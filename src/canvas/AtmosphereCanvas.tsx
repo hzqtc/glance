@@ -81,7 +81,7 @@ export function AtmosphereCanvas(props: AtmosphereCanvasProps) {
     sceneRef.current = createParticleScene();
   }
 
-  // Animated mode: 20 FPS daytime / 1 FPS quiet night RAF loop.
+  // Animated mode: smooth 30 FPS RAF loop.
   // Static mode: 0 FPS idle (no RAF loop at all — keeps iPad mini 2 completely cool).
   useEffect(
     function () {
@@ -159,13 +159,13 @@ export function AtmosphereCanvas(props: AtmosphereCanvasProps) {
       function loop(now: number) {
         rafId = window.requestAnimationFrame(loop);
         var p = propsRef.current;
-        var targetFrameMs = p.isNightQuiet ? 1000 : 1000 / 20;
+        var targetFrameMs = 1000 / 30;
 
         if (lastRenderTime !== 0 && now - lastRenderTime < targetFrameMs) {
           return;
         }
 
-        var dt = lastRenderTime === 0 ? 0.05 : Math.min(0.25, (now - lastRenderTime) / 1000);
+        var dt = lastRenderTime === 0 ? 0.033 : Math.min(0.25, (now - lastRenderTime) / 1000);
         lastRenderTime = now;
         var elapsed = (now - startTime) / 1000;
 
