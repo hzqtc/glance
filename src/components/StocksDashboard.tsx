@@ -426,7 +426,11 @@ export function StocksDashboard(props: StocksDashboardProps) {
                           : 'stocks-ext-pill stocks-ext-down'
                       }
                     >
-                      {hero.extendedLabel}{' '}
+                      {hero.extendedLabel === 'AH'
+                        ? 'After Hours'
+                        : hero.extendedLabel === 'PM'
+                          ? 'Pre-Market'
+                          : hero.extendedLabel}{' '}
                       {formatHeroValue(hero.extendedPrice, hero.format, hero.currency)}{' '}
                       ({formatStockPct(hero.extendedChangePct || 0)})
                     </span>

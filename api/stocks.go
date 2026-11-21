@@ -915,7 +915,7 @@ func buildStockHero(cfg config.StockSymbolConfig, normRange string, res *yfChart
 			if hasPostPoints && len(pts) > 0 && price > 0 {
 				lastPt := pts[len(pts)-1]
 				if lastPt.T > regularEnd && lastPt.V > 0 {
-					extendedLabel = "AH"
+					extendedLabel = "After Hours"
 					extendedPrice = lastPt.V
 					extendedChange = lastPt.V - price
 					extendedChangePct = (extendedChange / price) * 100
@@ -1004,12 +1004,12 @@ func applyQuoteMetaToHero(hero *StockHero, meta yfQuoteMetaItem) {
 		state = strings.ToUpper(meta.MarketState)
 	}
 	if state == "PRE" && meta.PreMarketPrice > 0 {
-		hero.ExtendedLabel = "PM"
+		hero.ExtendedLabel = "Pre-Market"
 		hero.ExtendedPrice = meta.PreMarketPrice
 		hero.ExtendedChange = meta.PreMarketChange
 		hero.ExtendedChangePct = meta.PreMarketChangePercent
 	} else if state != "REGULAR" && meta.PostMarketPrice > 0 {
-		hero.ExtendedLabel = "AH"
+		hero.ExtendedLabel = "After Hours"
 		hero.ExtendedPrice = meta.PostMarketPrice
 		hero.ExtendedChange = meta.PostMarketChange
 		hero.ExtendedChangePct = meta.PostMarketChangePercent

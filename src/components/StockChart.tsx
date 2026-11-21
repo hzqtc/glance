@@ -310,7 +310,7 @@ export function StockChart(props: StockChartProps) {
             style={{ left: regEndPct.toFixed(2) + '%' }}
             aria-hidden="true"
           >
-            <span class="stock-ah-badge">AH</span>
+            <span class="stock-ah-badge">After Hours</span>
           </div>
         ) : null}
 
@@ -436,7 +436,7 @@ export function StockChart(props: StockChartProps) {
               </span>
               <span class="stock-tooltip-time">
                 {formatChartTooltipTime(scrubPoint.t, props.range, props.timeFormat)}
-                {scrubIsAH ? ' · AH' : ''}
+                {scrubIsAH ? ' · After Hours' : ''}
               </span>
             </div>
           </div>
