@@ -102,6 +102,39 @@ export function formatMarketState(state: string): { label: string; isOpen: boole
   return { label: 'Market Closed', isOpen: false };
 }
 
+export function formatExchangeName(exchange: string): string {
+  var code = (exchange || '').trim().toUpperCase();
+  if (!code) return '';
+  if (code === 'NMS' || code === 'NGM' || code === 'NCM' || code === 'NAS' || code === 'NIM') {
+    return 'NASDAQ';
+  }
+  if (code === 'NYQ' || code === 'NYSE') {
+    return 'NYSE';
+  }
+  if (code === 'PCX' || code === 'ARCX') {
+    return 'NYSE Arca';
+  }
+  if (code === 'ASE') {
+    return 'AMEX';
+  }
+  if (code === 'SNP') {
+    return 'S&P';
+  }
+  if (code === 'DJI') {
+    return 'Dow Jones';
+  }
+  if (code === 'NYB') {
+    return 'Treasury';
+  }
+  if (code === 'CCC') {
+    return 'Crypto';
+  }
+  if (code === 'WCB') {
+    return 'CBOE';
+  }
+  return code;
+}
+
 function pad2(n: number): string {
   return n < 10 ? '0' + String(n) : String(n);
 }

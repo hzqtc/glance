@@ -11,6 +11,7 @@ import type {
 import {
   STOCK_RANGES,
   formatChartTooltipTime,
+  formatExchangeName,
   formatMarketState,
   formatStockDelta,
   formatStockPct,
@@ -279,7 +280,9 @@ export function StocksDashboard(props: StocksDashboardProps) {
                     {marketInfo ? marketInfo.label : 'Markets'}
                   </span>
                   {hero.exchange ? (
-                    <span class="stocks-exchange-tag">{hero.exchange}</span>
+                    <span class="stocks-exchange-tag">
+                      {formatExchangeName(hero.exchange)}
+                    </span>
                   ) : null}
                 </div>
 
