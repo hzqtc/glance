@@ -23,6 +23,11 @@ function getLogoBadgeStyle(symbol: string): LogoStyle {
   if (s === 'AMD') return { bg: 'rgba(248, 250, 252, 0.14)' };
   if (s === 'NFLX') return { bg: 'rgba(229, 9, 20, 0.2)' };
   if (s === 'BTC-USD' || s === 'BTC') return { bg: 'rgba(247, 147, 26, 0.2)' };
+  if (s === 'GC=F') return { bg: 'rgba(245, 158, 11, 0.22)' };
+  if (s === 'CL=F') return { bg: 'rgba(148, 163, 184, 0.2)' };
+  if (s === 'SI=F') return { bg: 'rgba(203, 213, 225, 0.18)' };
+  if (s === '^VIX') return { bg: 'rgba(168, 85, 247, 0.2)' };
+  if (s === '^DJI') return { bg: 'rgba(59, 130, 246, 0.2)' };
   if (s === '^GSPC') return { bg: 'rgba(56, 189, 248, 0.18)' };
   if (s === '^IXIC') return { bg: 'rgba(0, 160, 223, 0.18)' };
   if (s === '^TNX') return { bg: 'rgba(245, 158, 11, 0.18)' };
@@ -274,6 +279,82 @@ function renderMark(symbol: string, iconPx: number) {
         <rect x="10.9" y="10" width="2.2" height="7" rx="0.6" fill="#f59e0b" />
         <rect x="15.8" y="10" width="2.2" height="7" rx="0.6" fill="#f59e0b" />
         <rect x="4" y="18.2" width="16" height="2" rx="1" fill="#fbbf24" />
+      </svg>
+    );
+  }
+
+  // Gold Futures (GC=F) — stacked gold bullion bars
+  if (s === 'GC=F') {
+    return (
+      <svg width={iconPx} height={iconPx} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M8.5 7.5h7l1.3 4.2H7.2L8.5 7.5z" fill="#fde047" />
+        <path d="M4.2 13.3h6.6l1 4.2H3.2l1-4.2z" fill="#f59e0b" />
+        <path d="M13.2 13.3h6.6l1 4.2h-8.6l1-4.2z" fill="#fbbf24" />
+      </svg>
+    );
+  }
+
+  // WTI Crude Oil (CL=F) — glossy oil drop
+  if (s === 'CL=F') {
+    return (
+      <svg width={iconPx} height={iconPx} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path
+          d="M12 3.4C9.2 7.5 6.2 11.1 6.2 14.5a5.8 5.8 0 0 0 11.6 0c0-3.4-3-7-5.8-11.1z"
+          fill="#cbd5e1"
+        />
+        <path
+          d="M9.6 14.6a2.6 2.6 0 0 0 2.4 2.6"
+          stroke="#0f172a"
+          stroke-width="1.6"
+          stroke-linecap="round"
+        />
+      </svg>
+    );
+  }
+
+  // Silver Futures (SI=F) — metallic silver ingot
+  if (s === 'SI=F') {
+    return (
+      <svg width={iconPx} height={iconPx} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M6.4 9.2h11.2l2.4 6.6H4l2.4-6.6z" fill="#cbd5e1" />
+        <path d="M7.6 10.6h8.8l.9 2.4H6.7l.9-2.4z" fill="#f8fafc" />
+      </svg>
+    );
+  }
+
+  // CBOE Volatility Index (^VIX) — sharp volatility pulse
+  if (s === '^VIX') {
+    return (
+      <svg width={iconPx} height={iconPx} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path
+          d="M3 13.5h3.5l2.2-6.5 3.1 10.2 2.9-7.4 1.9 3.7H21"
+          stroke="#c084fc"
+          stroke-width="2.1"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+      </svg>
+    );
+  }
+
+  // Dow Jones Industrial (^DJI) — blue market pillars + trend chevron
+  if (s === '^DJI') {
+    return (
+      <svg width={iconPx} height={iconPx} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path
+          d="M4.5 16.5L9.8 11l3.6 3.2L19.5 7.5"
+          stroke="#60a5fa"
+          stroke-width="2.2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+        <path
+          d="M15.2 7.5h4.3v4.3"
+          stroke="#93c5fd"
+          stroke-width="2.1"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
       </svg>
     );
   }

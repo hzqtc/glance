@@ -65,7 +65,12 @@
       { "symbol": "TSM", "label": "TSM", "name": "TSMC", "format": "currency" },
       { "symbol": "AMD", "label": "AMD", "name": "AMD", "format": "currency" },
       { "symbol": "NFLX", "label": "NFLX", "name": "Netflix", "format": "currency" },
-      { "symbol": "BTC-USD", "label": "BTC", "name": "Bitcoin", "format": "currency" }
+      { "symbol": "BTC-USD", "label": "BTC", "name": "Bitcoin", "format": "currency" },
+      { "symbol": "GC=F", "label": "Gold", "name": "Gold Futures", "format": "currency" },
+      { "symbol": "CL=F", "label": "Oil", "name": "WTI Crude Oil", "format": "currency" },
+      { "symbol": "SI=F", "label": "Silver", "name": "Silver Futures", "format": "currency" },
+      { "symbol": "^VIX", "label": "VIX", "name": "CBOE Volatility", "format": "points" },
+      { "symbol": "^DJI", "label": "Dow", "name": "Dow Jones", "format": "points" }
     ]
   },
   "widgets": {

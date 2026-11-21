@@ -117,8 +117,8 @@ func TestStocksHandlerEndToEndAndChartOnly(t *testing.T) {
 	if full.Hero.RangeHigh != 5930.0 || full.Hero.RangeLow != 5875.0 {
 		t.Fatalf("expected 1D range 5875..5930, got %v..%v", full.Hero.RangeLow, full.Hero.RangeHigh)
 	}
-	if len(full.Quotes) != 15 {
-		t.Fatalf("expected 15 watchlist quotes, got %d", len(full.Quotes))
+	if len(full.Quotes) != 20 {
+		t.Fatalf("expected 20 watchlist quotes, got %d", len(full.Quotes))
 	}
 
 	// chartOnly=1 for 1y timeframe switching

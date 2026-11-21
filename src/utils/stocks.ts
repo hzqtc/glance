@@ -132,6 +132,15 @@ export function formatExchangeName(exchange: string): string {
   if (code === 'WCB') {
     return 'CBOE';
   }
+  if (code === 'CMX') {
+    return 'COMEX';
+  }
+  if (code === 'NYM') {
+    return 'NYMEX';
+  }
+  if (code === 'CBT' || code === 'CME') {
+    return 'CME';
+  }
   return code;
 }
 

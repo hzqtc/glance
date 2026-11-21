@@ -1460,10 +1460,10 @@ body,
 
 .stocks-content {
   justify-content: space-between;
-  padding-top: 20px;
-  padding-top: calc(20px + env(safe-area-inset-top));
-  padding-bottom: 22px;
-  padding-bottom: calc(22px + env(safe-area-inset-bottom));
+  padding-top: 18px;
+  padding-top: calc(18px + env(safe-area-inset-top));
+  padding-bottom: 20px;
+  padding-bottom: calc(20px + env(safe-area-inset-bottom));
 }
 
 .stocks-boot-controls {
@@ -1483,16 +1483,16 @@ body,
   flex-direction: row;
   align-items: flex-end;
   justify-content: space-between;
-  margin-bottom: 8px;
+  margin-bottom: 7px;
   flex-shrink: 0;
 }
 
 .stocks-hero-top .hero-location-row {
-  margin-bottom: 4px;
+  margin-bottom: 3px;
 }
 
 .stocks-hero-top .hero-location-label {
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .stocks-hero-left {
@@ -1535,16 +1535,16 @@ body,
 }
 
 .stock-logo-hero {
-  width: 38px;
-  height: 38px;
-  border-radius: 11px;
-  margin-right: 11px;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  margin-right: 10px;
 }
 
 .stock-logo-card {
-  width: 20px;
-  height: 20px;
-  border-radius: 6px;
+  width: 19px;
+  height: 19px;
+  border-radius: 5px;
   margin-right: 6px;
 }
 
@@ -1555,11 +1555,11 @@ body,
 }
 
 .stock-logo-mono-hero {
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .stocks-hero-ticker {
-  font-size: 42px;
+  font-size: 38px;
   font-weight: 300;
   letter-spacing: -0.03em;
   color: var(--text-primary);
@@ -1568,17 +1568,17 @@ body,
 }
 
 .stocks-hero-symbol-sub {
-  margin-left: 10px;
-  margin-top: 8px;
-  font-size: 15px;
+  margin-left: 9px;
+  margin-top: 6px;
+  font-size: 14px;
   font-weight: 500;
   letter-spacing: 0.04em;
   color: var(--text-muted);
 }
 
 .stocks-hero-name {
-  margin-top: 4px;
-  font-size: 16px;
+  margin-top: 3px;
+  font-size: 14px;
   font-weight: 400;
   color: var(--text-secondary);
   white-space: nowrap;
@@ -1595,7 +1595,7 @@ body,
 }
 
 .stocks-hero-price {
-  font-size: 44px;
+  font-size: 38px;
   font-weight: 200;
   line-height: 1;
   letter-spacing: -0.03em;
@@ -1605,12 +1605,12 @@ body,
 }
 
 .stocks-hero-change {
-  margin-top: 4px;
+  margin-top: 3px;
   display: flex;
   flex-direction: row;
   align-items: center;
   justify-content: flex-end;
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
@@ -1653,14 +1653,14 @@ body,
   font-weight: 500;
 }
 
-/* Hero Time-Series Chart Card (compressed to balance with 3 rows of cards) */
+/* Hero Time-Series Chart Card (balanced with 4 rows of cards) */
 .stocks-chart-card {
   flex: 1;
-  min-height: 170px;
+  min-height: 155px;
   display: flex;
   flex-direction: column;
-  padding: 10px 16px 9px 16px;
-  border-radius: 18px;
+  padding: 9px 14px 8px 14px;
+  border-radius: 17px;
   background-color: var(--surface-ribbon);
   box-shadow: 0 8px 24px var(--card-shadow);
 }
@@ -1669,7 +1669,7 @@ body,
   display: flex;
   flex-direction: row;
   align-items: center;
-  margin-bottom: 7px;
+  margin-bottom: 5px;
   flex-shrink: 0;
 }
 
@@ -1677,8 +1677,8 @@ body,
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 25px;
-  padding: 0 11px;
+  height: 24px;
+  padding: 0 10px;
   border: none;
   border-radius: 999px;
   background-color: transparent;
@@ -1869,10 +1869,10 @@ body,
   font-variant-numeric: tabular-nums;
 }
 
-/* Watchlist Grid: 3 Rows x 5 Cards */
+/* Watchlist Grid: 4 Rows x 5 Cards */
 .stocks-grid {
   width: 100%;
-  margin-top: 10px;
+  margin-top: 8px;
   flex-shrink: 0;
 }
 
@@ -1884,7 +1884,7 @@ body,
 }
 
 .stocks-row-next {
-  margin-top: 8px;
+  margin-top: 6px;
 }
 
 .stock-card {
@@ -1892,11 +1892,11 @@ body,
   flex: 1;
   min-width: 0;
   overflow: hidden;
-  padding: 9px 11px 8px 11px;
-  border-radius: 14px;
+  padding: 7px 10px 7px 10px;
+  border-radius: 13px;
   background-color: var(--surface-card);
   border: none;
-  box-shadow: 0 6px 18px var(--card-shadow);
+  box-shadow: 0 6px 16px var(--card-shadow);
   color: inherit;
   text-align: left;
   cursor: pointer;
@@ -1909,7 +1909,7 @@ body,
 }
 
 .stock-card:not(:last-child) {
-  margin-right: 9px;
+  margin-right: 8px;
 }
 
 .stock-card:active {
@@ -1918,7 +1918,7 @@ body,
 
 .stock-card-selected {
   background-color: var(--surface-card-active);
-  box-shadow: inset 0 0 0 1px rgba(147, 197, 253, 0.4), 0 8px 22px var(--card-shadow-active);
+  box-shadow: inset 0 0 0 1px rgba(147, 197, 253, 0.4), 0 8px 20px var(--card-shadow-active);
 }
 
 .stock-card-top {
@@ -1927,7 +1927,7 @@ body,
   flex-direction: row;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 2px;
+  margin-bottom: 1px;
 }
 
 .stock-card-symbol-row {
@@ -1935,11 +1935,11 @@ body,
   flex-direction: row;
   align-items: center;
   min-width: 0;
-  padding-right: 5px;
+  padding-right: 4px;
 }
 
 .stock-card-label {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   letter-spacing: -0.01em;
   color: var(--text-primary);
@@ -1950,7 +1950,7 @@ body,
 
 .stock-pct-badge {
   display: inline-block;
-  padding: 2px 6px;
+  padding: 1px 6px;
   border-radius: 999px;
   font-size: 11px;
   font-weight: 600;
@@ -1977,7 +1977,7 @@ body,
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 
 .stock-card-bottom {
@@ -1989,7 +1989,7 @@ body,
 }
 
 .stock-card-price {
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 400;
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;

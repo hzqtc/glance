@@ -238,9 +238,9 @@ export function StocksDashboard(props: StocksDashboardProps) {
     rangeHigh = maxP;
   }
 
-  // Partition watchlist into rows of 5 (3 rows x 5 cards = 15 symbols)
+  // Partition watchlist into rows of 5 (4 rows x 5 cards = 20 symbols)
   var quoteRows: StockQuote[][] = [];
-  for (var r = 0; r < quotes.length && quoteRows.length < 3; r += 5) {
+  for (var r = 0; r < quotes.length && quoteRows.length < 4; r += 5) {
     quoteRows.push(quotes.slice(r, r + 5));
   }
 

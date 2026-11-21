@@ -215,7 +215,7 @@ func StocksHandler(w http.ResponseWriter, r *http.Request) {
 		raw1D := make([]*yfChartResult, len(symbols))
 
 		// Limit concurrency cleanly to avoid overwhelming Yahoo Finance
-		sem := make(chan struct{}, 6)
+		sem := make(chan struct{}, 8)
 
 		for i, sc := range symbols {
 			wg.Add(1)
