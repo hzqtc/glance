@@ -723,18 +723,8 @@ export function App() {
             isActive={activeSlide === 2}
             nowMs={nowMs}
             timeFormat={timeFormat}
-            controls={
-              <TopControls
-                animEnabled={animEnabled}
-                units={units}
-                isRefreshing={isRefreshing}
-                showAnim={false}
-                showUnits={false}
-                onToggleAnim={handleToggleAnim}
-                onToggleUnits={handleToggleUnits}
-                onRefresh={handleRefresh}
-              />
-            }
+            isRefreshing={isRefreshing}
+            onRefresh={handleRefresh}
           />
         </section>
       </div>

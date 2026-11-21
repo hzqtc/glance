@@ -1,4 +1,3 @@
-import type { ComponentChildren } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { CalendarEvent, CalendarResponse, TimeFormat } from '../types';
 import {
@@ -44,7 +43,8 @@ interface CalendarDashboardProps {
   isActive: boolean;
   nowMs: number;
   timeFormat: TimeFormat;
-  controls?: ComponentChildren;
+  isRefreshing: boolean;
+  onRefresh: () => void;
 }
 
 export function CalendarDashboard(props: CalendarDashboardProps) {
@@ -308,19 +308,17 @@ export function CalendarDashboard(props: CalendarDashboardProps) {
       <div class="cal-backdrop" aria-hidden="true" />
 
       <div class="dashboard-content cal-content">
-        {/* Top Bar: Month/Year Title + Nav Buttons + Center Controls + Next Event */}
+        {/* Top Bar: Month/Year Left + Unified Centered Nav & Refresh Pill */}
         <header class="cal-header">
-          {props.controls ? (
-            <div class="hero-top-center">{props.controls}</div>
-          ) : null}
-
           <div class="cal-header-left">
             <h1 class="cal-month-title">
               {MONTHS_FULL[viewMonth - 1]}{' '}
               <span class="cal-year-num">{viewYear}</span>
             </h1>
+          </div>
 
-            <div class="cal-nav-group" role="group" aria-label="Calendar navigation">
+          <div class="cal-header-center">
+            <div class="cal-nav-group" role="toolbar" aria-label="Calendar navigation and refresh">
               <button
                 type="button"
                 class="cal-nav-btn"
@@ -377,59 +375,87 @@ export function CalendarDashboard(props: CalendarDashboardProps) {
               >
                 »
               </button>
+
+              <span class="ctrl-sep cal-nav-sep" aria-hidden="true" />
+
+              <button
+                type="button"
+                class="cal-nav-btn cal-nav-refresh"
+                onClick={props.onRefresh}
+                disabled={props.isRefreshing}
+                title="Hard reload & clear cache"
+                aria-label="Hard reload and clear cache"
+              >
+                <svg
+                  width="13"
+                  height="13"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.1"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  class={props.isRefreshing ? 'ctrl-svg ctrl-spinning' : 'ctrl-svg'}
+                  aria-hidden="true"
+                >
+                  <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+                  <polyline points="21 3 21 9 15 9" />
+                </svg>
+              </button>
             </div>
           </div>
 
           <div class="cal-header-right">
-            {calendars.length > 0 ? (
-              <div class="cal-filter-bar" role="group" aria-label="Toggle calendars">
-                {calendars.map(function (cal) {
-                  var isHidden = Boolean(hiddenCals[cal.id]);
-                  return (
-                    <button
-                      type="button"
-                      key={cal.id}
-                      class={
-                        isHidden
-                          ? 'cal-filter-pill cal-filter-pill-off'
-                          : 'cal-filter-pill'
-                      }
-                      aria-pressed={!isHidden}
-                      title={
-                        isHidden
-                          ? 'Show ' + cal.name
-                          : 'Hide ' + cal.name
-                      }
-                      onClick={function () {
-                        handleToggleCalendar(cal.id);
-                      }}
-                    >
-                      <span
-                        class="cal-filter-dot"
-                        style={
-                          isHidden
-                            ? {
-                                borderColor: cal.color || '#38bdf8',
-                                backgroundColor: 'transparent',
-                              }
-                            : {
-                                borderColor: cal.color || '#38bdf8',
-                                backgroundColor: cal.color || '#38bdf8',
-                              }
-                        }
-                      />
-                      <span class="cal-filter-name">{cal.name}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            ) : loadError ? (
+            {loadError ? (
               <span class="cal-status-pill cal-status-warn">Offline ({loadError})</span>
             ) : !isConfigured ? (
               <span class="cal-status-pill">Holidays · Local</span>
             ) : null}
           </div>
         </header>
+
+        {/* Full-Width Calendar Show/Hide Toggle Bar (no truncation) */}
+        {calendars.length > 0 ? (
+          <div class="cal-filter-row">
+            <div class="cal-filter-bar" role="group" aria-label="Toggle calendars">
+              {calendars.map(function (cal) {
+                var isHidden = Boolean(hiddenCals[cal.id]);
+                return (
+                  <button
+                    type="button"
+                    key={cal.id}
+                    class={
+                      isHidden
+                        ? 'cal-filter-pill cal-filter-pill-off'
+                        : 'cal-filter-pill'
+                    }
+                    aria-pressed={!isHidden}
+                    title={isHidden ? 'Show ' + cal.name : 'Hide ' + cal.name}
+                    onClick={function () {
+                      handleToggleCalendar(cal.id);
+                    }}
+                  >
+                    <span
+                      class="cal-filter-dot"
+                      style={
+                        isHidden
+                          ? {
+                              borderColor: cal.color || '#38bdf8',
+                              backgroundColor: 'transparent',
+                            }
+                          : {
+                              borderColor: cal.color || '#38bdf8',
+                              backgroundColor: cal.color || '#38bdf8',
+                            }
+                      }
+                    />
+                    <span class="cal-filter-name">{cal.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
 
         {/* Main Split Body: Left Month Grid (~60%) + Right Selected Day Agenda (~40%) */}
         <div class="cal-body">
