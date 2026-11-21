@@ -527,132 +527,138 @@ export function CalendarDashboard(props: CalendarDashboardProps) {
             </div>
           </section>
 
-          {/* Right Pane: Selected Day Agenda */}
-          <section class="cal-day-card" aria-label="Selected day agenda">
-            <div class="cal-day-header">
-              <div class="cal-day-eyebrow-row">
-                <span class="cal-day-weekday">{selWeekday}</span>
-                {selRelative ? (
-                  <span
-                    class={
-                      selectedDateKey === today.dateKey
-                        ? 'cal-rel-pill cal-rel-today'
-                        : 'cal-rel-pill'
-                    }
-                  >
-                    {selRelative}
-                  </span>
-                ) : null}
-              </div>
-
-              <div class="cal-day-date-title">
-                {MONTHS_SHORT[selParts.month - 1]} {selParts.day}, {selParts.year}
-              </div>
-
-              <div class="cal-day-sub-row">
-                {selLunar ? (
-                  <span
-                    class={
-                      selLunar.isFestival
-                        ? 'cal-day-lunar cal-lunar-fest'
-                        : 'cal-day-lunar'
-                    }
-                  >
-                    {selLunar.fullLabel}
-                  </span>
-                ) : null}
-                <span class="cal-day-count">
-                  {selEvents.length === 0
-                    ? 'No events'
-                    : selEvents.length === 1
-                      ? '1 event'
-                      : String(selEvents.length) + ' events'}
-                </span>
-              </div>
-            </div>
-
-            <div class="cal-day-list">
-              {selAllDay.length > 0 ? (
-                <div class="cal-allday-group">
-                  {selAllDay.map(function (ev) {
-                    return (
-                      <div
-                        key={ev.id}
-                        class={
-                          ev.isHoliday
-                            ? 'cal-allday-item cal-allday-holiday'
-                            : 'cal-allday-item'
-                        }
-                        style={
-                          ev.isHoliday
-                            ? undefined
-                            : { borderLeftColor: ev.color || '#38bdf8' }
-                        }
-                      >
-                        <span class="cal-allday-badge">
-                          {ev.isHoliday ? 'Holiday' : 'All Day'}
-                        </span>
-                        <span class="cal-allday-title">{ev.title}</span>
-                      </div>
-                    );
-                  })}
+          {/* Right Column: Selected Day Card (top) + Separate Calendars Card (bottom) */}
+          <div class="cal-right-col">
+            <section class="cal-day-card" aria-label="Selected day agenda">
+              <div class="cal-day-header">
+                <div class="cal-day-eyebrow-row">
+                  <span class="cal-day-weekday">{selWeekday}</span>
+                  {selRelative ? (
+                    <span
+                      class={
+                        selectedDateKey === today.dateKey
+                          ? 'cal-rel-pill cal-rel-today'
+                          : 'cal-rel-pill'
+                      }
+                    >
+                      {selRelative}
+                    </span>
+                  ) : null}
                 </div>
-              ) : null}
 
-              {selTimed.length > 0 ? (
-                <div class="cal-timed-group">
-                  {selTimed.map(function (ev) {
-                    var isNow =
-                      selectedDateKey === today.dateKey &&
-                      props.nowMs >= ev.startMs &&
-                      props.nowMs < ev.endMs;
-                    var isPast =
-                      selectedDateKey === today.dateKey && props.nowMs >= ev.endMs;
+                <div class="cal-day-date-title">
+                  {MONTHS_SHORT[selParts.month - 1]} {selParts.day}, {selParts.year}
+                </div>
 
-                    var itemClass = 'cal-event-item';
-                    if (isNow) itemClass += ' cal-event-now';
-                    if (isPast) itemClass += ' cal-event-past';
+                <div class="cal-day-sub-row">
+                  {selLunar ? (
+                    <span
+                      class={
+                        selLunar.isFestival
+                          ? 'cal-day-lunar cal-lunar-fest'
+                          : 'cal-day-lunar'
+                      }
+                    >
+                      {selLunar.fullLabel}
+                    </span>
+                  ) : null}
+                  <span class="cal-day-count">
+                    {selEvents.length === 0
+                      ? 'No events'
+                      : selEvents.length === 1
+                        ? '1 event'
+                        : String(selEvents.length) + ' events'}
+                  </span>
+                </div>
+              </div>
 
-                    return (
-                      <div
-                        key={ev.id}
-                        class={itemClass}
-                        style={{ borderLeftColor: ev.color || '#38bdf8' }}
-                      >
-                        <div class="cal-event-time-row">
-                          <span class="cal-event-time">
-                            {formatEventTimeRange(ev, props.timeFormat)}
+              <div class="cal-day-list">
+                {selAllDay.length > 0 ? (
+                  <div class="cal-allday-group">
+                    {selAllDay.map(function (ev) {
+                      return (
+                        <div
+                          key={ev.id}
+                          class={
+                            ev.isHoliday
+                              ? 'cal-allday-item cal-allday-holiday'
+                              : 'cal-allday-item'
+                          }
+                          style={
+                            ev.isHoliday
+                              ? undefined
+                              : { borderLeftColor: ev.color || '#38bdf8' }
+                          }
+                        >
+                          <span class="cal-allday-badge">
+                            {ev.isHoliday ? 'Holiday' : 'All Day'}
                           </span>
-                          {isNow ? <span class="cal-now-pill">NOW</span> : null}
-                          {multiCal && ev.calendarName ? (
-                            <span class="cal-event-cal">{ev.calendarName}</span>
+                          <span class="cal-allday-title">{ev.title}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : null}
+
+                {selTimed.length > 0 ? (
+                  <div class="cal-timed-group">
+                    {selTimed.map(function (ev) {
+                      var isNow =
+                        selectedDateKey === today.dateKey &&
+                        props.nowMs >= ev.startMs &&
+                        props.nowMs < ev.endMs;
+                      var isPast =
+                        selectedDateKey === today.dateKey && props.nowMs >= ev.endMs;
+
+                      var itemClass = 'cal-event-item';
+                      if (isNow) itemClass += ' cal-event-now';
+                      if (isPast) itemClass += ' cal-event-past';
+
+                      return (
+                        <div
+                          key={ev.id}
+                          class={itemClass}
+                          style={{ borderLeftColor: ev.color || '#38bdf8' }}
+                        >
+                          <div class="cal-event-time-row">
+                            <span class="cal-event-time">
+                              {formatEventTimeRange(ev, props.timeFormat)}
+                            </span>
+                            {isNow ? <span class="cal-now-pill">NOW</span> : null}
+                            {multiCal && ev.calendarName ? (
+                              <span class="cal-event-cal">{ev.calendarName}</span>
+                            ) : null}
+                          </div>
+                          <div class="cal-event-title">{ev.title}</div>
+                          {ev.location ? (
+                            <div class="cal-event-loc">{ev.location}</div>
                           ) : null}
                         </div>
-                        <div class="cal-event-title">{ev.title}</div>
-                        {ev.location ? (
-                          <div class="cal-event-loc">{ev.location}</div>
-                        ) : null}
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : null}
-
-              {selAllDay.length === 0 && selTimed.length === 0 ? (
-                <div class="cal-empty-day">
-                  <div class="cal-empty-title">Clear day</div>
-                  <div class="cal-empty-sub">
-                    {!isConfigured
-                      ? 'Set CALENDAR_ICS_URLS in Vercel Env Vars (or .env.local) to sync your private calendar.'
-                      : 'No events scheduled'}
+                      );
+                    })}
                   </div>
-                </div>
-              ) : null}
-            </div>
+                ) : null}
 
-            {/* Per-Calendar Show/Hide Toggles (one calendar per row) */}
+                {selAllDay.length === 0 && selTimed.length === 0 ? (
+                  <div class="cal-empty-day">
+                    <div class="cal-empty-title">Clear day</div>
+                    <div class="cal-empty-sub">
+                      {!isConfigured
+                        ? 'Set CALENDAR_ICS_URLS in Vercel Env Vars (or .env.local) to sync your private calendar.'
+                        : 'No events scheduled'}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            </section>
+
+            {/* Separate Calendars Card (one calendar per row) */}
             {calendars.length > 0 ? (
-              <div class="cal-toggles-section" role="group" aria-label="Toggle calendars">
+              <section
+                class="cal-sources-card"
+                role="group"
+                aria-label="Toggle calendars"
+              >
                 {calendars.map(function (cal) {
                   var isHidden = Boolean(hiddenCals[cal.id]);
                   return (
@@ -694,9 +700,9 @@ export function CalendarDashboard(props: CalendarDashboardProps) {
                     </div>
                   );
                 })}
-              </div>
+              </section>
             ) : null}
-          </section>
+          </div>
         </div>
       </div>
     </div>
