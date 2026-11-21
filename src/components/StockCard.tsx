@@ -1,5 +1,6 @@
 import type { StockQuote } from '../types';
 import { formatStockPct, formatStockValue } from '../utils/stocks';
+import { StockLogo } from './StockLogo';
 
 interface StockCardProps {
   quote: StockQuote;
@@ -71,7 +72,7 @@ export function StockCard(props: StockCardProps) {
     >
       <div class="stock-card-top">
         <div class="stock-card-symbol-row">
-          {props.isSelected ? <span class="city-active-dot" /> : null}
+          <StockLogo symbol={q.symbol} label={q.label} size="card" />
           <span class="stock-card-label">{q.label}</span>
         </div>
         {!q.unavailable ? (

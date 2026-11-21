@@ -16,6 +16,7 @@ import {
 } from '../utils/stocks';
 import { StockChart } from './StockChart';
 import { StockCard } from './StockCard';
+import { StockLogo } from './StockLogo';
 
 export var STOCKS_STORAGE_KEY = 'glance:lastStocks:v1';
 
@@ -243,6 +244,7 @@ export function StocksDashboard(props: StocksDashboardProps) {
                 </div>
 
                 <div class="stocks-title-row">
+                  <StockLogo symbol={hero.symbol} label={hero.label} size="hero" />
                   <span class="stocks-hero-ticker">{hero.label}</span>
                   {hero.label !== hero.symbol ? (
                     <span class="stocks-hero-symbol-sub">{hero.symbol}</span>
