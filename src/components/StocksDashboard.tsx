@@ -2,6 +2,7 @@ import type { ComponentChildren } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type {
   StockHero,
+  StockPoint,
   StockQuote,
   StockRange,
   StocksResponse,
@@ -9,6 +10,7 @@ import type {
 } from '../types';
 import {
   STOCK_RANGES,
+  formatChartTooltipTime,
   formatMarketState,
   formatStockDelta,
   formatStockPct,
@@ -85,6 +87,10 @@ export function StocksDashboard(props: StocksDashboardProps) {
   var _errorState = useState<string | null>(null);
   var loadError = _errorState[0];
   var setLoadError = _errorState[1];
+
+  var _scrubState = useState<StockPoint | null>(null);
+  var scrubPoint = _scrubState[0];
+  var setScrubPoint = _scrubState[1];
 
   var pollTimerRef = useRef<number | null>(null);
   var reqSeqRef = useRef<number>(0);
@@ -188,17 +194,33 @@ export function StocksDashboard(props: StocksDashboardProps) {
 
   function handleSelectSymbol(sym: string) {
     if (sym === selectedSymbol && hero && hero.symbol === sym) return;
+    setScrubPoint(null);
     setSelectedSymbol(sym);
     fetchStocks(sym, selectedRange, true);
   }
 
   function handleSelectRange(rng: StockRange) {
     if (rng === selectedRange) return;
+    setScrubPoint(null);
     setSelectedRange(rng);
     fetchStocks(selectedSymbol, rng, true);
   }
 
+  var displayPrice = hero ? (scrubPoint ? scrubPoint.v : hero.price) : 0;
+  var displayChange = hero
+    ? scrubPoint
+      ? scrubPoint.v - hero.baseline
+      : hero.change
+    : 0;
+  var displayChangePct = hero
+    ? scrubPoint
+      ? hero.baseline > 0
+        ? ((scrubPoint.v - hero.baseline) / hero.baseline) * 100
+        : 0
+      : hero.changePct
+    : 0;
   var isPositive = hero ? hero.change >= 0 : true;
+  var isDisplayPositive = displayChange >= 0;
   var marketInfo = hero ? formatMarketState(hero.marketState) : null;
 
   // Dynamic Low / High for the selected timeframe (uses backend full-series bounds, with points fallback)
@@ -273,21 +295,23 @@ export function StocksDashboard(props: StocksDashboardProps) {
 
               <div class="stocks-hero-right">
                 <div class="stocks-hero-price">
-                  {formatStockValue(hero.price, hero.format)}
+                  {formatStockValue(displayPrice, hero.format)}
                 </div>
                 <div
                   class={
-                    isPositive
+                    isDisplayPositive
                       ? 'stocks-hero-change stocks-up'
                       : 'stocks-hero-change stocks-down'
                   }
                 >
-                  <span>{formatStockDelta(hero.change, hero.format)}</span>
+                  <span>{formatStockDelta(displayChange, hero.format)}</span>
                   <span class="stocks-hero-pct">
-                    ({formatStockPct(hero.changePct)})
+                    ({formatStockPct(displayChangePct)})
                   </span>
                   <span class="stocks-hero-range-tag">
-                    {hero.range.toUpperCase()}
+                    {scrubPoint
+                      ? formatChartTooltipTime(scrubPoint.t, hero.range, props.timeFormat)
+                      : hero.range.toUpperCase()}
                   </span>
                 </div>
                 <div class="stocks-hero-meta">
@@ -341,6 +365,7 @@ export function StocksDashboard(props: StocksDashboardProps) {
                 timeFormat={props.timeFormat}
                 isPositive={isPositive}
                 isLoading={isChartLoading}
+                onScrub={setScrubPoint}
               />
             </section>
           </div>

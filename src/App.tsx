@@ -510,7 +510,9 @@ export function App() {
 
   function handleTouchStart(e: TouchEvent) {
     if (!e.touches || e.touches.length !== 1) return;
-    var ignore = isInsideClass(e.target, 'hourly-ribbon');
+    var ignore =
+      isInsideClass(e.target, 'hourly-ribbon') ||
+      isInsideClass(e.target, 'stock-chart-wrap');
     touchStartRef.current = {
       x: e.touches[0].clientX,
       y: e.touches[0].clientY,

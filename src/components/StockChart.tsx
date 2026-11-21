@@ -1,5 +1,10 @@
+import { useEffect, useRef, useState } from 'preact/hooks';
 import type { StockFormat, StockPoint, StockRange, TimeFormat } from '../types';
-import { formatChartAxisTime, formatStockValue } from '../utils/stocks';
+import {
+  formatChartAxisTime,
+  formatChartTooltipTime,
+  formatStockValue,
+} from '../utils/stocks';
 
 interface StockChartProps {
   points: StockPoint[];
@@ -9,6 +14,7 @@ interface StockChartProps {
   timeFormat: TimeFormat;
   isPositive: boolean;
   isLoading: boolean;
+  onScrub?: (point: StockPoint | null) => void;
 }
 
 export function StockChart(props: StockChartProps) {
@@ -16,6 +22,23 @@ export function StockChart(props: StockChartProps) {
   var isPositive = props.isPositive;
   var strokeColor = isPositive ? '#34d399' : '#fb7185';
   var gradId = isPositive ? 'stock-area-up' : 'stock-area-down';
+
+  var _activeIdxState = useState<number | null>(null);
+  var activeIdx = _activeIdxState[0];
+  var setActiveIdx = _activeIdxState[1];
+
+  var areaRef = useRef<HTMLDivElement | null>(null);
+
+  // Clear scrub state whenever dataset or timeframe changes
+  useEffect(
+    function () {
+      setActiveIdx(null);
+      if (props.onScrub) {
+        props.onScrub(null);
+      }
+    },
+    [props.points, props.range]
+  );
 
   if (pts.length < 2) {
     return (
@@ -62,12 +85,75 @@ export function StockChart(props: StockChartProps) {
   }
 
   var linePath = lineParts.join(' ');
-  var areaPath = linePath + ' L ' + String(vbW) + ' ' + String(vbH) + ' L 0 ' + String(vbH) + ' Z';
+  var areaPath =
+    linePath + ' L ' + String(vbW) + ' ' + String(vbH) + ' L 0 ' + String(vbH) + ' Z';
 
   var baseY = hasBaseline ? vbH - ((props.baseline - yMin) / ySpan) * vbH : -1;
   var basePct = hasBaseline ? (baseY / vbH) * 100 : -1;
   var dotLeftPct = (lastX / vbW) * 100;
   var dotTopPct = (lastY / vbH) * 100;
+
+  function updateFromClientX(clientX: number) {
+    var el = areaRef.current;
+    if (!el || pts.length < 2) return;
+    var rect = el.getBoundingClientRect();
+    if (!rect || rect.width <= 0) return;
+    var ratio = (clientX - rect.left) / rect.width;
+    if (ratio < 0) ratio = 0;
+    if (ratio > 1) ratio = 1;
+    var idx = Math.round(ratio * (pts.length - 1));
+    if (idx < 0) idx = 0;
+    if (idx >= pts.length) idx = pts.length - 1;
+    setActiveIdx(idx);
+    if (props.onScrub) {
+      props.onScrub(pts[idx]);
+    }
+  }
+
+  function clearScrub() {
+    setActiveIdx(null);
+    if (props.onScrub) {
+      props.onScrub(null);
+    }
+  }
+
+  function handleMouseMove(e: MouseEvent) {
+    updateFromClientX(e.clientX);
+  }
+
+  function handleTouchStart(e: TouchEvent) {
+    if (!e.touches || e.touches.length === 0) return;
+    e.stopPropagation();
+    updateFromClientX(e.touches[0].clientX);
+  }
+
+  function handleTouchMove(e: TouchEvent) {
+    if (!e.touches || e.touches.length === 0) return;
+    e.stopPropagation();
+    e.preventDefault();
+    updateFromClientX(e.touches[0].clientX);
+  }
+
+  function handleTouchEnd(e: TouchEvent) {
+    e.stopPropagation();
+    clearScrub();
+  }
+
+  var scrubPoint =
+    activeIdx !== null && activeIdx >= 0 && activeIdx < pts.length
+      ? pts[activeIdx]
+      : null;
+  var scrubLeftPct = 0;
+  var scrubTopPct = 0;
+  var tooltipLeftPct = 50;
+  if (scrubPoint && activeIdx !== null) {
+    scrubLeftPct = (activeIdx / (pts.length - 1)) * 100;
+    var scrubY = vbH - ((scrubPoint.v - yMin) / ySpan) * vbH;
+    scrubTopPct = (scrubY / vbH) * 100;
+    tooltipLeftPct = scrubLeftPct;
+    if (tooltipLeftPct < 13) tooltipLeftPct = 13;
+    if (tooltipLeftPct > 87) tooltipLeftPct = 87;
+  }
 
   // 4 evenly spaced X-axis timestamps
   var tickIndices = [
@@ -79,7 +165,16 @@ export function StockChart(props: StockChartProps) {
 
   return (
     <div class={props.isLoading ? 'stock-chart-wrap stock-chart-loading' : 'stock-chart-wrap'}>
-      <div class="stock-chart-canvas-area">
+      <div
+        ref={areaRef}
+        class="stock-chart-canvas-area"
+        onMouseMove={handleMouseMove}
+        onMouseLeave={clearScrub}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchEnd}
+      >
         <svg
           class="stock-chart-svg"
           viewBox={'0 0 ' + String(vbW) + ' ' + String(vbH)}
@@ -124,14 +219,50 @@ export function StockChart(props: StockChartProps) {
           />
         </svg>
 
-        {/* Crisp non-distorted latest price dot */}
-        <span
-          class={isPositive ? 'stock-end-dot stock-end-dot-up' : 'stock-end-dot stock-end-dot-down'}
-          style={{
-            left: dotLeftPct.toFixed(2) + '%',
-            top: dotTopPct.toFixed(2) + '%',
-          }}
-        />
+        {/* Resting latest price dot (hidden while actively scrubbing) */}
+        {!scrubPoint ? (
+          <span
+            class={
+              isPositive ? 'stock-end-dot stock-end-dot-up' : 'stock-end-dot stock-end-dot-down'
+            }
+            style={{
+              left: dotLeftPct.toFixed(2) + '%',
+              top: dotTopPct.toFixed(2) + '%',
+            }}
+          />
+        ) : null}
+
+        {/* Interactive crosshair, active dot, and exact price tooltip */}
+        {scrubPoint ? (
+          <div class="stock-scrub-layer" aria-hidden="true">
+            <div
+              class="stock-crosshair"
+              style={{ left: scrubLeftPct.toFixed(2) + '%' }}
+            />
+            <span
+              class={
+                isPositive
+                  ? 'stock-scrub-dot stock-end-dot-up'
+                  : 'stock-scrub-dot stock-end-dot-down'
+              }
+              style={{
+                left: scrubLeftPct.toFixed(2) + '%',
+                top: scrubTopPct.toFixed(2) + '%',
+              }}
+            />
+            <div
+              class="stock-tooltip"
+              style={{ left: tooltipLeftPct.toFixed(2) + '%' }}
+            >
+              <span class="stock-tooltip-price">
+                {formatStockValue(scrubPoint.v, props.format)}
+              </span>
+              <span class="stock-tooltip-time">
+                {formatChartTooltipTime(scrubPoint.t, props.range, props.timeFormat)}
+              </span>
+            </div>
+          </div>
+        ) : null}
 
         {/* Crisp Y-axis bounds */}
         <span class="stock-y-label stock-y-high">

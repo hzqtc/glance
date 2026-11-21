@@ -134,3 +134,30 @@ export function formatChartAxisTime(
   }
   return String(d.getFullYear());
 }
+
+export function formatChartTooltipTime(
+  unixSec: number,
+  range: StockRange,
+  timeFormat: TimeFormat
+): string {
+  var d = new Date(unixSec * 1000);
+  var h = d.getHours();
+  var m = d.getMinutes();
+  var timeStr: string;
+  if (timeFormat === '24h') {
+    timeStr = pad2(h) + ':' + pad2(m);
+  } else {
+    var ampm = h >= 12 ? 'PM' : 'AM';
+    var h12 = h % 12;
+    timeStr = String(h12 === 0 ? 12 : h12) + ':' + pad2(m) + ' ' + ampm;
+  }
+
+  var monthDay = MONTHS_SHORT[d.getMonth()] + ' ' + String(d.getDate());
+  if (range === '1d') {
+    return timeStr;
+  }
+  if (range === '1w' || range === '1m') {
+    return monthDay + ', ' + timeStr;
+  }
+  return monthDay + ', ' + String(d.getFullYear());
+}
