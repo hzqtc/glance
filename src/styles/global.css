@@ -820,6 +820,14 @@ body,
   font-weight: 500;
   color: var(--text-muted);
   margin-bottom: 4px;
+  white-space: nowrap;
+}
+
+.atmos-metric-inline-sub {
+  font-size: 12px;
+  font-weight: 400;
+  opacity: 0.85;
+  font-variant-numeric: tabular-nums;
 }
 
 .atmos-metric-value-row {
@@ -1219,6 +1227,7 @@ body,
   font-weight: 500;
   color: var(--text-primary);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .city-stat-aqi {

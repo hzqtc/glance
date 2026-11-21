@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -57,75 +58,102 @@ func TestExtractNextHours(t *testing.T) {
 	}
 }
 
-func TestHandlerEndToEndWithMockOpenMeteoAndAirQuality(t *testing.T) {
+func TestComputeRainNowcast(t *testing.T) {
+	m15Start := omMinutely15{
+		Time:          []string{"2026-11-18T22:00", "2026-11-18T22:15", "2026-11-18T22:30", "2026-11-18T22:45"},
+		Precipitation: []float64{0, 0, 0.3, 0.4},
+	}
+	if got := computeRainNowcast("2026-11-18T22:00", m15Start); got != "Rain in ~30 min" {
+		t.Fatalf("expected 'Rain in ~30 min', got %q", got)
+	}
+
+	m15End := omMinutely15{
+		Time:          []string{"2026-11-18T22:00", "2026-11-18T22:15", "2026-11-18T22:30", "2026-11-18T22:45"},
+		Precipitation: []float64{0.4, 0.2, 0.1, 0},
+	}
+	if got := computeRainNowcast("2026-11-18T22:00", m15End); got != "Rain ending in ~45 min" {
+		t.Fatalf("expected 'Rain ending in ~45 min', got %q", got)
+	}
+}
+
+func TestHandlerEndToEndWithPastDaysAndAirQuality(t *testing.T) {
 	mockForecast := `[
 		{
 			"utc_offset_seconds": -28800,
-			"current": {"time":"2026-11-18T22:00","temperature_2m":14.0,"apparent_temperature":13.2,"relative_humidity_2m":68,"weather_code":2,"wind_speed_10m":9.5,"is_day":0,"cloud_cover":35},
-			"hourly": {"time":["2026-11-18T22:00","2026-11-18T23:00","2026-11-19T00:00"],"temperature_2m":[14,13,12],"weather_code":[2,2,1],"precipitation_probability":[10,5,0],"is_day":[0,0,0]},
+			"current": {"time":"2026-11-19T22:00","temperature_2m":14.0,"apparent_temperature":13.2,"dew_point_2m":6.5,"relative_humidity_2m":68,"weather_code":2,"wind_speed_10m":9.5,"wind_direction_10m":315,"visibility":16000,"is_day":0,"cloud_cover":35},
+			"minutely_15": {"time":["2026-11-19T22:00","2026-11-19T22:15","2026-11-19T22:30"],"precipitation":[0,0,0.25]},
+			"hourly": {"time":["2026-11-19T22:00","2026-11-19T23:00","2026-11-20T00:00"],"temperature_2m":[14,13,12],"weather_code":[2,2,1],"precipitation_probability":[10,5,0],"is_day":[0,0,0]},
 			"daily": {
-				"time":["2026-11-18","2026-11-19","2026-11-20","2026-11-21","2026-11-22"],
-				"weather_code":[2,0,1,61,0],
-				"temperature_2m_max":[20.5,21.0,19.5,16.0,18.5],
-				"temperature_2m_min":[9.0,8.5,9.5,10.0,8.0],
-				"precipitation_probability_max":[10,0,5,75,0],
-				"uv_index_max":[3.8,4.1,3.5,2.2,4.0],
-				"sunrise":["2026-11-18T06:51"],
-				"sunset":["2026-11-18T16:54"]
+				"time":["2026-11-18","2026-11-19","2026-11-20","2026-11-21","2026-11-22","2026-11-23"],
+				"weather_code":[0,2,0,1,61,0],
+				"temperature_2m_max":[22.5,20.5,21.0,19.5,16.0,18.5],
+				"temperature_2m_min":[10.0,9.0,8.5,9.5,10.0,8.0],
+				"precipitation_probability_max":[0,10,0,5,75,0],
+				"precipitation_sum":[0,0,0,0.2,8.5,0],
+				"sunshine_duration":[30000,27000,31000,28000,10000,29000],
+				"uv_index_max":[4.0,3.8,4.1,3.5,2.2,4.0],
+				"sunrise":["2026-11-18T06:50","2026-11-19T06:51"],
+				"sunset":["2026-11-18T16:55","2026-11-19T16:54"]
 			}
 		},
 		{
 			"utc_offset_seconds": -28800,
-			"current": {"time":"2026-11-18T22:00","temperature_2m":12.5,"apparent_temperature":11.0,"relative_humidity_2m":80,"weather_code":45,"wind_speed_10m":16.0,"is_day":0,"cloud_cover":85},
-			"hourly": {"time":["2026-11-18T22:00","2026-11-18T23:00"],"temperature_2m":[12.5,12.0],"weather_code":[45,45],"precipitation_probability":[15,15],"is_day":[0,0]},
+			"current": {"time":"2026-11-19T22:00","temperature_2m":12.5,"apparent_temperature":11.0,"dew_point_2m":9.0,"relative_humidity_2m":80,"weather_code":45,"wind_speed_10m":16.0,"wind_direction_10m":270,"visibility":1800,"is_day":0,"cloud_cover":85},
+			"hourly": {"time":["2026-11-19T22:00","2026-11-19T23:00"],"temperature_2m":[12.5,12.0],"weather_code":[45,45],"precipitation_probability":[15,15],"is_day":[0,0]},
 			"daily": {
-				"time":["2026-11-18","2026-11-19"],
-				"weather_code":[45,2],
-				"temperature_2m_max":[16.0,17.0],
-				"temperature_2m_min":[10.0,9.5],
-				"precipitation_probability_max":[15,10],
-				"uv_index_max":[3.0,3.5],
-				"sunrise":["2026-11-18T06:53"],
-				"sunset":["2026-11-18T16:55"]
+				"time":["2026-11-18","2026-11-19","2026-11-20"],
+				"weather_code":[2,45,2],
+				"temperature_2m_max":[17.0,16.0,17.0],
+				"temperature_2m_min":[10.0,10.0,9.5],
+				"precipitation_probability_max":[10,15,10],
+				"precipitation_sum":[0,0.1,0],
+				"sunshine_duration":[22000,12000,24000],
+				"uv_index_max":[3.2,3.0,3.5],
+				"sunrise":["2026-11-18T06:52","2026-11-19T06:53"],
+				"sunset":["2026-11-18T16:56","2026-11-19T16:55"]
 			}
 		},
 		{
 			"utc_offset_seconds": 28800,
-			"current": {"time":"2026-11-19T14:00","temperature_2m":18.5,"apparent_temperature":18.0,"relative_humidity_2m":62,"weather_code":61,"wind_speed_10m":14.0,"is_day":1,"cloud_cover":90},
-			"hourly": {"time":["2026-11-19T14:00","2026-11-19T15:00"],"temperature_2m":[18.5,18.0],"weather_code":[61,61],"precipitation_probability":[70,65],"is_day":[1,1]},
+			"current": {"time":"2026-11-20T14:00","temperature_2m":18.5,"apparent_temperature":18.0,"dew_point_2m":11.0,"relative_humidity_2m":62,"weather_code":61,"wind_speed_10m":14.0,"wind_direction_10m":90,"visibility":9000,"is_day":1,"cloud_cover":90},
+			"hourly": {"time":["2026-11-20T14:00","2026-11-20T15:00"],"temperature_2m":[18.5,18.0],"weather_code":[61,61],"precipitation_probability":[70,65],"is_day":[1,1]},
 			"daily": {
-				"time":["2026-11-19","2026-11-20"],
-				"weather_code":[61,2],
-				"temperature_2m_max":[20.0,19.0],
-				"temperature_2m_min":[13.5,12.0],
-				"precipitation_probability_max":[75,20],
-				"uv_index_max":[2.5,4.2],
-				"sunrise":["2026-11-19T06:24"],
-				"sunset":["2026-11-19T16:55"]
+				"time":["2026-11-19","2026-11-20","2026-11-21"],
+				"weather_code":[2,61,2],
+				"temperature_2m_max":[19.0,20.0,19.0],
+				"temperature_2m_min":[12.0,13.5,12.0],
+				"precipitation_probability_max":[20,75,20],
+				"precipitation_sum":[0,6.2,0],
+				"sunshine_duration":[26000,6000,25000],
+				"uv_index_max":[4.0,2.5,4.2],
+				"sunrise":["2026-11-19T06:23","2026-11-20T06:24"],
+				"sunset":["2026-11-19T16:56","2026-11-20T16:55"]
 			}
 		},
 		{
 			"utc_offset_seconds": 32400,
-			"current": {"time":"2026-11-19T15:00","temperature_2m":16.0,"apparent_temperature":15.5,"relative_humidity_2m":55,"weather_code":1,"wind_speed_10m":11.0,"is_day":1,"cloud_cover":20},
-			"hourly": {"time":["2026-11-19T15:00","2026-11-19T16:00"],"temperature_2m":[16.0,15.0],"weather_code":[1,1],"precipitation_probability":[5,5],"is_day":[1,1]},
+			"current": {"time":"2026-11-20T15:00","temperature_2m":16.0,"apparent_temperature":15.5,"dew_point_2m":7.0,"relative_humidity_2m":55,"weather_code":1,"wind_speed_10m":11.0,"wind_direction_10m":180,"visibility":20000,"is_day":1,"cloud_cover":20},
+			"hourly": {"time":["2026-11-20T15:00","2026-11-20T16:00"],"temperature_2m":[16.0,15.0],"weather_code":[1,1],"precipitation_probability":[5,5],"is_day":[1,1]},
 			"daily": {
-				"time":["2026-11-19","2026-11-20"],
-				"weather_code":[1,0],
-				"temperature_2m_max":[18.0,17.5],
-				"temperature_2m_min":[10.5,9.5],
-				"precipitation_probability_max":[10,5],
-				"uv_index_max":[3.6,3.8],
-				"sunrise":["2026-11-19T06:21"],
-				"sunset":["2026-11-19T16:31"]
+				"time":["2026-11-19","2026-11-20","2026-11-21"],
+				"weather_code":[0,1,0],
+				"temperature_2m_max":[17.5,18.0,17.5],
+				"temperature_2m_min":[9.5,10.5,9.5],
+				"precipitation_probability_max":[5,10,5],
+				"precipitation_sum":[0,0,0],
+				"sunshine_duration":[29000,28000,30000],
+				"uv_index_max":[3.8,3.6,3.8],
+				"sunrise":["2026-11-19T06:20","2026-11-20T06:21"],
+				"sunset":["2026-11-19T16:32","2026-11-20T16:31"]
 			}
 		}
 	]`
 
 	mockAir := `[
-		{"current":{"us_aqi":28,"uv_index":0.0}},
-		{"current":{"us_aqi":34,"uv_index":0.0}},
-		{"current":{"us_aqi":72,"uv_index":3.4}},
-		{"current":{"us_aqi":24,"uv_index":2.1}}
+		{"current":{"us_aqi":28,"pm2_5":6.4,"uv_index":0.0}},
+		{"current":{"us_aqi":34,"pm2_5":8.1,"uv_index":0.0}},
+		{"current":{"us_aqi":72,"pm2_5":22.5,"uv_index":3.4}},
+		{"current":{"us_aqi":24,"pm2_5":5.2,"uv_index":2.1}}
 	]`
 
 	origClient := httpClient
@@ -159,16 +187,21 @@ func TestHandlerEndToEndWithMockOpenMeteoAndAirQuality(t *testing.T) {
 	if len(parsed.Weather) != 4 {
 		t.Fatalf("expected 4 cities weather, got %d", len(parsed.Weather))
 	}
-	if len(parsed.Weather[0].Daily) != 5 {
-		t.Fatalf("expected 5 daily entries for sunnyvale, got %d", len(parsed.Weather[0].Daily))
+
+	sv := parsed.Weather[0]
+	if len(sv.Daily) != 5 || sv.Daily[0].Date != "2026-11-19" {
+		t.Fatalf("expected 5 daily entries starting today (2026-11-19), got %+v", sv.Daily)
 	}
-	if parsed.Weather[0].USAqi == nil || *parsed.Weather[0].USAqi != 28 {
-		t.Fatalf("expected sunnyvale AQI 28, got %+v", parsed.Weather[0].USAqi)
+	if sv.Sunrise != "06:51" || sv.WindDirDeg != 315 || sv.RainNowcast != "Rain in ~30 min" {
+		t.Fatalf("unexpected sunnyvale enriched fields: %+v", sv)
 	}
-	if parsed.Weather[2].USAqi == nil || *parsed.Weather[2].USAqi != 72 {
-		t.Fatalf("expected shanghai AQI 72, got %+v", parsed.Weather[2].USAqi)
+	if sv.TempDeltaYesterdayC == nil || math.Abs(*sv.TempDeltaYesterdayC-(-2.0)) > 0.01 {
+		t.Fatalf("expected temp delta -2.0C, got %+v", sv.TempDeltaYesterdayC)
 	}
-	if parsed.Weather[3].CityID != "tokyo" || parsed.Weather[3].USAqi == nil || *parsed.Weather[3].USAqi != 24 {
-		t.Fatalf("expected tokyo AQI 24, got %+v", parsed.Weather[3])
+	if sv.PM25 == nil || math.Abs(*sv.PM25-6.4) > 0.01 {
+		t.Fatalf("expected sunnyvale PM2.5 6.4, got %+v", sv.PM25)
+	}
+	if parsed.Weather[2].PrecipSumMm != 6.2 {
+		t.Fatalf("expected shanghai precip sum 6.2mm, got %v", parsed.Weather[2].PrecipSumMm)
 	}
 }

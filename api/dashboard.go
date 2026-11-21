@@ -21,9 +21,9 @@ import (
 var embeddedConfigJSON []byte
 
 var (
-	openMeteoBaseURL   = "https://api.open-meteo.com/v1/forecast"
-	openMeteoAirURL    = "https://air-quality-api.open-meteo.com/v1/air-quality"
-	httpClient         = &http.Client{Timeout: 8 * time.Second}
+	openMeteoBaseURL = "https://api.open-meteo.com/v1/forecast"
+	openMeteoAirURL  = "https://air-quality-api.open-meteo.com/v1/air-quality"
+	httpClient       = &http.Client{Timeout: 8 * time.Second}
 )
 
 type HeroConfig struct {
@@ -95,23 +95,31 @@ type DailyForecast struct {
 }
 
 type CityWeather struct {
-	CityID           string           `json:"cityId"`
-	UTCOffsetSeconds int              `json:"utcOffsetSeconds"`
-	TempC            float64          `json:"tempC"`
-	FeelsLikeC       float64          `json:"feelsLikeC"`
-	Humidity         int              `json:"humidity"`
-	WindKmh          float64          `json:"windKmh"`
-	WeatherCode      int              `json:"weatherCode"`
-	IsDay            bool             `json:"isDay"`
-	CloudCover       int              `json:"cloudCover"`
-	HighC            float64          `json:"highC"`
-	LowC             float64          `json:"lowC"`
-	Sunrise          string           `json:"sunrise"`
-	Sunset           string           `json:"sunset"`
-	USAqi            *int             `json:"usAqi"`
-	UVIndex          *float64         `json:"uvIndex"`
-	Hourly           []HourlyForecast `json:"hourly"`
-	Daily            []DailyForecast  `json:"daily"`
+	CityID              string           `json:"cityId"`
+	UTCOffsetSeconds    int              `json:"utcOffsetSeconds"`
+	TempC               float64          `json:"tempC"`
+	FeelsLikeC          float64          `json:"feelsLikeC"`
+	DewPointC           float64          `json:"dewPointC"`
+	Humidity            int              `json:"humidity"`
+	WindKmh             float64          `json:"windKmh"`
+	WindDirDeg          int              `json:"windDirDeg"`
+	VisibilityM         float64          `json:"visibilityM"`
+	WeatherCode         int              `json:"weatherCode"`
+	IsDay               bool             `json:"isDay"`
+	CloudCover          int              `json:"cloudCover"`
+	HighC               float64          `json:"highC"`
+	LowC                float64          `json:"lowC"`
+	Sunrise             string           `json:"sunrise"`
+	Sunset              string           `json:"sunset"`
+	PrecipSumMm         float64          `json:"precipSumMm"`
+	SunshineSeconds     float64          `json:"sunshineSeconds"`
+	TempDeltaYesterdayC *float64         `json:"tempDeltaYesterdayC"`
+	RainNowcast         string           `json:"rainNowcast,omitempty"`
+	USAqi               *int             `json:"usAqi"`
+	PM25                *float64         `json:"pm25"`
+	UVIndex             *float64         `json:"uvIndex"`
+	Hourly              []HourlyForecast `json:"hourly"`
+	Daily               []DailyForecast  `json:"daily"`
 }
 
 type DashboardResponse struct {
@@ -123,21 +131,30 @@ type DashboardResponse struct {
 
 // Open-Meteo Forecast raw response structures.
 type omLocation struct {
-	UTCOffsetSeconds int       `json:"utc_offset_seconds"`
-	Current          omCurrent `json:"current"`
-	Hourly           omHourly  `json:"hourly"`
-	Daily            omDaily   `json:"daily"`
+	UTCOffsetSeconds int          `json:"utc_offset_seconds"`
+	Current          omCurrent    `json:"current"`
+	Minutely15       omMinutely15 `json:"minutely_15"`
+	Hourly           omHourly     `json:"hourly"`
+	Daily            omDaily      `json:"daily"`
 }
 
 type omCurrent struct {
 	Time                string  `json:"time"`
 	Temperature2m       float64 `json:"temperature_2m"`
 	ApparentTemperature float64 `json:"apparent_temperature"`
+	DewPoint2m          float64 `json:"dew_point_2m"`
 	RelativeHumidity2m  int     `json:"relative_humidity_2m"`
 	WeatherCode         int     `json:"weather_code"`
 	WindSpeed10m        float64 `json:"wind_speed_10m"`
+	WindDirection10m    int     `json:"wind_direction_10m"`
+	Visibility          float64 `json:"visibility"`
 	IsDay               int     `json:"is_day"`
 	CloudCover          int     `json:"cloud_cover"`
+}
+
+type omMinutely15 struct {
+	Time          []string  `json:"time"`
+	Precipitation []float64 `json:"precipitation"`
 }
 
 type omHourly struct {
@@ -154,6 +171,8 @@ type omDaily struct {
 	Temperature2mMax            []float64 `json:"temperature_2m_max"`
 	Temperature2mMin            []float64 `json:"temperature_2m_min"`
 	PrecipitationProbabilityMax []int     `json:"precipitation_probability_max"`
+	PrecipitationSum            []float64 `json:"precipitation_sum"`
+	SunshineDuration            []float64 `json:"sunshine_duration"`
 	UVIndexMax                  []float64 `json:"uv_index_max"`
 	Sunrise                     []string  `json:"sunrise"`
 	Sunset                      []string  `json:"sunset"`
@@ -166,6 +185,7 @@ type omAirLocation struct {
 
 type omAirCurrent struct {
 	USAqi   *int     `json:"us_aqi"`
+	PM25    *float64 `json:"pm2_5"`
 	UVIndex *float64 `json:"uv_index"`
 }
 
@@ -275,24 +295,26 @@ func fetchAllWeather(cities []CityConfig) ([]CityWeather, error) {
 	lonCSV := strings.Join(lons, ",")
 
 	var (
-		locations []omLocation
-		airList   []omAirLocation
+		locations  []omLocation
+		airList    []omAirLocation
 		weatherErr error
 		wg         sync.WaitGroup
 	)
 
 	wg.Add(2)
 
-	// 1. Forecast + 5-day daily
+	// 1. Forecast + yesterday comparison (past_days=1) + 15-min rain nowcast + 5-day daily
 	go func() {
 		defer wg.Done()
 		params := url.Values{}
 		params.Set("latitude", latCSV)
 		params.Set("longitude", lonCSV)
 		params.Set("timezone", "auto")
-		params.Set("current", "temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,is_day,cloud_cover")
+		params.Set("current", "temperature_2m,apparent_temperature,dew_point_2m,relative_humidity_2m,weather_code,wind_speed_10m,wind_direction_10m,visibility,is_day,cloud_cover")
+		params.Set("minutely_15", "precipitation")
 		params.Set("hourly", "temperature_2m,weather_code,precipitation_probability,is_day")
-		params.Set("daily", "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,uv_index_max,sunrise,sunset")
+		params.Set("daily", "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,sunshine_duration,uv_index_max,sunrise,sunset")
+		params.Set("past_days", "1")
 		params.Set("forecast_days", "5")
 		params.Set("temperature_unit", "celsius")
 		params.Set("wind_speed_unit", "kmh")
@@ -305,14 +327,14 @@ func fetchAllWeather(cities []CityConfig) ([]CityWeather, error) {
 		locations, weatherErr = decodeOpenMeteoResponse(body)
 	}()
 
-	// 2. Air Quality + live UV (best-effort; degrades gracefully if unavailable)
+	// 2. Air Quality + PM2.5 + live UV (best-effort; degrades gracefully if unavailable)
 	go func() {
 		defer wg.Done()
 		params := url.Values{}
 		params.Set("latitude", latCSV)
 		params.Set("longitude", lonCSV)
 		params.Set("timezone", "auto")
-		params.Set("current", "us_aqi,uv_index")
+		params.Set("current", "us_aqi,pm2_5,uv_index")
 
 		body, err := httpGetBody(openMeteoAirURL + "?" + params.Encode())
 		if err != nil {
@@ -402,49 +424,151 @@ func decodeOpenMeteoAirResponse(body []byte) ([]omAirLocation, error) {
 }
 
 func mapLocationWeather(cityID string, loc omLocation, air *omAirLocation) CityWeather {
-	var highC, lowC float64
-	if len(loc.Daily.Temperature2mMax) > 0 {
-		highC = loc.Daily.Temperature2mMax[0]
+	todayIdx := findTodayDailyIndex(loc.Current.Time, loc.Daily.Time)
+
+	var highC, lowC, precipSumMm, sunshineSeconds float64
+	if todayIdx < len(loc.Daily.Temperature2mMax) {
+		highC = loc.Daily.Temperature2mMax[todayIdx]
 	}
-	if len(loc.Daily.Temperature2mMin) > 0 {
-		lowC = loc.Daily.Temperature2mMin[0]
+	if todayIdx < len(loc.Daily.Temperature2mMin) {
+		lowC = loc.Daily.Temperature2mMin[todayIdx]
+	}
+	if todayIdx < len(loc.Daily.PrecipitationSum) {
+		precipSumMm = loc.Daily.PrecipitationSum[todayIdx]
+	}
+	if todayIdx < len(loc.Daily.SunshineDuration) {
+		sunshineSeconds = loc.Daily.SunshineDuration[todayIdx]
 	}
 
 	sunrise := "06:30"
-	if len(loc.Daily.Sunrise) > 0 {
-		sunrise = extractClockHHMM(loc.Daily.Sunrise[0], sunrise)
+	if todayIdx < len(loc.Daily.Sunrise) {
+		sunrise = extractClockHHMM(loc.Daily.Sunrise[todayIdx], sunrise)
 	}
 	sunset := "18:30"
-	if len(loc.Daily.Sunset) > 0 {
-		sunset = extractClockHHMM(loc.Daily.Sunset[0], sunset)
+	if todayIdx < len(loc.Daily.Sunset) {
+		sunset = extractClockHHMM(loc.Daily.Sunset[todayIdx], sunset)
 	}
 
 	var usAqi *int
+	var pm25 *float64
 	var uvIndex *float64
 	if air != nil {
 		usAqi = air.Current.USAqi
+		pm25 = air.Current.PM25
 		uvIndex = air.Current.UVIndex
 	}
 
 	return CityWeather{
-		CityID:           cityID,
-		UTCOffsetSeconds: loc.UTCOffsetSeconds,
-		TempC:            loc.Current.Temperature2m,
-		FeelsLikeC:       loc.Current.ApparentTemperature,
-		Humidity:         loc.Current.RelativeHumidity2m,
-		WindKmh:          loc.Current.WindSpeed10m,
-		WeatherCode:      loc.Current.WeatherCode,
-		IsDay:            loc.Current.IsDay == 1,
-		CloudCover:       loc.Current.CloudCover,
-		HighC:            highC,
-		LowC:             lowC,
-		Sunrise:          sunrise,
-		Sunset:           sunset,
-		USAqi:            usAqi,
-		UVIndex:          uvIndex,
-		Hourly:           extractNextHours(loc.Current.Time, loc.Hourly, 8),
-		Daily:            extractDailyForecast(loc.Daily, 5),
+		CityID:              cityID,
+		UTCOffsetSeconds:    loc.UTCOffsetSeconds,
+		TempC:               loc.Current.Temperature2m,
+		FeelsLikeC:          loc.Current.ApparentTemperature,
+		DewPointC:           loc.Current.DewPoint2m,
+		Humidity:            loc.Current.RelativeHumidity2m,
+		WindKmh:             loc.Current.WindSpeed10m,
+		WindDirDeg:          loc.Current.WindDirection10m,
+		VisibilityM:         loc.Current.Visibility,
+		WeatherCode:         loc.Current.WeatherCode,
+		IsDay:               loc.Current.IsDay == 1,
+		CloudCover:          loc.Current.CloudCover,
+		HighC:               highC,
+		LowC:                lowC,
+		Sunrise:             sunrise,
+		Sunset:              sunset,
+		PrecipSumMm:         precipSumMm,
+		SunshineSeconds:     sunshineSeconds,
+		TempDeltaYesterdayC: computeTempDeltaYesterday(loc.Current.Time, loc.Current.Temperature2m, loc.Hourly, loc.Daily, todayIdx),
+		RainNowcast:         computeRainNowcast(loc.Current.Time, loc.Minutely15),
+		USAqi:               usAqi,
+		PM25:                pm25,
+		UVIndex:             uvIndex,
+		Hourly:              extractNextHours(loc.Current.Time, loc.Hourly, 8),
+		Daily:               extractDailyForecast(loc.Daily, todayIdx, 5),
 	}
+}
+
+func findTodayDailyIndex(currentISO string, dailyTimes []string) int {
+	if len(dailyTimes) == 0 {
+		return 0
+	}
+	if len(currentISO) >= 10 {
+		todayDate := currentISO[:10]
+		for i, d := range dailyTimes {
+			if d == todayDate {
+				return i
+			}
+		}
+	}
+	// With past_days=1, index 1 is typically today if exact date match failed.
+	if len(dailyTimes) > 5 {
+		return 1
+	}
+	return 0
+}
+
+// computeTempDeltaYesterday compares current temp against yesterday's temperature at the same hour.
+// Falls back to today's high minus yesterday's high if hourly history isn't present.
+func computeTempDeltaYesterday(
+	currentISO string,
+	currentTempC float64,
+	hourly omHourly,
+	daily omDaily,
+	todayIdx int,
+) *float64 {
+	if len(currentISO) >= 13 && len(hourly.Time) >= 25 && len(hourly.Temperature2m) == len(hourly.Time) {
+		currentHourPrefix := currentISO[:13] + ":00"
+		for i, t := range hourly.Time {
+			if t == currentHourPrefix && i >= 24 {
+				delta := currentTempC - hourly.Temperature2m[i-24]
+				return &delta
+			}
+		}
+	}
+	if todayIdx >= 1 && todayIdx < len(daily.Temperature2mMax) {
+		delta := daily.Temperature2mMax[todayIdx] - daily.Temperature2mMax[todayIdx-1]
+		return &delta
+	}
+	return nil
+}
+
+// computeRainNowcast checks the next 2 hours (8 x 15-min slots) for imminent rain start or end.
+func computeRainNowcast(currentISO string, m15 omMinutely15) string {
+	n := len(m15.Time)
+	if n == 0 || len(m15.Precipitation) < n || len(currentISO) < 16 {
+		return ""
+	}
+
+	startIdx := -1
+	for i, t := range m15.Time {
+		if t >= currentISO[:16] {
+			startIdx = i
+			break
+		}
+	}
+	if startIdx < 0 {
+		return ""
+	}
+
+	const rainThresholdMm = 0.05
+	maxSlots := 8 // 2 hours
+	if startIdx+maxSlots > n {
+		maxSlots = n - startIdx
+	}
+	if maxSlots < 2 {
+		return ""
+	}
+
+	rainingNow := m15.Precipitation[startIdx] >= rainThresholdMm
+	for offset := 1; offset < maxSlots; offset++ {
+		isWet := m15.Precipitation[startIdx+offset] >= rainThresholdMm
+		if !rainingNow && isWet {
+			return fmt.Sprintf("Rain in ~%d min", offset*15)
+		}
+		if rainingNow && !isWet {
+			return fmt.Sprintf("Rain ending in ~%d min", offset*15)
+		}
+	}
+	return ""
 }
 
 func extractClockHHMM(iso string, fallback string) string {
@@ -455,16 +579,17 @@ func extractClockHHMM(iso string, fallback string) string {
 	return iso[idx+1 : idx+6]
 }
 
-func extractDailyForecast(daily omDaily, limit int) []DailyForecast {
+func extractDailyForecast(daily omDaily, startIdx int, limit int) []DailyForecast {
 	n := len(daily.Time)
-	if n == 0 || limit <= 0 {
+	if n == 0 || limit <= 0 || startIdx >= n {
 		return []DailyForecast{}
 	}
-	if n > limit {
-		n = limit
+	end := startIdx + limit
+	if end > n {
+		end = n
 	}
-	out := make([]DailyForecast, 0, n)
-	for i := 0; i < n; i++ {
+	out := make([]DailyForecast, 0, end-startIdx)
+	for i := startIdx; i < end; i++ {
 		var code int
 		if i < len(daily.WeatherCode) {
 			code = daily.WeatherCode[i]

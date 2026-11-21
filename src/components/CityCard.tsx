@@ -1,7 +1,13 @@
 import type { CityConfig, CityWeather, TempUnit } from '../types';
 import type { CityClockInfo } from '../utils/time';
 import { formatHourOffset } from '../utils/time';
-import { describeAQI, describeWMO, formatTemp, formatWind } from '../utils/weather';
+import {
+  describeAQI,
+  describeWMO,
+  formatTemp,
+  formatWind,
+  windDirectionArrow,
+} from '../utils/weather';
 import { WeatherIcon } from './WeatherIcon';
 
 interface CityCardProps {
@@ -36,6 +42,7 @@ export function CityCard(props: CityCardProps) {
 
   var aqiVal = weather && typeof weather.usAqi === 'number' ? weather.usAqi : null;
   var aqiDesc = aqiVal !== null ? describeAQI(aqiVal) : null;
+  var windArrow = weather ? windDirectionArrow(weather.windDirDeg) : '';
 
   var cardClass = 'city-card';
   if (props.isSelected) {
@@ -119,7 +126,10 @@ export function CityCard(props: CityCardProps) {
           </div>
           <div class="city-stat">
             <span class="city-stat-label">Wind</span>
-            <span class="city-stat-value">{formatWind(weather.windKmh, units)}</span>
+            <span class="city-stat-value">
+              {windArrow ? windArrow + ' ' : ''}
+              {formatWind(weather.windKmh, units)}
+            </span>
           </div>
           <div class="city-stat">
             <span class="city-stat-label">Humid</span>

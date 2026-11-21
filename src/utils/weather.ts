@@ -68,9 +68,96 @@ export function formatWind(windKmh: number, units: TempUnit): string {
   return String(Math.round(windKmh * 0.621371)) + ' mph';
 }
 
+/**
+ * Returns a directional flow arrow for meteorological wind_direction_10m
+ * (0° = wind blowing from North -> South = '↓', 315° = NW -> SE = '↘').
+ */
+export function windDirectionArrow(deg: number | undefined): string {
+  if (typeof deg !== 'number' || isNaN(deg)) {
+    return '';
+  }
+  var arrows = ['↓', '↙', '←', '↖', '↑', '↗', '→', '↘'];
+  var norm = ((deg % 360) + 360) % 360;
+  var idx = Math.round(norm / 45) % 8;
+  return arrows[idx];
+}
+
+export function formatTempDeltaYesterday(
+  deltaC: number | null | undefined,
+  units: TempUnit
+): string | null {
+  if (typeof deltaC !== 'number' || isNaN(deltaC)) {
+    return null;
+  }
+  var delta = units === 'C' ? Math.round(deltaC) : Math.round((deltaC * 9) / 5);
+  if (delta === 0) {
+    return 'Same as yesterday';
+  }
+  if (delta > 0) {
+    return String(delta) + '° warmer than yesterday';
+  }
+  return String(Math.abs(delta)) + '° cooler than yesterday';
+}
+
+/**
+ * Formats visibility only when noticeably reduced by fog/haze (< 8 km / 5 mi).
+ */
+export function formatLowVisibility(
+  meters: number | undefined,
+  units: TempUnit
+): string | null {
+  if (typeof meters !== 'number' || isNaN(meters) || meters <= 0 || meters >= 8000) {
+    return null;
+  }
+  if (units === 'C') {
+    var km = meters / 1000;
+    return 'Vis ' + (km < 2 ? km.toFixed(1) : String(Math.round(km))) + ' km';
+  }
+  var mi = meters / 1609.34;
+  return 'Vis ' + (mi < 2 ? mi.toFixed(1) : String(Math.round(mi))) + ' mi';
+}
+
+export function formatDailySummary(
+  precipSumMm: number | undefined,
+  sunshineSeconds: number | undefined,
+  units: TempUnit
+): string | null {
+  if (typeof precipSumMm === 'number' && precipSumMm >= 0.5) {
+    if (units === 'C') {
+      var mmStr = precipSumMm < 10 ? precipSumMm.toFixed(1) : String(Math.round(precipSumMm));
+      return mmStr + ' mm rain today';
+    }
+    var inches = precipSumMm / 25.4;
+    var inStr = inches < 1 ? inches.toFixed(2) : inches.toFixed(1);
+    return inStr + ' in rain today';
+  }
+  if (typeof sunshineSeconds === 'number' && sunshineSeconds >= 3600) {
+    var hrs = Math.round((sunshineSeconds / 3600) * 2) / 2;
+    var hrStr = hrs % 1 === 0 ? String(hrs) : hrs.toFixed(1);
+    return hrStr + 'h sun today';
+  }
+  return null;
+}
+
 export interface RatingDescriptor {
   label: string;
   color: string;
+}
+
+export function describeDewPoint(dewPointC: number): RatingDescriptor {
+  if (dewPointC < 10) {
+    return { label: 'Crisp', color: '#60a5fa' };
+  }
+  if (dewPointC < 15.5) {
+    return { label: 'Comfy', color: '#4ade80' };
+  }
+  if (dewPointC < 18.5) {
+    return { label: 'Mild', color: '#a3e635' };
+  }
+  if (dewPointC < 21) {
+    return { label: 'Humid', color: '#facc15' };
+  }
+  return { label: 'Muggy', color: '#fb923c' };
 }
 
 export function describeAQI(aqi: number): RatingDescriptor {

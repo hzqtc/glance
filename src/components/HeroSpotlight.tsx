@@ -2,7 +2,15 @@ import type { ComponentChildren } from 'preact';
 import type { CityConfig, CityWeather, TempUnit, TimeFormat } from '../types';
 import type { CityClockInfo } from '../utils/time';
 import { formatHourlyLabel } from '../utils/time';
-import { describeAQI, describeWMO, formatTemp, formatWind } from '../utils/weather';
+import {
+  describeAQI,
+  describeWMO,
+  formatLowVisibility,
+  formatTemp,
+  formatTempDeltaYesterday,
+  formatWind,
+  windDirectionArrow,
+} from '../utils/weather';
 import { WeatherIcon } from './WeatherIcon';
 
 interface HeroSpotlightProps {
@@ -20,6 +28,9 @@ function getRainHeadsUp(
   timeFormat: TimeFormat
 ): string | null {
   if (!weather) return null;
+  if (weather.rainNowcast) {
+    return weather.rainNowcast;
+  }
   var desc = describeWMO(weather.weatherCode);
   if (desc.kind === 'storm') {
     return 'Thunderstorm active';
@@ -57,6 +68,12 @@ export function HeroSpotlight(props: HeroSpotlightProps) {
     aqiVal !== null && aqiVal >= 101
       ? 'AQI ' + String(aqiVal) + ' · ' + describeAQI(aqiVal).label
       : null;
+
+  var deltaText = weather
+    ? formatTempDeltaYesterday(weather.tempDeltaYesterdayC, units)
+    : null;
+  var windArrow = weather ? windDirectionArrow(weather.windDirDeg) : '';
+  var lowVis = weather ? formatLowVisibility(weather.visibilityM, units) : null;
 
   return (
     <section class="hero">
@@ -109,17 +126,37 @@ export function HeroSpotlight(props: HeroSpotlightProps) {
                 <span class="hero-meta-item">
                   L {formatTemp(weather.lowC, units)}
                 </span>
-                <span class="hero-meta-sep">·</span>
-                <span class="hero-meta-item">
-                  Feels {formatTemp(weather.feelsLikeC, units)}
-                </span>
+                {deltaText ? (
+                  <span>
+                    <span class="hero-meta-sep">·</span>
+                    <span class="hero-meta-item">{deltaText}</span>
+                  </span>
+                ) : (
+                  <span>
+                    <span class="hero-meta-sep">·</span>
+                    <span class="hero-meta-item">
+                      Feels {formatTemp(weather.feelsLikeC, units)}
+                    </span>
+                  </span>
+                )}
               </div>
               <div class="hero-meta-row hero-meta-secondary">
+                {deltaText ? (
+                  <span>
+                    <span class="hero-meta-item">
+                      Feels {formatTemp(weather.feelsLikeC, units)}
+                    </span>
+                    <span class="hero-meta-sep">·</span>
+                  </span>
+                ) : null}
                 <span class="hero-meta-item">
-                  Wind {formatWind(weather.windKmh, units)}
+                  {windArrow ? windArrow + ' ' : 'Wind '}
+                  {formatWind(weather.windKmh, units)}
                 </span>
                 <span class="hero-meta-sep">·</span>
-                <span class="hero-meta-item">Humidity {weather.humidity}%</span>
+                <span class="hero-meta-item">
+                  {lowVis ? lowVis : 'Humidity ' + String(weather.humidity) + '%'}
+                </span>
               </div>
             </div>
           ) : (

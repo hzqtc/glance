@@ -74,8 +74,11 @@ export interface CityWeather {
   utcOffsetSeconds: number;
   tempC: number;
   feelsLikeC: number;
+  dewPointC?: number;
   humidity: number;
   windKmh: number;
+  windDirDeg?: number;
+  visibilityM?: number;
   weatherCode: number;
   isDay: boolean;
   cloudCover: number;
@@ -83,7 +86,12 @@ export interface CityWeather {
   lowC: number;
   sunrise: string;
   sunset: string;
+  precipSumMm?: number;
+  sunshineSeconds?: number;
+  tempDeltaYesterdayC?: number | null;
+  rainNowcast?: string;
   usAqi?: number | null;
+  pm25?: number | null;
   uvIndex?: number | null;
   hourly: HourlyForecast[];
   daily?: DailyForecast[];
