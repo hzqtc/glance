@@ -48,6 +48,85 @@ function getRainHeadsUp(
   return null;
 }
 
+function MetaThermometerIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      class="hero-meta-icon"
+      aria-hidden="true"
+    >
+      <path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z" />
+    </svg>
+  );
+}
+
+function MetaWindIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      class="hero-meta-icon"
+      aria-hidden="true"
+    >
+      <path d="M9.59 4.59A2 2 0 1 1 11 8H2" />
+      <path d="M12.59 19.41A2 2 0 1 0 14 16H2" />
+      <path d="M17.73 7.73A2.5 2.5 0 1 1 19.5 12H2" />
+    </svg>
+  );
+}
+
+function MetaDropletIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      class="hero-meta-icon"
+      aria-hidden="true"
+    >
+      <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z" />
+    </svg>
+  );
+}
+
+function MetaEyeIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      class="hero-meta-icon"
+      aria-hidden="true"
+    >
+      <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
 export function HeroSpotlight(props: HeroSpotlightProps) {
   var city = props.city;
   var weather = props.weather;
@@ -140,20 +219,34 @@ export function HeroSpotlight(props: HeroSpotlightProps) {
               </div>
               <div class="hero-meta-row hero-meta-secondary">
                 {deltaText ? (
-                  <span>
+                  <span class="hero-meta-group" title="Feels like">
+                    <MetaThermometerIcon />
                     <span class="hero-meta-item">
-                      Feels {formatTemp(weather.feelsLikeC, units)}
+                      {formatTemp(weather.feelsLikeC, units)}
                     </span>
                     <span class="hero-meta-sep">·</span>
                   </span>
                 ) : null}
-                <span class="hero-meta-item">
-                  Wind {formatWind(weather.windKmh, units)}
+                <span class="hero-meta-group" title="Wind">
+                  <MetaWindIcon />
+                  <span class="hero-meta-item">
+                    {formatWind(weather.windKmh, units)}
+                  </span>
                 </span>
                 <span class="hero-meta-sep">·</span>
-                <span class="hero-meta-item">
-                  {lowVis ? lowVis : 'Humidity ' + String(weather.humidity) + '%'}
-                </span>
+                {lowVis ? (
+                  <span class="hero-meta-group" title="Visibility">
+                    <MetaEyeIcon />
+                    <span class="hero-meta-item">{lowVis.replace(/^Vis\s+/, '')}</span>
+                  </span>
+                ) : (
+                  <span class="hero-meta-group" title="Humidity">
+                    <MetaDropletIcon />
+                    <span class="hero-meta-item">
+                      {String(weather.humidity) + '%'}
+                    </span>
+                  </span>
+                )}
               </div>
             </div>
           ) : (
