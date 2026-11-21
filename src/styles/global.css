@@ -3042,47 +3042,126 @@ body,
 /* Targeted vertical fit tuning for iPad mini 6 (1133x744 + Home Indicator) without affecting iPad mini 2 (1024x768) */
 @media (max-height: 750px) {
   .dashboard-content {
-    padding: 20px 26px 20px 26px;
-    padding-top: calc(20px + env(safe-area-inset-top));
-    padding-bottom: calc(20px + env(safe-area-inset-bottom));
+    padding: 18px 24px 18px 24px;
+    padding-top: calc(6px + env(safe-area-inset-top));
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+  }
+
+  .stocks-content,
+  .cal-content {
+    padding-top: calc(6px + env(safe-area-inset-top));
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+  }
+
+  .carousel-dots {
+    bottom: 2px;
+    bottom: calc(0px + env(safe-area-inset-bottom));
+  }
+
+  .carousel-dot {
+    height: 16px;
   }
 
   .hero-top {
-    margin-bottom: 10px;
+    margin-bottom: 8px;
+  }
+
+  .hero-location-row {
+    margin-bottom: 4px;
   }
 
   .hero-clock-digits {
-    font-size: 108px;
-  }
-
-  .hero-clock-colon {
     font-size: 94px;
   }
 
+  .hero-clock-colon {
+    font-size: 82px;
+  }
+
+  .hero-clock-ampm {
+    font-size: 26px;
+  }
+
   .hero-date {
-    margin-top: 6px;
-    font-size: 23px;
+    margin-top: 5px;
+    font-size: 21px;
   }
 
   .hero-temp {
-    font-size: 96px;
+    font-size: 86px;
+  }
+
+  .hero-condition {
+    margin-top: 2px;
+    font-size: 21px;
+  }
+
+  .hero-meta-row {
+    margin-top: 3px;
+    font-size: 15px;
   }
 
   .hourly-ribbon {
-    padding: 12px 16px;
+    padding: 10px 14px;
+  }
+
+  .hourly-icon-wrap {
+    margin: 4px 0 4px 0;
+    height: 26px;
+  }
+
+  .hourly-temp {
+    font-size: 20px;
   }
 
   .insights-band,
   .cities-row {
-    margin-top: 11px;
+    margin-top: 10px;
   }
 
   .insights-card {
-    padding: 12px 18px;
+    padding: 11px 16px;
+  }
+
+  .insights-header {
+    margin-bottom: 8px;
+  }
+
+  .daily-icon-wrap {
+    margin: 4px 0 3px 0;
+    height: 24px;
+  }
+
+  .daily-precip {
+    margin-bottom: 4px;
+  }
+
+  .atmos-metrics {
+    margin-bottom: 8px;
+  }
+
+  .atmos-metric-num {
+    font-size: 28px;
+  }
+
+  .daylight-block {
+    padding-top: 8px;
   }
 
   .cities-row-compact .city-card {
-    padding: 11px 13px 10px 13px;
+    padding: 10px 13px 10px 13px;
+  }
+
+  .cities-row-compact .city-card-header {
+    margin-bottom: 6px;
+  }
+
+  .cities-row-compact .city-card-body {
+    margin-bottom: 7px;
+  }
+
+  .cities-row-compact .city-card-footer {
+    padding-top: 7px;
   }
 }
 
