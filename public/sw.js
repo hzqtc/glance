@@ -58,6 +58,11 @@ self.addEventListener('fetch', function (event) {
 
   var url = req.url || '';
 
+  /* Never cache private /api/calendar responses in Cache Storage */
+  if (url.indexOf('/api/calendar') !== -1) {
+    return;
+  }
+
   /* Network-first for /api/weather and /api/stocks with cached fallback during Wi-Fi blips */
   if (url.indexOf('/api/') !== -1) {
     event.respondWith(

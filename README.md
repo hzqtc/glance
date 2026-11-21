@@ -4,8 +4,8 @@ An ambient personal wall dashboard PWA designed for an **iPad mini 2 (iOS 12.5.7
 
 ## Features
 
-- **Swipeable Dashboard Carousel (Weather ↔ Stocks):**
-  - Swipe left/right on touchscreens, tap the subtle bottom pagination dots, or press `←`/`→` on desktop to switch between the **Weather** and **Stocks** dashboards.
+- **Swipeable Dashboard Carousel (Weather ↔ Stocks ↔ Calendar):**
+  - Swipe left/right on touchscreens, tap the subtle bottom pagination dots, or press `←`/`→` on desktop to switch between **Weather**, **Stocks**, and **Calendar**.
 - **Weather Dashboard (Slide 1):**
   - **Atmospheric Sky & Real Moon Phase:** Solar-elevation-driven sky canvas (dawn, day, sunset, twilight, night) paired with a crisp Retina vector SVG Moon showing tonight's actual astronomical phase, drifting clouds, twinkling stars, shooting stars, wind ribbons, rain, snow, fog, and storm flashes (celestial bodies hide automatically during overcast/precipitation).
   - **Adaptive Day / Twilight / Night Themes:** Light frosted-white borderless cards with crisp slate typography during daytime, warm twilight glass at sunrise/sunset, and lifted slate-blue frosted cards at night.
@@ -16,6 +16,9 @@ An ambient personal wall dashboard PWA designed for an **iPad mini 2 (iOS 12.5.7
   - **Selected Symbol Hero & Time-Series Chart:** Ticker with vector company/index logo, price, gain/loss delta, dynamic Low/High for the selected timeframe, subtle emerald/coral atmospheric backdrop glow, **9 timeframes (`1D`, `1W`, `1M`, `YTD`, `1Y`, `2Y`, `5Y`, `10Y`, `ALL`)**, and a crisp vector SVG area chart.
   - **4×5 Watchlist Grid:** 20 tappable cards (**S&P 500**, **NASDAQ**, **10Y Bond**, **NVDA**, **AAPL** / **MSFT**, **GOOGL**, **AMZN**, **META**, **TSLA** / **ANT**, **TSM**, **AMD**, **NFLX**, **BTC** / **Gold**, **Oil**, **Silver**, **SPCX**, **Dow**) with vector logos, live quotes, percent change pills, and mini intraday sparklines.
   - **Smart Market-Hours Polling:** Refreshes every 2 minutes during US market hours and every 15 minutes after-hours/weekends.
+- **Calendar Dashboard (Slide 3):**
+  - **Side-by-Side Month & Selected Day View:** Monday–Sunday month grid with Chinese lunar dates (1900–2100), built-in US Holidays, month/year navigation (`«`, `‹`, `Today`, `›`, `»`), and a scrollable agenda for the selected day with live `"NOW"` and next-event countdown badges.
+  - **Private `.ics` Sync (Zero Secrets in Git):** Reads `CALENDAR_ICS_URLS` from Vercel Environment Variables (or gitignored `.env.local` locally) — supports single URLs, comma/newline-separated URLs, `webcal://` iCloud URLs, or color-coded JSON arrays (`[{"name":"Personal","color":"#38bdf8","url":"https://..."}]`), served with `Cache-Control: private, no-store`.
 - **Minimalist Top-Center Controls:**
   - **Motion / Static icon toggle:** Switch between animated sky and 0-FPS static sky (saved per-device in `localStorage` so older iPad mini 2 hardware stays cool 24/7 while newer devices stay animated).
   - **°F / °C toggle:** Instant temperature & wind unit switching.

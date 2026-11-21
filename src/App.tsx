@@ -20,11 +20,12 @@ import { HeroSpotlight } from './components/HeroSpotlight';
 import { InsightsBand } from './components/InsightsBand';
 import { CityCard } from './components/CityCard';
 import { STOCKS_STORAGE_KEY, StocksDashboard } from './components/StocksDashboard';
+import { CalendarDashboard } from './components/CalendarDashboard';
 
 var WEATHER_STORAGE_KEY = 'glance:lastDashboard:v1';
 var ANIM_STORAGE_KEY = 'glance:animEnabled:v1';
 var STOCK_METRIC_STORAGE_KEY = 'glance:stockCardMetric:v1';
-var TOTAL_SLIDES = 2;
+var TOTAL_SLIDES = 3;
 
 interface DemoOverride {
   weatherKind?: WeatherKind;
@@ -595,7 +596,7 @@ export function App() {
       <div
         class="carousel-track"
         style={{
-          transform: 'translate3d(' + String(trackOffsetPct) + '%, 0, 0)',
+          transform: 'translate3d(' + trackOffsetPct.toFixed(4) + '%, 0, 0)',
         }}
       >
         {/* Slide 0: Weather Dashboard */}
@@ -715,6 +716,26 @@ export function App() {
             }
           />
         </section>
+        {/* Slide 2: Calendar Dashboard */}
+        <section class="carousel-slide" aria-hidden={activeSlide !== 2}>
+          <CalendarDashboard
+            isActive={activeSlide === 2}
+            nowMs={nowMs}
+            timeFormat={timeFormat}
+            controls={
+              <TopControls
+                animEnabled={animEnabled}
+                units={units}
+                isRefreshing={isRefreshing}
+                showAnim={false}
+                showUnits={false}
+                onToggleAnim={handleToggleAnim}
+                onToggleUnits={handleToggleUnits}
+                onRefresh={handleRefresh}
+              />
+            }
+          />
+        </section>
       </div>
 
       {/* Subtle carousel pagination dots (tappable on touch & Mac) */}
@@ -736,6 +757,15 @@ export function App() {
           }}
           aria-label="Stocks dashboard"
           aria-current={activeSlide === 1 ? 'page' : undefined}
+        />
+        <button
+          type="button"
+          class={activeSlide === 2 ? 'carousel-dot carousel-dot-active' : 'carousel-dot'}
+          onClick={function () {
+            setActiveSlide(2);
+          }}
+          aria-label="Calendar dashboard"
+          aria-current={activeSlide === 2 ? 'page' : undefined}
         />
       </nav>
 

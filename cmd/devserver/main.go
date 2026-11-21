@@ -1,14 +1,48 @@
 package main
 
 import (
+	"bufio"
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
 	handler "glance/api"
 )
 
+// loadDotEnv loads simple KEY=VALUE lines from a local file without overriding existing env vars.
+func loadDotEnv(path string) {
+	f, err := os.Open(path)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		eq := strings.IndexByte(line, '=')
+		if eq <= 0 {
+			continue
+		}
+		key := strings.TrimSpace(line[:eq])
+		val := strings.TrimSpace(line[eq+1:])
+		if len(val) >= 2 && ((val[0] == '"' && val[len(val)-1] == '"') || (val[0] == '\'' && val[len(val)-1] == '\'')) {
+			val = val[1 : len(val)-1]
+		}
+		if key != "" && os.Getenv(key) == "" {
+			_ = os.Setenv(key, val)
+		}
+	}
+}
+
 func main() {
+	loadDotEnv(".env.local")
+	loadDotEnv(".env")
+
 	if os.Getenv("GLANCE_DEV_CONFIG_PATH") == "" {
 		_ = os.Setenv("GLANCE_DEV_CONFIG_PATH", "config/dashboard.config.json")
 	}
@@ -21,9 +55,10 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/weather", handler.WeatherHandler)
 	mux.HandleFunc("/api/stocks", handler.StocksHandler)
+	mux.HandleFunc("/api/calendar", handler.CalendarHandler)
 
 	addr := "127.0.0.1:" + port
-	log.Printf("Glance Go dev API listening on http://%s (/api/weather, /api/stocks)", addr)
+	log.Printf("Glance Go dev API listening on http://%s (/api/weather, /api/stocks, /api/calendar)", addr)
 	if err := http.ListenAndServe(addr, mux); err != nil {
 		log.Fatal(err)
 	}

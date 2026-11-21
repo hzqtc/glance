@@ -183,6 +183,41 @@ export interface StocksResponse {
   quotes?: StockQuote[];
 }
 
+export interface CalendarMeta {
+  id: string;
+  name: string;
+  color: string;
+}
+
+export interface CalendarEvent {
+  id: string;
+  calendarId: string;
+  calendarName: string;
+  color: string;
+  title: string;
+  location?: string;
+  date: string; // YYYY-MM-DD
+  allDay: boolean;
+  startMs: number;
+  endMs: number;
+  startTime?: string; // HH:MM
+  endTime?: string; // HH:MM
+  isHoliday?: boolean;
+}
+
+export interface CalendarResponse {
+  version: string;
+  fetchedAt: string;
+  timezone: string;
+  year: number;
+  month: number;
+  configured: boolean;
+  calendars: CalendarMeta[];
+  events: CalendarEvent[];
+  nextEvent?: CalendarEvent | null;
+  warnings?: string[];
+}
+
 export type WeatherKind =
   | 'clear'
   | 'partly-cloudy'
