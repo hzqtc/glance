@@ -135,7 +135,7 @@ export function HeroSpotlight(props: HeroSpotlightProps) {
   var timeFormat = props.timeFormat;
 
   var desc = weather ? describeWMO(weather.weatherCode) : null;
-  var hourly = weather ? weather.hourly.slice(0, 8) : [];
+  var hourly = weather ? weather.hourly.slice(0, 24) : [];
   var hasHourlyPrecip = hourly.some(function (slot) {
     return slot.precipProb >= 15;
   });

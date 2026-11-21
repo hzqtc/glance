@@ -588,18 +588,25 @@ body,
   color: var(--text-muted);
 }
 
-/* Hourly Forecast Ribbon */
+/* Hourly Forecast Ribbon (24h horizontally scrollable, ~8.5 slots visible) */
 .hourly-ribbon {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 22px;
+  display: block;
+  width: 100%;
+  padding: 14px 16px;
   border-radius: 20px;
   background-color: var(--surface-ribbon);
   border: none;
   box-shadow: 0 8px 24px var(--card-shadow);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+  scrollbar-width: none;
   transition: background-color 0.8s ease, box-shadow 0.8s ease;
+}
+
+.hourly-ribbon::-webkit-scrollbar {
+  display: none;
 }
 
 .hourly-ribbon-rain {
@@ -607,19 +614,24 @@ body,
 }
 
 .hourly-slots {
-  flex: 1;
   display: flex;
   flex-direction: row;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
+  width: 100%;
 }
 
 .hourly-slot {
-  flex: 1;
+  flex: 0 0 11.8%;
+  min-width: 82px;
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
+}
+
+.hourly-slot:last-child {
+  padding-right: 12px;
 }
 
 .hourly-time {

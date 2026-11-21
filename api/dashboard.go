@@ -482,7 +482,7 @@ func mapLocationWeather(cityID string, loc omLocation, air *omAirLocation) CityW
 		USAqi:               usAqi,
 		PM25:                pm25,
 		UVIndex:             uvIndex,
-		Hourly:              extractNextHours(loc.Current.Time, loc.Hourly, 8),
+		Hourly:              extractNextHours(loc.Current.Time, loc.Hourly, 24),
 		Daily:               extractDailyForecast(loc.Daily, todayIdx, 5),
 	}
 }
