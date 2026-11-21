@@ -13,6 +13,7 @@ import {
   STOCK_RANGES,
   formatChartTooltipTime,
   formatExchangeName,
+  formatHeroValue,
   formatMarketCap,
   formatMarketState,
   formatStockDelta,
@@ -312,23 +313,30 @@ export function StocksDashboard(props: StocksDashboardProps) {
 
               <div class="stocks-hero-right">
                 <div class="stocks-hero-price">
-                  {formatStockValue(displayPrice, hero.format)}
+                  {formatHeroValue(displayPrice, hero.format, hero.currency)}
                 </div>
                 <div
                   class={
-                    isDisplayPositive
-                      ? 'stocks-hero-change stocks-up'
-                      : 'stocks-hero-change stocks-down'
+                    props.cardMetric === 'mcap' && !scrubPoint
+                      ? 'stocks-hero-change stocks-neutral'
+                      : isDisplayPositive
+                        ? 'stocks-hero-change stocks-up'
+                        : 'stocks-hero-change stocks-down'
                   }
                 >
-                  <span>{formatStockDelta(displayChange, hero.format)}</span>
-                  <span class="stocks-hero-pct">
-                    ({formatStockPct(displayChangePct)})
-                  </span>
+                  {props.cardMetric === 'mcap' && !scrubPoint ? (
+                    <span>{formatMarketCap(heroMarketCap)}</span>
+                  ) : props.cardMetric === 'abs' ? (
+                    <span>{formatStockDelta(displayChange, hero.format)}</span>
+                  ) : (
+                    <span>{formatStockPct(displayChangePct)}</span>
+                  )}
                   <span class="stocks-hero-range-tag">
                     {scrubPoint
                       ? formatChartTooltipTime(scrubPoint.t, hero.range, props.timeFormat)
-                      : hero.range.toUpperCase()}
+                      : props.cardMetric === 'mcap'
+                        ? 'MKT CAP'
+                        : hero.range.toUpperCase()}
                   </span>
                 </div>
                 <div class="stocks-hero-meta">
@@ -345,7 +353,7 @@ export function StocksDashboard(props: StocksDashboardProps) {
                       </span>
                     </span>
                   ) : null}
-                  {heroMarketCap > 0 ? (
+                  {heroMarketCap > 0 && props.cardMetric !== 'mcap' ? (
                     <span>
                       {rangeHigh > 0 && rangeLow > 0 ? (
                         <span class="hero-meta-sep">·</span>

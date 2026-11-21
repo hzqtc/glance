@@ -264,13 +264,7 @@ export function StockChart(props: StockChartProps) {
           </div>
         ) : null}
 
-        {/* Crisp Y-axis bounds */}
-        <span class="stock-y-label stock-y-high">
-          {formatStockValue(maxV, props.format)}
-        </span>
-        <span class="stock-y-label stock-y-low">
-          {formatStockValue(minV, props.format)}
-        </span>
+        {/* Dashed baseline reference label */}
         {hasBaseline && basePct > 14 && basePct < 86 ? (
           <span
             class="stock-y-label stock-y-base"

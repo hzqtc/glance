@@ -1657,6 +1657,10 @@ body,
   color: #fb7185;
 }
 
+.stocks-neutral {
+  color: var(--text-secondary);
+}
+
 .stocks-hero-pct {
   margin-left: 5px;
 }

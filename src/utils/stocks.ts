@@ -49,6 +49,33 @@ function addCommas(numStr: string): string {
   return (neg ? '-' : '') + out + (parts.length > 1 ? '.' + parts[1] : '');
 }
 
+export function getCurrencySymbol(currency?: string): string {
+  var c = (currency || 'USD').trim().toUpperCase();
+  if (c === 'EUR') return '€';
+  if (c === 'GBP' || c === 'GBp') return '£';
+  if (c === 'JPY' || c === 'CNY' || c === 'RMB') return '¥';
+  if (c === 'HKD') return 'HK$';
+  if (c === 'CAD') return 'C$';
+  if (c === 'CHF') return 'CHF ';
+  return '$';
+}
+
+export function formatHeroValue(
+  val: number,
+  format: StockFormat,
+  currency?: string
+): string {
+  if (typeof val !== 'number' || isNaN(val)) {
+    return '—';
+  }
+  if (format === 'yield') {
+    return val.toFixed(2) + '%';
+  }
+  var decimals = Math.abs(val) >= 10000 ? 1 : 2;
+  var formatted = addCommas(val.toFixed(decimals));
+  return getCurrencySymbol(currency) + formatted;
+}
+
 export function formatStockValue(val: number, format: StockFormat): string {
   if (typeof val !== 'number' || isNaN(val)) {
     return '—';
