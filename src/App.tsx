@@ -21,6 +21,7 @@ import { InsightsBand } from './components/InsightsBand';
 import { CityCard } from './components/CityCard';
 import { STOCKS_STORAGE_KEY, StocksDashboard } from './components/StocksDashboard';
 import { CalendarDashboard } from './components/CalendarDashboard';
+import { PasscodeGate } from './components/PasscodeGate';
 
 var WEATHER_STORAGE_KEY = 'glance:lastDashboard:v1';
 var ANIM_STORAGE_KEY = 'glance:animEnabled:v1';
@@ -189,7 +190,104 @@ function isInsideClass(target: EventTarget | null, className: string): boolean {
   return false;
 }
 
+function clearCachedDashboardData(): void {
+  try {
+    window.localStorage.removeItem(WEATHER_STORAGE_KEY);
+    window.localStorage.removeItem(STOCKS_STORAGE_KEY);
+  } catch (_err) {
+    // Ignore storage errors
+  }
+}
+
 export function App() {
+  var _authState = useState<'checking' | 'locked' | 'unlocked'>('checking');
+  var authState = _authState[0];
+  var setAuthState = _authState[1];
+
+  var _misconfigState = useState<boolean>(false);
+  var isMisconfigured = _misconfigState[0];
+  var setIsMisconfigured = _misconfigState[1];
+
+  var _authErrState = useState<string | null>(null);
+  var authInitError = _authErrState[0];
+  var setAuthInitError = _authErrState[1];
+
+  useEffect(function () {
+    var cancelled = false;
+
+    fetch('/api/auth', {
+      method: 'GET',
+      credentials: 'same-origin',
+      cache: 'no-store',
+    })
+      .then(function (resp) {
+        if (!resp.ok) {
+          throw new Error('HTTP ' + String(resp.status));
+        }
+        return resp.json();
+      })
+      .then(function (json: {
+        authenticated?: boolean;
+        required?: boolean;
+        misconfigured?: boolean;
+      }) {
+        if (cancelled) return;
+        if (json && json.authenticated) {
+          setIsMisconfigured(false);
+          setAuthInitError(null);
+          setAuthState('unlocked');
+          return;
+        }
+        clearCachedDashboardData();
+        setIsMisconfigured(Boolean(json && json.misconfigured));
+        setAuthInitError(null);
+        setAuthState('locked');
+      })
+      .catch(function () {
+        if (cancelled) return;
+        clearCachedDashboardData();
+        setIsMisconfigured(false);
+        setAuthInitError('Unable to verify session — enter PIN to retry');
+        setAuthState('locked');
+      });
+
+    return function () {
+      cancelled = true;
+    };
+  }, []);
+
+  function handleUnauthorized() {
+    clearCachedDashboardData();
+    setAuthState('locked');
+  }
+
+  function handleUnlocked() {
+    setAuthInitError(null);
+    setAuthState('unlocked');
+  }
+
+  if (authState === 'checking') {
+    return <div class="pin-gate pin-gate-checking" aria-busy="true" />;
+  }
+
+  if (authState === 'locked') {
+    return (
+      <PasscodeGate
+        misconfigured={isMisconfigured}
+        initialError={authInitError}
+        onUnlocked={handleUnlocked}
+      />
+    );
+  }
+
+  return <DashboardShell onUnauthorized={handleUnauthorized} />;
+}
+
+interface DashboardShellProps {
+  onUnauthorized: () => void;
+}
+
+function DashboardShell(props: DashboardShellProps) {
   var _dataState = useState<WeatherResponse | null>(function () {
     return readCachedWeather();
   });
@@ -368,15 +466,19 @@ export function App() {
     }
 
     function fetchWeather() {
-      fetch('/api/weather', { cache: 'no-cache' })
+      fetch('/api/weather', { cache: 'no-cache', credentials: 'same-origin' })
         .then(function (resp) {
+          if (resp.status === 401) {
+            props.onUnauthorized();
+            return null;
+          }
           if (!resp.ok) {
             throw new Error('HTTP ' + String(resp.status));
           }
           return resp.json();
         })
-        .then(function (json: WeatherResponse) {
-          if (cancelled) return;
+        .then(function (json: WeatherResponse | null) {
+          if (cancelled || !json) return;
 
           // Zero-touch auto-update in production when a new Vercel deploy lands
           if (import.meta.env.PROD && json.version) {
@@ -844,6 +946,7 @@ export function App() {
             preload={preloadReady}
             timeFormat={timeFormat}
             cardMetric={stockMetric}
+            onUnauthorized={props.onUnauthorized}
             controls={
               <TopControls
                 animEnabled={animEnabled}
@@ -869,6 +972,7 @@ export function App() {
             timeFormat={timeFormat}
             isRefreshing={isRefreshing}
             onRefresh={handleRefresh}
+            onUnauthorized={props.onUnauthorized}
           />
         </section>
       </div>

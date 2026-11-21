@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"glance/auth"
 	"glance/config"
 )
 
@@ -191,6 +192,9 @@ func mapCardRangeSpec(normRange string, heroSpec yahooRangeSpec) yahooRangeSpec 
 func StocksHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		writeStocksError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	if !auth.RequireAuth(w, r) {
 		return
 	}
 
@@ -397,8 +401,8 @@ func StocksHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	if isDevDisk {
-		w.Header().Set("Cache-Control", "no-store")
+	if isDevDisk || auth.IsRequired() {
+		w.Header().Set("Cache-Control", "private, no-store")
 	} else {
 		maxAge := 300
 		if chartOnly && normRange != "1d" && normRange != "1w" {

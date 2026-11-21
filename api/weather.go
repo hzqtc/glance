@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"glance/auth"
 	"glance/config"
 )
 
@@ -139,6 +140,9 @@ func WeatherHandler(w http.ResponseWriter, r *http.Request) {
 		writeWeatherError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
+	if !auth.RequireAuth(w, r) {
+		return
+	}
 
 	rawConfig, isDevDisk, err := config.LoadRawConfig()
 	if err != nil {
@@ -166,8 +170,8 @@ func WeatherHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	if isDevDisk {
-		w.Header().Set("Cache-Control", "no-store")
+	if isDevDisk || auth.IsRequired() {
+		w.Header().Set("Cache-Control", "private, no-store")
 	} else {
 		w.Header().Set("Cache-Control", "public, s-maxage=600, stale-while-revalidate=300")
 	}

@@ -47,6 +47,7 @@ interface CalendarDashboardProps {
   timeFormat: TimeFormat;
   isRefreshing: boolean;
   onRefresh: () => void;
+  onUnauthorized?: () => void;
 }
 
 export function CalendarDashboard(props: CalendarDashboardProps) {
@@ -130,15 +131,19 @@ export function CalendarDashboard(props: CalendarDashboardProps) {
     }
 
     var qs = '?year=' + String(year) + '&month=' + String(month);
-    return fetch('/api/calendar' + qs, { cache: 'no-cache' })
+    return fetch('/api/calendar' + qs, { cache: 'no-cache', credentials: 'same-origin' })
       .then(function (resp) {
+        if (resp.status === 401) {
+          if (props.onUnauthorized) props.onUnauthorized();
+          return null;
+        }
         if (!resp.ok) {
           throw new Error('HTTP ' + String(resp.status));
         }
         return resp.json();
       })
-      .then(function (json: CalendarResponse) {
-        if (seq !== reqSeqRef.current) return json;
+      .then(function (json: CalendarResponse | null) {
+        if (seq !== reqSeqRef.current || !json) return json;
         monthCacheRef.current[ymKey] = json;
         lastFetchMsRef.current[ymKey] = Date.now();
         setData(json);

@@ -4,6 +4,8 @@ An ambient personal wall dashboard PWA designed for an **iPad mini 2 (iOS 12.5.7
 
 ## Features
 
+- **One-Time 4-Digit PIN Gate:**
+  - Protected server-side via `GLANCE_PASSCODE` (stored in Vercel Environment Variables; never committed to Git or sent to the client). Issues a 1-year HMAC-SHA256 signed `HttpOnly` cookie on unlock and blocks `/api/weather`, `/api/stocks`, and `/api/calendar` until verified. Local dev allows open access when `GLANCE_PASSCODE` is unset, while Vercel fails closed if unset.
 - **Swipeable Auto-Rotating Carousel (Weather ↔ Stocks ↔ Calendar):**
   - Auto-cycles across dashboards every 30s (`carousel.intervalSeconds`), automatically pausing for 5 minutes (`carousel.manualPauseSeconds`) whenever you manually swipe, tap a bottom dot, or press `←`/`→`.
 - **Weather Dashboard (Slide 1):**

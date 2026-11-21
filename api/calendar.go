@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"glance/auth"
 	"glance/config"
 )
 
@@ -84,6 +85,9 @@ var defaultCalendarPalette = []string{
 func CalendarHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		writeCalendarError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	if !auth.RequireAuth(w, r) {
 		return
 	}
 

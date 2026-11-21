@@ -1,6 +1,6 @@
 /* Minimal Safari 12-safe Service Worker (ES5) */
-var CACHE_NAME = 'glance-shell-v3';
-var API_CACHE = 'glance-api-v3';
+var CACHE_NAME = 'glance-shell-v4';
+var API_CACHE = 'glance-api-v4';
 
 function isLocalDevHost() {
   var host = self.location && self.location.hostname ? self.location.hostname : '';
@@ -58,8 +58,8 @@ self.addEventListener('fetch', function (event) {
 
   var url = req.url || '';
 
-  /* Never cache private /api/calendar responses in Cache Storage */
-  if (url.indexOf('/api/calendar') !== -1) {
+  /* Never cache /api/auth or private /api/calendar responses in Cache Storage */
+  if (url.indexOf('/api/auth') !== -1 || url.indexOf('/api/calendar') !== -1) {
     return;
   }
 
