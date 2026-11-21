@@ -76,7 +76,7 @@ func TestComputeRainNowcast(t *testing.T) {
 	}
 }
 
-func TestHandlerEndToEndWithPastDaysAndAirQuality(t *testing.T) {
+func TestWeatherHandlerEndToEnd(t *testing.T) {
 	mockForecast := `[
 		{
 			"utc_offset_seconds": -28800,
@@ -156,8 +156,8 @@ func TestHandlerEndToEndWithPastDaysAndAirQuality(t *testing.T) {
 		{"current":{"us_aqi":24,"pm2_5":5.2,"uv_index":2.1}}
 	]`
 
-	origClient := httpClient
-	httpClient = &http.Client{
+	origClient := weatherHTTPClient
+	weatherHTTPClient = &http.Client{
 		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 			payload := mockForecast
 			if strings.Contains(r.URL.String(), "air-quality") {
@@ -170,17 +170,17 @@ func TestHandlerEndToEndWithPastDaysAndAirQuality(t *testing.T) {
 			}, nil
 		}),
 	}
-	defer func() { httpClient = origClient }()
+	defer func() { weatherHTTPClient = origClient }()
 
-	req := httptest.NewRequest(http.MethodGet, "/api/dashboard", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/weather", nil)
 	rec := httptest.NewRecorder()
-	Handler(rec, req)
+	WeatherHandler(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	var parsed DashboardResponse
+	var parsed WeatherResponse
 	if err := json.Unmarshal(rec.Body.Bytes(), &parsed); err != nil {
 		t.Fatalf("invalid json response: %v", err)
 	}
@@ -192,7 +192,7 @@ func TestHandlerEndToEndWithPastDaysAndAirQuality(t *testing.T) {
 	if len(sv.Daily) != 5 || sv.Daily[0].Date != "2026-11-19" {
 		t.Fatalf("expected 5 daily entries starting today (2026-11-19), got %+v", sv.Daily)
 	}
-	if sv.Sunrise != "06:51" || sv.WindDirDeg != 315 || sv.RainNowcast != "Rain in ~30 min" {
+	if sv.Sunrise != "06:51" || sv.RainNowcast != "Rain in ~30 min" {
 		t.Fatalf("unexpected sunnyvale enriched fields: %+v", sv)
 	}
 	if sv.TempDeltaYesterdayC == nil || math.Abs(*sv.TempDeltaYesterdayC-(-2.0)) > 0.01 {
@@ -200,8 +200,5 @@ func TestHandlerEndToEndWithPastDaysAndAirQuality(t *testing.T) {
 	}
 	if sv.PM25 == nil || math.Abs(*sv.PM25-6.4) > 0.01 {
 		t.Fatalf("expected sunnyvale PM2.5 6.4, got %+v", sv.PM25)
-	}
-	if parsed.Weather[2].PrecipSumMm != 6.2 {
-		t.Fatalf("expected shanghai precip sum 6.2mm, got %v", parsed.Weather[2].PrecipSumMm)
 	}
 }

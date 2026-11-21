@@ -1,6 +1,6 @@
 /* Minimal Safari 12-safe Service Worker (ES5) */
-var CACHE_NAME = 'glance-shell-v2';
-var API_CACHE = 'glance-api-v2';
+var CACHE_NAME = 'glance-shell-v3';
+var API_CACHE = 'glance-api-v3';
 
 function isLocalDevHost() {
   var host = self.location && self.location.hostname ? self.location.hostname : '';
@@ -58,7 +58,7 @@ self.addEventListener('fetch', function (event) {
 
   var url = req.url || '';
 
-  /* Network-first for /api/dashboard with cached fallback during Wi-Fi blips */
+  /* Network-first for /api/weather and /api/stocks with cached fallback during Wi-Fi blips */
   if (url.indexOf('/api/') !== -1) {
     event.respondWith(
       fetch(req).then(function (resp) {

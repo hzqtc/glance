@@ -4,12 +4,14 @@ interface TopControlsProps {
   animEnabled: boolean;
   units: TempUnit;
   isRefreshing: boolean;
+  showUnits?: boolean;
   onToggleAnim: () => void;
   onToggleUnits: () => void;
   onRefresh: () => void;
 }
 
 export function TopControls(props: TopControlsProps) {
+  var showUnits = props.showUnits !== false;
   return (
     <div class="top-controls" role="toolbar" aria-label="Dashboard controls">
       <button
@@ -58,19 +60,23 @@ export function TopControls(props: TopControlsProps) {
         )}
       </button>
 
-      <span class="ctrl-sep" aria-hidden="true" />
+      {showUnits ? (
+        <span class="ctrl-sep" aria-hidden="true" />
+      ) : null}
 
-      <button
-        type="button"
-        class="ctrl-btn"
-        onClick={props.onToggleUnits}
-        title="Switch between Fahrenheit and Celsius"
-        aria-label={'Temperature unit °' + props.units + ', tap to switch'}
-      >
-        <span class="ctrl-unit-active">°{props.units}</span>
-        <span class="ctrl-unit-slash">/</span>
-        <span class="ctrl-unit-alt">{props.units === 'F' ? 'C' : 'F'}</span>
-      </button>
+      {showUnits ? (
+        <button
+          type="button"
+          class="ctrl-btn"
+          onClick={props.onToggleUnits}
+          title="Switch between Fahrenheit and Celsius"
+          aria-label={'Temperature unit °' + props.units + ', tap to switch'}
+        >
+          <span class="ctrl-unit-active">°{props.units}</span>
+          <span class="ctrl-unit-slash">/</span>
+          <span class="ctrl-unit-alt">{props.units === 'F' ? 'C' : 'F'}</span>
+        </button>
+      ) : null}
 
       <span class="ctrl-sep" aria-hidden="true" />
 

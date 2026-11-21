@@ -161,8 +161,77 @@ body,
   color: var(--text-primary);
 }
 
-.atmosphere-layer {
+/* Horizontal swipe carousel (Weather <-> Stocks) */
+.carousel-track {
+  display: flex;
+  flex-direction: row;
+  width: 200%;
+  height: 100%;
+  transition: transform 0.38s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+
+.carousel-slide {
+  position: relative;
+  width: 50%;
+  height: 100%;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.weather-slide {
+  color: var(--text-primary);
+}
+
+.carousel-dots {
   position: fixed;
+  left: 50%;
+  bottom: 4px;
+  bottom: calc(4px + env(safe-area-inset-bottom));
+  transform: translate3d(-50%, 0, 0);
+  z-index: 6;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+}
+
+.carousel-dot {
+  position: relative;
+  width: 24px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  outline: none;
+  -webkit-appearance: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.carousel-dot:after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 6px;
+  height: 6px;
+  margin-top: -3px;
+  margin-left: -3px;
+  border-radius: 999px;
+  background-color: rgba(255, 255, 255, 0.42);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
+  transition: width 0.25s ease, margin-left 0.25s ease, background-color 0.25s ease;
+}
+
+.carousel-dot-active:after {
+  width: 16px;
+  margin-left: -8px;
+  background-color: rgba(255, 255, 255, 0.92);
+}
+
+.atmosphere-layer {
+  position: absolute;
   top: 0;
   right: 0;
   bottom: 0;
@@ -207,8 +276,9 @@ body,
   max-width: 1280px;
   height: 100%;
   margin: 0 auto;
-  padding: 26px 26px 26px 26px;
+  padding: 26px 26px 24px 26px;
   padding-top: calc(26px + env(safe-area-inset-top));
+  padding-bottom: calc(24px + env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -1325,6 +1395,505 @@ body,
   fill: var(--wi-bolt);
 }
 
+/* ============================================================================
+   Stocks Dashboard (Slide 1)
+   ============================================================================ */
+
+.stocks-slide {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  --text-primary: rgba(255, 255, 255, 0.97);
+  --text-secondary: rgba(226, 236, 252, 0.84);
+  --text-muted: rgba(186, 206, 234, 0.68);
+  --surface-ribbon: rgba(28, 44, 74, 0.38);
+  --surface-card: rgba(24, 38, 66, 0.44);
+  --surface-card-active: rgba(44, 68, 112, 0.62);
+  --divider-line: rgba(196, 220, 255, 0.14);
+  --card-shadow: rgba(0, 0, 0, 0.18);
+  --card-shadow-active: rgba(0, 0, 0, 0.28);
+  --active-dot-color: #93c5fd;
+  color: var(--text-primary);
+  background: linear-gradient(155deg, #0b1322 0%, #101b30 52%, #0a101d 100%);
+}
+
+.stocks-backdrop {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.stocks-glow {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  opacity: 0;
+  transition: opacity 0.9s ease;
+}
+
+.stocks-glow-up {
+  background:
+    radial-gradient(circle at 80% 14%, rgba(16, 185, 129, 0.22) 0%, rgba(16, 185, 129, 0.06) 36%, rgba(16, 185, 129, 0) 68%),
+    radial-gradient(circle at 18% 82%, rgba(56, 189, 248, 0.12) 0%, rgba(56, 189, 248, 0) 58%);
+}
+
+.stocks-glow-down {
+  background:
+    radial-gradient(circle at 80% 14%, rgba(244, 63, 94, 0.22) 0%, rgba(244, 63, 94, 0.06) 36%, rgba(244, 63, 94, 0) 68%),
+    radial-gradient(circle at 18% 82%, rgba(139, 92, 246, 0.1) 0%, rgba(139, 92, 246, 0) 58%);
+}
+
+.stocks-mood-up .stocks-glow-up {
+  opacity: 1;
+}
+
+.stocks-mood-down .stocks-glow-down {
+  opacity: 1;
+}
+
+.stocks-content {
+  justify-content: space-between;
+}
+
+.stocks-boot-controls {
+  top: 26px;
+}
+
+.stocks-hero-stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.stocks-hero-top {
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  flex-shrink: 0;
+}
+
+.stocks-hero-left {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding-right: 16px;
+}
+
+.status-dot-closed {
+  background-color: #94a3b8;
+  box-shadow: 0 0 8px rgba(148, 163, 184, 0.45);
+}
+
+.stocks-exchange-tag {
+  display: inline-block;
+  margin-left: 10px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+.stocks-title-row {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  line-height: 1;
+}
+
+.stocks-hero-ticker {
+  font-size: 58px;
+  font-weight: 300;
+  letter-spacing: -0.03em;
+  color: var(--text-primary);
+  text-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+  white-space: nowrap;
+}
+
+.stocks-hero-symbol-sub {
+  margin-left: 12px;
+  font-size: 18px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.stocks-hero-name {
+  margin-top: 6px;
+  font-size: 20px;
+  font-weight: 400;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stocks-hero-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.stocks-hero-price {
+  font-size: 58px;
+  font-weight: 200;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+  text-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+}
+
+.stocks-hero-change {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+  font-size: 20px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.stocks-up {
+  color: #34d399;
+}
+
+.stocks-down {
+  color: #fb7185;
+}
+
+.stocks-hero-pct {
+  margin-left: 6px;
+}
+
+.stocks-hero-range-tag {
+  display: inline-block;
+  margin-left: 10px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.stocks-hero-meta {
+  margin-top: 5px;
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Hero Time-Series Chart Card */
+.stocks-chart-card {
+  flex: 1;
+  min-height: 210px;
+  display: flex;
+  flex-direction: column;
+  padding: 14px 18px 12px 18px;
+  border-radius: 20px;
+  background-color: var(--surface-ribbon);
+  box-shadow: 0 8px 24px var(--card-shadow);
+}
+
+.stocks-range-bar {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  margin-bottom: 10px;
+  flex-shrink: 0;
+}
+
+.range-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 999px;
+  background-color: transparent;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  outline: none;
+  -webkit-appearance: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.2s ease, color 0.2s ease, transform 0.15s ease;
+}
+
+.range-btn:not(:last-child) {
+  margin-right: 4px;
+}
+
+.range-btn:active {
+  transform: scale(0.95);
+}
+
+.range-btn-active {
+  color: var(--text-primary);
+  background-color: rgba(255, 255, 255, 0.16);
+}
+
+.stock-chart-wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  transition: opacity 0.2s ease;
+}
+
+.stock-chart-loading {
+  opacity: 0.55;
+}
+
+.stock-chart-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  color: var(--text-muted);
+}
+
+.stock-chart-canvas-area {
+  position: relative;
+  flex: 1;
+  min-height: 140px;
+  margin-right: 6px;
+}
+
+.stock-chart-svg {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  overflow: visible;
+}
+
+.stock-end-dot {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  margin-left: -4px;
+  margin-top: -4px;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.stock-end-dot-up {
+  background-color: #6ee7b7;
+  box-shadow: 0 0 10px rgba(52, 211, 153, 0.85);
+}
+
+.stock-end-dot-down {
+  background-color: #fda4af;
+  box-shadow: 0 0 10px rgba(251, 113, 133, 0.85);
+}
+
+.stock-y-label {
+  position: absolute;
+  left: 4px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background-color: rgba(11, 18, 33, 0.52);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.stock-y-high {
+  top: 2px;
+}
+
+.stock-y-low {
+  bottom: 2px;
+}
+
+.stock-y-base {
+  transform: translate3d(0, -50%, 0);
+  color: var(--text-muted);
+}
+
+.stock-x-axis {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+  flex-shrink: 0;
+}
+
+.stock-x-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Watchlist Grid: 2 Rows x 5 Cards */
+.stocks-grid {
+  width: 100%;
+  margin-top: 14px;
+  flex-shrink: 0;
+}
+
+.stocks-row {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  width: 100%;
+}
+
+.stocks-row-second {
+  margin-top: 10px;
+}
+
+.stock-card {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  padding: 11px 13px 10px 13px;
+  border-radius: 16px;
+  background-color: var(--surface-card);
+  border: none;
+  box-shadow: 0 8px 20px var(--card-shadow);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition: transform 0.2s ease, background-color 0.35s ease, box-shadow 0.35s ease;
+}
+
+.stock-card:not(:last-child) {
+  margin-right: 10px;
+}
+
+.stock-card:active {
+  transform: scale(0.985);
+}
+
+.stock-card-selected {
+  background-color: var(--surface-card-active);
+  box-shadow: 0 10px 26px var(--card-shadow-active);
+}
+
+.stock-card-top {
+  width: 100%;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 3px;
+}
+
+.stock-card-symbol-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  min-width: 0;
+  padding-right: 6px;
+}
+
+.stock-card-label {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stock-pct-badge {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.stock-pct-up {
+  color: #6ee7b7;
+  background-color: rgba(16, 185, 129, 0.18);
+}
+
+.stock-pct-down {
+  color: #fda4af;
+  background-color: rgba(244, 63, 94, 0.2);
+}
+
+.stock-card-name {
+  width: 100%;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 8px;
+}
+
+.stock-card-bottom {
+  width: 100%;
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  justify-content: space-between;
+}
+
+.stock-card-price {
+  font-size: 19px;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.stock-sparkline {
+  display: block;
+  flex-shrink: 0;
+  margin-left: 6px;
+}
+
 /* Compact adjustments for tighter landscape heights */
 @media (max-height: 700px) {
   .dashboard-content {
@@ -1359,5 +1928,36 @@ body,
 
   .city-card {
     padding: 14px 16px 12px 16px;
+  }
+
+  .stocks-hero-ticker,
+  .stocks-hero-price {
+    font-size: 46px;
+  }
+
+  .stocks-hero-name,
+  .stocks-hero-change {
+    font-size: 17px;
+  }
+
+  .stocks-chart-card {
+    padding: 10px 14px 10px 14px;
+    min-height: 170px;
+  }
+
+  .stocks-grid {
+    margin-top: 10px;
+  }
+
+  .stocks-row-second {
+    margin-top: 8px;
+  }
+
+  .stock-card {
+    padding: 9px 11px 8px 11px;
+  }
+
+  .stock-card-price {
+    font-size: 17px;
   }
 }

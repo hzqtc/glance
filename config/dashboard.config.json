@@ -48,6 +48,21 @@
       "timezone": "Asia/Tokyo"
     }
   ],
+  "stocks": {
+    "defaultRange": "1d",
+    "symbols": [
+      { "symbol": "^GSPC", "label": "S&P 500", "name": "S&P 500 Index", "format": "points" },
+      { "symbol": "^IXIC", "label": "NASDAQ", "name": "NASDAQ Composite", "format": "points" },
+      { "symbol": "^TNX", "label": "10Y Bond", "name": "US 10Y Treasury Yield", "format": "yield" },
+      { "symbol": "NVDA", "label": "NVDA", "name": "NVIDIA", "format": "currency" },
+      { "symbol": "AAPL", "label": "AAPL", "name": "Apple", "format": "currency" },
+      { "symbol": "MSFT", "label": "MSFT", "name": "Microsoft", "format": "currency" },
+      { "symbol": "GOOGL", "label": "GOOGL", "name": "Alphabet", "format": "currency" },
+      { "symbol": "AMZN", "label": "AMZN", "name": "Amazon", "format": "currency" },
+      { "symbol": "META", "label": "META", "name": "Meta", "format": "currency" },
+      { "symbol": "TSLA", "label": "TSLA", "name": "Tesla", "format": "currency" }
+    ]
+  },
   "widgets": {
     "trips": [],
     "calendar": {

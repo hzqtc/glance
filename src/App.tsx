@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
-import type { CityWeather, DashboardResponse, TempUnit, WeatherKind } from './types';
+import type { CityWeather, TempUnit, WeatherKind, WeatherResponse } from './types';
 import {
   getCityClock,
   getMoonPhase,
@@ -13,9 +13,11 @@ import { TopControls } from './components/TopControls';
 import { HeroSpotlight } from './components/HeroSpotlight';
 import { InsightsBand } from './components/InsightsBand';
 import { CityCard } from './components/CityCard';
+import { STOCKS_STORAGE_KEY, StocksDashboard } from './components/StocksDashboard';
 
-var STORAGE_KEY = 'glance:lastDashboard:v1';
+var WEATHER_STORAGE_KEY = 'glance:lastDashboard:v1';
 var ANIM_STORAGE_KEY = 'glance:animEnabled:v1';
+var TOTAL_SLIDES = 2;
 
 interface DemoOverride {
   weatherKind?: WeatherKind;
@@ -82,11 +84,11 @@ function getDemoOverride(): DemoOverride | null {
   return null;
 }
 
-function readCachedDashboard(): DashboardResponse | null {
+function readCachedWeather(): WeatherResponse | null {
   try {
-    var raw = window.localStorage.getItem(STORAGE_KEY);
+    var raw = window.localStorage.getItem(WEATHER_STORAGE_KEY);
     if (!raw) return null;
-    var parsed = JSON.parse(raw) as DashboardResponse;
+    var parsed = JSON.parse(raw) as WeatherResponse;
     if (parsed && parsed.config && parsed.config.cities && parsed.config.cities.length > 0) {
       return parsed;
     }
@@ -96,9 +98,9 @@ function readCachedDashboard(): DashboardResponse | null {
   return null;
 }
 
-function writeCachedDashboard(data: DashboardResponse): void {
+function writeCachedWeather(data: WeatherResponse): void {
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    window.localStorage.setItem(WEATHER_STORAGE_KEY, JSON.stringify(data));
   } catch (_err) {
     // Ignore quota/storage errors
   }
@@ -112,7 +114,7 @@ function readStoredAnimEnabled(): boolean {
   } catch (_err) {
     // Ignore storage errors
   }
-  return true; // default ON
+  return true;
 }
 
 function writeStoredAnimEnabled(enabled: boolean): void {
@@ -123,9 +125,21 @@ function writeStoredAnimEnabled(enabled: boolean): void {
   }
 }
 
+/** Safari 12-safe ancestor class check so touches inside horizontally scrollable strips don't trigger carousel swipes. */
+function isInsideClass(target: EventTarget | null, className: string): boolean {
+  var node = target as HTMLElement | null;
+  while (node && node !== document.body) {
+    if (node.classList && node.classList.contains(className)) {
+      return true;
+    }
+    node = node.parentElement;
+  }
+  return false;
+}
+
 export function App() {
-  var _dataState = useState<DashboardResponse | null>(function () {
-    return readCachedDashboard();
+  var _dataState = useState<WeatherResponse | null>(function () {
+    return readCachedWeather();
   });
   var data = _dataState[0];
   var setData = _dataState[1];
@@ -135,6 +149,10 @@ export function App() {
   });
   var nowMs = _nowState[0];
   var setNowMs = _nowState[1];
+
+  var _slideState = useState<number>(0);
+  var activeSlide = _slideState[0];
+  var setActiveSlide = _slideState[1];
 
   var _selectedState = useState<string | null>(null);
   var selectedCityId = _selectedState[0];
@@ -170,6 +188,7 @@ export function App() {
   var pollTimerRef = useRef<number | null>(null);
   var reloadTriggeredRef = useRef<boolean>(false);
   var deployedVersionRef = useRef<string | null>(null);
+  var touchStartRef = useRef<{ x: number; y: number; ignore: boolean } | null>(null);
 
   // Entrance transition trigger
   useEffect(function () {
@@ -178,6 +197,25 @@ export function App() {
     }, 60);
     return function () {
       window.clearTimeout(id);
+    };
+  }, []);
+
+  // Desktop keyboard left/right arrow navigation between dashboards
+  useEffect(function () {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'ArrowRight') {
+        setActiveSlide(function (prev) {
+          return prev < TOTAL_SLIDES - 1 ? prev + 1 : prev;
+        });
+      } else if (e.key === 'ArrowLeft') {
+        setActiveSlide(function (prev) {
+          return prev > 0 ? prev - 1 : prev;
+        });
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return function () {
+      window.removeEventListener('keydown', handleKeyDown);
     };
   }, []);
 
@@ -213,7 +251,7 @@ export function App() {
     };
   }, []);
 
-  // Poll /api/dashboard with graceful retry & caching
+  // Poll /api/weather with graceful retry & caching
   useEffect(function () {
     var cancelled = false;
 
@@ -221,18 +259,18 @@ export function App() {
       if (pollTimerRef.current !== null) {
         window.clearTimeout(pollTimerRef.current);
       }
-      pollTimerRef.current = window.setTimeout(fetchDashboard, ms);
+      pollTimerRef.current = window.setTimeout(fetchWeather, ms);
     }
 
-    function fetchDashboard() {
-      fetch('/api/dashboard', { cache: 'no-cache' })
+    function fetchWeather() {
+      fetch('/api/weather', { cache: 'no-cache' })
         .then(function (resp) {
           if (!resp.ok) {
             throw new Error('HTTP ' + String(resp.status));
           }
           return resp.json();
         })
-        .then(function (json: DashboardResponse) {
+        .then(function (json: WeatherResponse) {
           if (cancelled) return;
 
           // Zero-touch auto-update in production when a new Vercel deploy lands
@@ -240,7 +278,7 @@ export function App() {
             if (deployedVersionRef.current === null) {
               deployedVersionRef.current = json.version;
             } else if (deployedVersionRef.current !== json.version) {
-              writeCachedDashboard(json);
+              writeCachedWeather(json);
               window.location.reload();
               return;
             }
@@ -250,7 +288,7 @@ export function App() {
           setNowMs(Date.now());
           setIsStale(false);
           setLoadError(null);
-          writeCachedDashboard(json);
+          writeCachedWeather(json);
 
           var pollMin =
             json.config && json.config.refresh && json.config.refresh.pollMinutes > 0
@@ -262,12 +300,11 @@ export function App() {
           if (cancelled) return;
           setIsStale(true);
           setLoadError(err && err.message ? String(err.message) : 'Network error');
-          // Retry sooner on transient Wi-Fi blips
           scheduleNext(60 * 1000);
         });
     }
 
-    fetchDashboard();
+    fetchWeather();
 
     return function () {
       cancelled = true;
@@ -298,7 +335,6 @@ export function App() {
     }
   }
 
-  // Home city (cities[0]) drives room night-dimming schedule & relative city offsets
   var homeCity = cities.length > 0 ? cities[0] : null;
   var homeWeather = homeCity ? weatherById[homeCity.id] : undefined;
   var homeClock = getCityClock(
@@ -307,7 +343,6 @@ export function App() {
     timeFormat
   );
 
-  // Active city (defaults to first city; switches smoothly when user taps any city card)
   var activeCity = homeCity;
   if (selectedCityId && cities.length > 0) {
     for (var j = 0; j < cities.length; j++) {
@@ -422,9 +457,9 @@ export function App() {
       }
     }
 
-    // Clear cached API snapshot (keep Motion/Static preference intact)
     try {
-      window.localStorage.removeItem(STORAGE_KEY);
+      window.localStorage.removeItem(WEATHER_STORAGE_KEY);
+      window.localStorage.removeItem(STOCKS_STORAGE_KEY);
     } catch (_err) {
       // Ignore storage errors
     }
@@ -469,12 +504,39 @@ export function App() {
       }
     }
 
-    // Guaranteed fallback so an older WebKit stall never blocks the reload
     window.setTimeout(triggerHardReload, 1200);
     Promise.all(tasks).then(triggerHardReload, triggerHardReload);
   }
 
-  var rootClass = 'dashboard-root theme-' + themeMode;
+  function handleTouchStart(e: TouchEvent) {
+    if (!e.touches || e.touches.length !== 1) return;
+    var ignore = isInsideClass(e.target, 'hourly-ribbon');
+    touchStartRef.current = {
+      x: e.touches[0].clientX,
+      y: e.touches[0].clientY,
+      ignore: ignore,
+    };
+  }
+
+  function handleTouchEnd(e: TouchEvent) {
+    var start = touchStartRef.current;
+    touchStartRef.current = null;
+    if (!start || start.ignore || !e.changedTouches || e.changedTouches.length === 0) {
+      return;
+    }
+    var dx = e.changedTouches[0].clientX - start.x;
+    var dy = e.changedTouches[0].clientY - start.y;
+    if (Math.abs(dx) < 55 || Math.abs(dx) < Math.abs(dy) * 1.3) {
+      return;
+    }
+    if (dx < 0 && activeSlide < TOTAL_SLIDES - 1) {
+      setActiveSlide(activeSlide + 1);
+    } else if (dx > 0 && activeSlide > 0) {
+      setActiveSlide(activeSlide - 1);
+    }
+  }
+
+  var rootClass = 'dashboard-root';
   if (isReady) {
     rootClass += ' dashboard-ready';
   }
@@ -482,94 +544,156 @@ export function App() {
     rootClass += ' anim-paused';
   }
 
+  var trackOffsetPct = -(activeSlide * (100 / TOTAL_SLIDES));
+
   return (
-    <div class={rootClass}>
-      <AtmosphereCanvas
-        minutesSinceMidnight={canvasMinutes}
-        sunriseMinutes={sunriseMin}
-        sunsetMinutes={sunsetMin}
-        weatherKind={canvasWeatherKind}
-        cloudCover={canvasCloudCover}
-        windKmh={canvasWindKmh}
-        moonPhase={moonPhase}
-        isNightQuiet={isNightQuiet}
-        animated={animEnabled}
-      />
+    <div
+      class={rootClass}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+    >
+      <div
+        class="carousel-track"
+        style={{
+          transform: 'translate3d(' + String(trackOffsetPct) + '%, 0, 0)',
+        }}
+      >
+        {/* Slide 0: Weather Dashboard */}
+        <section
+          class={'carousel-slide weather-slide theme-' + themeMode}
+          aria-hidden={activeSlide !== 0}
+        >
+          <AtmosphereCanvas
+            minutesSinceMidnight={canvasMinutes}
+            sunriseMinutes={sunriseMin}
+            sunsetMinutes={sunsetMin}
+            weatherKind={canvasWeatherKind}
+            cloudCover={canvasCloudCover}
+            windKmh={canvasWindKmh}
+            moonPhase={moonPhase}
+            isNightQuiet={isNightQuiet}
+            animated={animEnabled && activeSlide === 0}
+          />
 
-      <main class="dashboard-content">
-        {activeCity ? (
-          <div class="active-stage" key={activeCity.id}>
-            <HeroSpotlight
-              city={activeCity}
-              weather={activeWeather}
-              clock={activeClock}
-              units={units}
-              timeFormat={timeFormat}
-              isStale={isStale}
-              controls={
-                <TopControls
-                  animEnabled={animEnabled}
+          <main class="dashboard-content">
+            {activeCity ? (
+              <div class="active-stage" key={activeCity.id}>
+                <HeroSpotlight
+                  city={activeCity}
+                  weather={activeWeather}
+                  clock={activeClock}
                   units={units}
-                  isRefreshing={isRefreshing}
-                  onToggleAnim={handleToggleAnim}
-                  onToggleUnits={handleToggleUnits}
-                  onRefresh={handleRefresh}
-                />
-              }
-            />
-            <InsightsBand
-              weather={activeWeather}
-              clock={activeClock}
-              units={units}
-              timeFormat={timeFormat}
-              trips={trips}
-            />
-          </div>
-        ) : (
-          <div class="boot-state">
-            <div class="boot-title">Glance</div>
-            <div class="boot-sub">
-              {loadError
-                ? 'Waiting for connection (' + loadError + ')…'
-                : 'Loading atmospheric data…'}
-            </div>
-          </div>
-        )}
-
-        {cities.length > 0 ? (
-          <section
-            class={cities.length >= 4 ? 'cities-row cities-row-compact' : 'cities-row'}
-            aria-label="Cities"
-          >
-            {cities.map(function (city, idx) {
-              var cityWeather = weatherById[city.id];
-              var cityClock = getCityClock(
-                nowMs,
-                cityWeather ? cityWeather.utcOffsetSeconds : undefined,
-                timeFormat
-              );
-              var isSelected = Boolean(activeCity && activeCity.id === city.id);
-              return (
-                <CityCard
-                  key={city.id}
-                  city={city}
-                  weather={cityWeather}
-                  clock={cityClock}
-                  homeDaySerial={homeClock.daySerial}
-                  homeOffsetSeconds={
-                    homeWeather ? homeWeather.utcOffsetSeconds : 0
+                  timeFormat={timeFormat}
+                  isStale={isStale}
+                  controls={
+                    <TopControls
+                      animEnabled={animEnabled}
+                      units={units}
+                      isRefreshing={isRefreshing}
+                      onToggleAnim={handleToggleAnim}
+                      onToggleUnits={handleToggleUnits}
+                      onRefresh={handleRefresh}
+                    />
                   }
-                  units={units}
-                  isHome={idx === 0}
-                  isSelected={isSelected}
-                  compact={cities.length >= 4}
-                  onSelect={handleSelectCity}
                 />
-              );
-            })}
-          </section>
-        ) : null}
-      </main>
+                <InsightsBand
+                  weather={activeWeather}
+                  clock={activeClock}
+                  units={units}
+                  timeFormat={timeFormat}
+                  trips={trips}
+                />
+              </div>
+            ) : (
+              <div class="boot-state">
+                <div class="boot-title">Glance</div>
+                <div class="boot-sub">
+                  {loadError
+                    ? 'Waiting for connection (' + loadError + ')…'
+                    : 'Loading atmospheric data…'}
+                </div>
+              </div>
+            )}
+
+            {cities.length > 0 ? (
+              <section
+                class={
+                  cities.length >= 4 ? 'cities-row cities-row-compact' : 'cities-row'
+                }
+                aria-label="Cities"
+              >
+                {cities.map(function (city, idx) {
+                  var cityWeather = weatherById[city.id];
+                  var cityClock = getCityClock(
+                    nowMs,
+                    cityWeather ? cityWeather.utcOffsetSeconds : undefined,
+                    timeFormat
+                  );
+                  var isSelected = Boolean(activeCity && activeCity.id === city.id);
+                  return (
+                    <CityCard
+                      key={city.id}
+                      city={city}
+                      weather={cityWeather}
+                      clock={cityClock}
+                      homeDaySerial={homeClock.daySerial}
+                      homeOffsetSeconds={
+                        homeWeather ? homeWeather.utcOffsetSeconds : 0
+                      }
+                      units={units}
+                      isHome={idx === 0}
+                      isSelected={isSelected}
+                      compact={cities.length >= 4}
+                      onSelect={handleSelectCity}
+                    />
+                  );
+                })}
+              </section>
+            ) : null}
+          </main>
+        </section>
+
+        {/* Slide 1: Stocks Dashboard */}
+        <section class="carousel-slide" aria-hidden={activeSlide !== 1}>
+          <StocksDashboard
+            isActive={activeSlide === 1}
+            timeFormat={timeFormat}
+            controls={
+              <TopControls
+                animEnabled={animEnabled}
+                units={units}
+                isRefreshing={isRefreshing}
+                showUnits={false}
+                onToggleAnim={handleToggleAnim}
+                onToggleUnits={handleToggleUnits}
+                onRefresh={handleRefresh}
+              />
+            }
+          />
+        </section>
+      </div>
+
+      {/* Subtle carousel pagination dots (tappable on touch & Mac) */}
+      <nav class="carousel-dots" aria-label="Switch dashboard">
+        <button
+          type="button"
+          class={activeSlide === 0 ? 'carousel-dot carousel-dot-active' : 'carousel-dot'}
+          onClick={function () {
+            setActiveSlide(0);
+          }}
+          aria-label="Weather dashboard"
+          aria-current={activeSlide === 0 ? 'page' : undefined}
+        />
+        <button
+          type="button"
+          class={activeSlide === 1 ? 'carousel-dot carousel-dot-active' : 'carousel-dot'}
+          onClick={function () {
+            setActiveSlide(1);
+          }}
+          aria-label="Stocks dashboard"
+          aria-current={activeSlide === 1 ? 'page' : undefined}
+        />
+      </nav>
 
       <div
         class="night-veil"

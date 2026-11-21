@@ -2,80 +2,24 @@ package handler
 
 import (
 	"bytes"
-	"crypto/sha256"
-	_ "embed"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
-)
 
-//go:embed dashboard.config.json
-var embeddedConfigJSON []byte
+	"glance/config"
+)
 
 var (
-	openMeteoBaseURL = "https://api.open-meteo.com/v1/forecast"
-	openMeteoAirURL  = "https://air-quality-api.open-meteo.com/v1/air-quality"
-	httpClient       = &http.Client{Timeout: 8 * time.Second}
+	openMeteoBaseURL  = "https://api.open-meteo.com/v1/forecast"
+	openMeteoAirURL   = "https://air-quality-api.open-meteo.com/v1/air-quality"
+	weatherHTTPClient = &http.Client{Timeout: 8 * time.Second}
 )
-
-type HeroConfig struct {
-	LockFirstCity bool `json:"lockFirstCity"`
-}
-
-type NightModeConfig struct {
-	Enabled    bool    `json:"enabled"`
-	StartHour  int     `json:"startHour"`
-	EndHour    int     `json:"endHour"`
-	DimOpacity float64 `json:"dimOpacity"`
-}
-
-type RefreshConfig struct {
-	PollMinutes     int `json:"pollMinutes"`
-	DailyReloadHour int `json:"dailyReloadHour"`
-}
-
-type CityConfig struct {
-	ID       string  `json:"id"`
-	Name     string  `json:"name"`
-	Region   string  `json:"region"`
-	Lat      float64 `json:"lat"`
-	Lon      float64 `json:"lon"`
-	Timezone string  `json:"timezone"`
-}
-
-type TripWidgetItem struct {
-	ID    string `json:"id"`
-	Title string `json:"title"`
-	Date  string `json:"date"`
-	Emoji string `json:"emoji,omitempty"`
-}
-
-type CalendarWidgetConfig struct {
-	Enabled bool `json:"enabled"`
-}
-
-type WidgetsConfig struct {
-	Trips    []TripWidgetItem     `json:"trips"`
-	Calendar CalendarWidgetConfig `json:"calendar"`
-}
-
-type DashboardConfig struct {
-	Units      string          `json:"units"`
-	TimeFormat string          `json:"timeFormat"`
-	Hero       HeroConfig      `json:"hero"`
-	NightMode  NightModeConfig `json:"nightMode"`
-	Refresh    RefreshConfig   `json:"refresh"`
-	Cities     []CityConfig    `json:"cities"`
-	Widgets    WidgetsConfig   `json:"widgets"`
-}
 
 type HourlyForecast struct {
 	Time        string  `json:"time"`
@@ -122,11 +66,11 @@ type CityWeather struct {
 	Daily               []DailyForecast  `json:"daily"`
 }
 
-type DashboardResponse struct {
-	Version   string          `json:"version"`
-	FetchedAt string          `json:"fetchedAt"`
-	Config    DashboardConfig `json:"config"`
-	Weather   []CityWeather   `json:"weather"`
+type WeatherResponse struct {
+	Version   string                 `json:"version"`
+	FetchedAt string                 `json:"fetchedAt"`
+	Config    config.DashboardConfig `json:"config"`
+	Weather   []CityWeather          `json:"weather"`
 }
 
 // Open-Meteo Forecast raw response structures.
@@ -189,33 +133,33 @@ type omAirCurrent struct {
 	UVIndex *float64 `json:"uv_index"`
 }
 
-// Handler serves GET /api/dashboard on Vercel (and locally via cmd/devserver).
-func Handler(w http.ResponseWriter, r *http.Request) {
+// WeatherHandler serves GET /api/weather on Vercel (and locally via cmd/devserver).
+func WeatherHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
-		writeJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
+		writeWeatherError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
-	rawConfig, isDevDisk, err := loadRawConfig()
+	rawConfig, isDevDisk, err := config.LoadRawConfig()
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("failed to load config: %v", err))
+		writeWeatherError(w, http.StatusInternalServerError, fmt.Sprintf("failed to load config: %v", err))
 		return
 	}
 
-	cfg, err := parseAndNormalizeConfig(rawConfig)
+	cfg, err := config.ParseAndNormalizeConfig(rawConfig)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("invalid dashboard config: %v", err))
+		writeWeatherError(w, http.StatusInternalServerError, fmt.Sprintf("invalid dashboard config: %v", err))
 		return
 	}
 
 	weather, err := fetchAllWeather(cfg.Cities)
 	if err != nil {
-		writeJSONError(w, http.StatusBadGateway, fmt.Sprintf("failed to fetch weather: %v", err))
+		writeWeatherError(w, http.StatusBadGateway, fmt.Sprintf("failed to fetch weather: %v", err))
 		return
 	}
 
-	resp := DashboardResponse{
-		Version:   computeVersion(rawConfig),
+	resp := WeatherResponse{
+		Version:   config.ComputeVersion(rawConfig),
 		FetchedAt: time.Now().UTC().Format(time.RFC3339),
 		Config:    cfg,
 		Weather:   weather,
@@ -234,57 +178,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(resp)
 }
 
-func loadRawConfig() ([]byte, bool, error) {
-	if devPath := strings.TrimSpace(os.Getenv("GLANCE_DEV_CONFIG_PATH")); devPath != "" {
-		data, err := os.ReadFile(devPath)
-		if err != nil {
-			return nil, true, err
-		}
-		return data, true, nil
-	}
-	return embeddedConfigJSON, false, nil
-}
-
-func parseAndNormalizeConfig(raw []byte) (DashboardConfig, error) {
-	var cfg DashboardConfig
-	if err := json.Unmarshal(raw, &cfg); err != nil {
-		return cfg, err
-	}
-	if len(cfg.Cities) == 0 {
-		return cfg, fmt.Errorf("config must contain at least one city")
-	}
-	upperUnits := strings.ToUpper(strings.TrimSpace(cfg.Units))
-	if upperUnits != "C" && upperUnits != "F" {
-		upperUnits = "F"
-	}
-	cfg.Units = upperUnits
-
-	if cfg.TimeFormat != "24h" {
-		cfg.TimeFormat = "12h"
-	}
-	if cfg.Refresh.PollMinutes < 1 {
-		cfg.Refresh.PollMinutes = 10
-	}
-	if cfg.NightMode.DimOpacity <= 0 || cfg.NightMode.DimOpacity > 0.9 {
-		cfg.NightMode.DimOpacity = 0.55
-	}
-	if cfg.Widgets.Trips == nil {
-		cfg.Widgets.Trips = []TripWidgetItem{}
-	}
-	return cfg, nil
-}
-
-func computeVersion(rawConfig []byte) string {
-	h := sha256.New()
-	h.Write(rawConfig)
-	if sha := os.Getenv("VERCEL_GIT_COMMIT_SHA"); sha != "" {
-		h.Write([]byte("|"))
-		h.Write([]byte(sha))
-	}
-	return hex.EncodeToString(h.Sum(nil))[:12]
-}
-
-func fetchAllWeather(cities []CityConfig) ([]CityWeather, error) {
+func fetchAllWeather(cities []config.CityConfig) ([]CityWeather, error) {
 	lats := make([]string, len(cities))
 	lons := make([]string, len(cities))
 	for i, c := range cities {
@@ -319,7 +213,7 @@ func fetchAllWeather(cities []CityConfig) ([]CityWeather, error) {
 		params.Set("temperature_unit", "celsius")
 		params.Set("wind_speed_unit", "kmh")
 
-		body, err := httpGetBody(openMeteoBaseURL + "?" + params.Encode())
+		body, err := weatherHTTPGet(openMeteoBaseURL + "?" + params.Encode())
 		if err != nil {
 			weatherErr = err
 			return
@@ -336,7 +230,7 @@ func fetchAllWeather(cities []CityConfig) ([]CityWeather, error) {
 		params.Set("timezone", "auto")
 		params.Set("current", "us_aqi,pm2_5,uv_index")
 
-		body, err := httpGetBody(openMeteoAirURL + "?" + params.Encode())
+		body, err := weatherHTTPGet(openMeteoAirURL + "?" + params.Encode())
 		if err != nil {
 			return
 		}
@@ -366,8 +260,8 @@ func fetchAllWeather(cities []CityConfig) ([]CityWeather, error) {
 	return result, nil
 }
 
-func httpGetBody(reqURL string) ([]byte, error) {
-	resp, err := httpClient.Get(reqURL)
+func weatherHTTPGet(reqURL string) ([]byte, error) {
+	resp, err := weatherHTTPClient.Get(reqURL)
 	if err != nil {
 		return nil, err
 	}
@@ -499,15 +393,12 @@ func findTodayDailyIndex(currentISO string, dailyTimes []string) int {
 			}
 		}
 	}
-	// With past_days=1, index 1 is typically today if exact date match failed.
 	if len(dailyTimes) > 5 {
 		return 1
 	}
 	return 0
 }
 
-// computeTempDeltaYesterday compares current temp against yesterday's temperature at the same hour.
-// Falls back to today's high minus yesterday's high if hourly history isn't present.
 func computeTempDeltaYesterday(
 	currentISO string,
 	currentTempC float64,
@@ -531,7 +422,6 @@ func computeTempDeltaYesterday(
 	return nil
 }
 
-// computeRainNowcast checks the next 2 hours (8 x 15-min slots) for imminent rain start or end.
 func computeRainNowcast(currentISO string, m15 omMinutely15) string {
 	n := len(m15.Time)
 	if n == 0 || len(m15.Precipitation) < n || len(currentISO) < 16 {
@@ -621,14 +511,12 @@ func extractDailyForecast(daily omDaily, startIdx int, limit int) []DailyForecas
 	return out
 }
 
-// extractNextHours returns up to `limit` hourly entries strictly after the current hour.
 func extractNextHours(currentISO string, hourly omHourly, limit int) []HourlyForecast {
 	n := len(hourly.Time)
 	if n == 0 || limit <= 0 {
 		return []HourlyForecast{}
 	}
 
-	// Open-Meteo local timestamps are lexicographically sortable ("YYYY-MM-DDTHH:MM").
 	startIdx := 0
 	if len(currentISO) >= 13 {
 		currentHourPrefix := currentISO[:13] + ":00"
@@ -670,7 +558,7 @@ func extractNextHours(currentISO string, hourly omHourly, limit int) []HourlyFor
 	return out
 }
 
-func writeJSONError(w http.ResponseWriter, status int, message string) {
+func writeWeatherError(w http.ResponseWriter, status int, message string) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(status)
