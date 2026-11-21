@@ -414,50 +414,7 @@ export function CalendarDashboard(props: CalendarDashboardProps) {
           </div>
         </header>
 
-        {/* Full-Width Calendar Show/Hide Toggle Bar (no truncation) */}
-        {calendars.length > 0 ? (
-          <div class="cal-filter-row">
-            <div class="cal-filter-bar" role="group" aria-label="Toggle calendars">
-              {calendars.map(function (cal) {
-                var isHidden = Boolean(hiddenCals[cal.id]);
-                return (
-                  <button
-                    type="button"
-                    key={cal.id}
-                    class={
-                      isHidden
-                        ? 'cal-filter-pill cal-filter-pill-off'
-                        : 'cal-filter-pill'
-                    }
-                    aria-pressed={!isHidden}
-                    title={isHidden ? 'Show ' + cal.name : 'Hide ' + cal.name}
-                    onClick={function () {
-                      handleToggleCalendar(cal.id);
-                    }}
-                  >
-                    <span
-                      class="cal-filter-dot"
-                      style={
-                        isHidden
-                          ? {
-                              borderColor: cal.color || '#38bdf8',
-                              backgroundColor: 'transparent',
-                            }
-                          : {
-                              borderColor: cal.color || '#38bdf8',
-                              backgroundColor: cal.color || '#38bdf8',
-                            }
-                      }
-                    />
-                    <span class="cal-filter-name">{cal.name}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ) : null}
-
-        {/* Main Split Body: Left Month Grid (~60%) + Right Selected Day Agenda (~40%) */}
+        {/* Main Split Body: Left Month Grid (~60%) + Right Selected Day Agenda & Calendar Toggles (~40%) */}
         <div class="cal-body">
           <section
             class={isLoading ? 'cal-month-card cal-loading' : 'cal-month-card'}
@@ -692,6 +649,63 @@ export function CalendarDashboard(props: CalendarDashboardProps) {
                 </div>
               ) : null}
             </div>
+
+            {/* Per-Calendar Show/Hide Toggles (one calendar per row) */}
+            {calendars.length > 0 ? (
+              <div class="cal-toggles-section" role="group" aria-label="Toggle calendars">
+                {calendars.map(function (cal) {
+                  var isHidden = Boolean(hiddenCals[cal.id]);
+                  return (
+                    <div
+                      key={cal.id}
+                      role="button"
+                      tabIndex={0}
+                      class={
+                        isHidden
+                          ? 'cal-toggle-row cal-toggle-row-off'
+                          : 'cal-toggle-row'
+                      }
+                      aria-pressed={!isHidden}
+                      onClick={function () {
+                        handleToggleCalendar(cal.id);
+                      }}
+                      onKeyDown={function (evKey: KeyboardEvent) {
+                        if (evKey.key === 'Enter' || evKey.key === ' ') {
+                          evKey.preventDefault();
+                          handleToggleCalendar(cal.id);
+                        }
+                      }}
+                    >
+                      <span
+                        class="cal-toggle-dot"
+                        style={
+                          isHidden
+                            ? {
+                                borderColor: cal.color || '#38bdf8',
+                                backgroundColor: 'transparent',
+                              }
+                            : {
+                                borderColor: cal.color || '#38bdf8',
+                                backgroundColor: cal.color || '#38bdf8',
+                              }
+                        }
+                      />
+                      <span class="cal-toggle-name">{cal.name}</span>
+                      <span
+                        class={
+                          isHidden
+                            ? 'cal-toggle-switch'
+                            : 'cal-toggle-switch cal-toggle-switch-on'
+                        }
+                        aria-hidden="true"
+                      >
+                        <span class="cal-toggle-knob" />
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null}
           </section>
         </div>
       </div>

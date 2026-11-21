@@ -25,6 +25,7 @@ import { CalendarDashboard } from './components/CalendarDashboard';
 var WEATHER_STORAGE_KEY = 'glance:lastDashboard:v1';
 var ANIM_STORAGE_KEY = 'glance:animEnabled:v1';
 var STOCK_METRIC_STORAGE_KEY = 'glance:stockCardMetric:v1';
+var ACTIVE_SLIDE_STORAGE_KEY = 'glance:activeSlide:v1';
 var TOTAL_SLIDES = 3;
 
 interface DemoOverride {
@@ -153,6 +154,29 @@ function writeStoredStockMetric(metric: StockCardMetric): void {
   }
 }
 
+function readStoredActiveSlide(): number {
+  try {
+    var saved = window.localStorage.getItem(ACTIVE_SLIDE_STORAGE_KEY);
+    if (saved !== null) {
+      var parsed = parseInt(saved, 10);
+      if (!isNaN(parsed) && parsed >= 0 && parsed < TOTAL_SLIDES) {
+        return parsed;
+      }
+    }
+  } catch (_err) {
+    // Ignore storage errors
+  }
+  return 0;
+}
+
+function writeStoredActiveSlide(slide: number): void {
+  try {
+    window.localStorage.setItem(ACTIVE_SLIDE_STORAGE_KEY, String(slide));
+  } catch (_err) {
+    // Ignore storage errors
+  }
+}
+
 /** Safari 12-safe ancestor class check so touches inside horizontally scrollable strips don't trigger carousel swipes. */
 function isInsideClass(target: EventTarget | null, className: string): boolean {
   var node = target as HTMLElement | null;
@@ -178,9 +202,18 @@ export function App() {
   var nowMs = _nowState[0];
   var setNowMs = _nowState[1];
 
-  var _slideState = useState<number>(0);
+  var _slideState = useState<number>(function () {
+    return readStoredActiveSlide();
+  });
   var activeSlide = _slideState[0];
   var setActiveSlide = _slideState[1];
+
+  useEffect(
+    function () {
+      writeStoredActiveSlide(activeSlide);
+    },
+    [activeSlide]
+  );
 
   var _selectedState = useState<string | null>(null);
   var selectedCityId = _selectedState[0];
