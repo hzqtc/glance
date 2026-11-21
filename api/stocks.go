@@ -862,9 +862,9 @@ func buildStockHero(cfg config.StockSymbolConfig, normRange string, res *yfChart
 	)
 
 	// On 1D hero chart:
-	// - Frame regular session proportionally (e.g. 6:30 AM - 1:00 PM PT)
-	// - Include after-hours points seamlessly after regular close (extending axis to post.end)
-	// - Filter out pre-market points unless currently in PRE-market so regular hours stay wide & clean
+	// - During PRE-market or the first 3 hours of Regular trading (before 9:30 AM PT / 12:30 PM ET),
+	//   keep the active pre-market lead-in (up to 3h before open) so early-morning charts have rich context.
+	// - Once >=3h into Regular trading (or once After Hours begins), focus full width on Regular + After Hours.
 	if normRange == "1d" && res != nil {
 		tp := res.Meta.CurrentTradingPeriod
 		if tp.Regular.Start > 0 && tp.Regular.End > tp.Regular.Start {
@@ -874,6 +874,7 @@ func buildStockHero(cfg config.StockSymbolConfig, normRange string, res *yfChart
 			upperState := strings.ToUpper(marketState)
 			hasPrePoints := false
 			hasPostPoints := false
+			var lastAllT int64
 			for _, p := range allPts {
 				if p.T < regularStart {
 					hasPrePoints = true
@@ -881,12 +882,31 @@ func buildStockHero(cfg config.StockSymbolConfig, normRange string, res *yfChart
 				if p.T > regularEnd {
 					hasPostPoints = true
 				}
+				if p.T > lastAllT {
+					lastAllT = p.T
+				}
 			}
 
-			if upperState == "PRE" && hasPrePoints && tp.Pre.Start > 0 {
-				sessionStart = tp.Pre.Start
+			isEarlyRegular := !hasPostPoints && lastAllT >= regularStart && lastAllT < regularStart+3*3600
+			showPreMarket := hasPrePoints && (upperState == "PRE" || isEarlyRegular)
+
+			if showPreMarket {
+				pmStart := regularStart - 3*3600
+				if tp.Pre.Start > pmStart {
+					pmStart = tp.Pre.Start
+				}
+				filtered := make([]StockPoint, 0, len(allPts))
+				for _, p := range allPts {
+					if p.T >= pmStart {
+						filtered = append(filtered, p)
+					}
+				}
+				if len(filtered) >= 2 {
+					pts = filtered
+					minRangeTs = pmStart
+				}
+				sessionStart = pmStart
 				sessionEnd = regularEnd
-				minRangeTs = sessionStart
 			} else {
 				// Filter to Regular + After-Hours (>= regularStart) when regular/post points exist
 				filtered := make([]StockPoint, 0, len(allPts))
@@ -911,7 +931,7 @@ func buildStockHero(cfg config.StockSymbolConfig, normRange string, res *yfChart
 				}
 			}
 
-			// Fallback after-hours summary from 1D chart tail (overridden if /v7/quote provides official postMarket*)
+			// Fallback extended-hours summary from 1D chart tail (overridden if /v7/quote provides official quote)
 			if hasPostPoints && len(pts) > 0 && price > 0 {
 				lastPt := pts[len(pts)-1]
 				if lastPt.T > regularEnd && lastPt.V > 0 {
@@ -919,6 +939,14 @@ func buildStockHero(cfg config.StockSymbolConfig, normRange string, res *yfChart
 					extendedPrice = lastPt.V
 					extendedChange = lastPt.V - price
 					extendedChangePct = (extendedChange / price) * 100
+				}
+			} else if upperState == "PRE" && len(pts) > 0 && prevClose > 0 {
+				lastPt := pts[len(pts)-1]
+				if lastPt.T < regularStart && lastPt.V > 0 {
+					extendedLabel = "Pre-Market"
+					extendedPrice = lastPt.V
+					extendedChange = lastPt.V - prevClose
+					extendedChangePct = (extendedChange / prevClose) * 100
 				}
 			}
 		}

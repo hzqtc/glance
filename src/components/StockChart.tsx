@@ -26,7 +26,7 @@ export function StockChart(props: StockChartProps) {
   var isPositive = props.isPositive;
   var strokeColor = isPositive ? '#34d399' : '#fb7185';
   var gradId = isPositive ? 'stock-area-up' : 'stock-area-down';
-  var ahGradId = isPositive ? 'stock-ah-area-up' : 'stock-ah-area-down';
+  var extGradId = isPositive ? 'stock-ah-area-up' : 'stock-ah-area-down';
 
   var _activeIdxState = useState<number | null>(null);
   var activeIdx = _activeIdxState[0];
@@ -75,9 +75,10 @@ export function StockChart(props: StockChartProps) {
   var vbW = 800;
   var vbH = 200;
 
-  // Proportional 1D trading-session axis (e.g. 6:30 AM - 1:00 PM PT, extending to 5:00 PM PT with after-hours)
+  // Proportional 1D trading-session axis (supports Pre-Market, Regular, and After Hours)
   var sessionStart = props.sessionStart || 0;
   var sessionEnd = props.sessionEnd || 0;
+  var regularStart = props.regularStart || 0;
   var regularEnd = props.regularEnd || 0;
   var useProportional1D =
     props.range === '1d' &&
@@ -101,20 +102,33 @@ export function StockChart(props: StockChartProps) {
     return vbH - ((val - yMin) / ySpan) * vbH;
   }
 
-  // Detect whether after-hours points exist past regularEnd on 1D
+  // Detect Pre-Market (t < regularStart) and After Hours (t > regularEnd) zones on 1D
+  var hasPreMarket =
+    useProportional1D &&
+    regularStart > sessionStart &&
+    regularStart < sessionEnd &&
+    pts[0].t < regularStart;
   var hasAfterHours =
     useProportional1D &&
     regularEnd > sessionStart &&
     regularEnd < sessionEnd &&
     pts[pts.length - 1].t > regularEnd;
 
+  var regStartPct = hasPreMarket
+    ? ((regularStart - sessionStart) / sessionSpan) * 100
+    : -1;
+  var regStartX = hasPreMarket ? (regStartPct / 100) * vbW : -1;
+
   var regEndPct = hasAfterHours
     ? ((regularEnd - sessionStart) / sessionSpan) * 100
     : -1;
   var regEndX = hasAfterHours ? (regEndPct / 100) * vbW : -1;
 
+  var pmLineParts: string[] = [];
   var regLineParts: string[] = [];
   var ahLineParts: string[] = [];
+  var pmFirstX = 0;
+  var pmLastX = 0;
   var regFirstX = 0;
   var regLastX = 0;
   var ahFirstX = 0;
@@ -125,19 +139,19 @@ export function StockChart(props: StockChartProps) {
   for (var j = 0; j < pts.length; j++) {
     var px = pointX(j);
     var py = pointY(pts[j].v);
+    var isPM = hasPreMarket && pts[j].t < regularStart;
     var isAH = hasAfterHours && pts[j].t > regularEnd;
 
-    if (!isAH) {
-      if (regLineParts.length === 0) {
-        regFirstX = px;
-        regLineParts.push('M ' + px.toFixed(1) + ' ' + py.toFixed(1));
+    if (isPM) {
+      if (pmLineParts.length === 0) {
+        pmFirstX = px;
+        pmLineParts.push('M ' + px.toFixed(1) + ' ' + py.toFixed(1));
       } else {
-        regLineParts.push('L ' + px.toFixed(1) + ' ' + py.toFixed(1));
+        pmLineParts.push('L ' + px.toFixed(1) + ' ' + py.toFixed(1));
       }
-      regLastX = px;
-    } else {
+      pmLastX = px;
+    } else if (isAH) {
       if (ahLineParts.length === 0) {
-        // Connect smoothly from last regular point if present
         if (j > 0 && regLineParts.length > 0) {
           var prevX = pointX(j - 1);
           var prevY = pointY(pts[j - 1].v);
@@ -152,6 +166,23 @@ export function StockChart(props: StockChartProps) {
         ahLineParts.push('L ' + px.toFixed(1) + ' ' + py.toFixed(1));
       }
       ahLastX = px;
+    } else {
+      if (regLineParts.length === 0) {
+        if (j > 0 && pmLineParts.length > 0) {
+          // Connect smoothly from last Pre-Market point into first Regular point
+          var pmPrevX = pointX(j - 1);
+          var pmPrevY = pointY(pts[j - 1].v);
+          regFirstX = pmPrevX;
+          regLineParts.push('M ' + pmPrevX.toFixed(1) + ' ' + pmPrevY.toFixed(1));
+          regLineParts.push('L ' + px.toFixed(1) + ' ' + py.toFixed(1));
+        } else {
+          regFirstX = px;
+          regLineParts.push('M ' + px.toFixed(1) + ' ' + py.toFixed(1));
+        }
+      } else {
+        regLineParts.push('L ' + px.toFixed(1) + ' ' + py.toFixed(1));
+      }
+      regLastX = px;
     }
 
     if (j === pts.length - 1) {
@@ -159,6 +190,21 @@ export function StockChart(props: StockChartProps) {
       lastY = py;
     }
   }
+
+  var pmLinePath = pmLineParts.join(' ');
+  var pmAreaPath =
+    pmLineParts.length >= 2
+      ? pmLinePath +
+        ' L ' +
+        pmLastX.toFixed(1) +
+        ' ' +
+        String(vbH) +
+        ' L ' +
+        pmFirstX.toFixed(1) +
+        ' ' +
+        String(vbH) +
+        ' Z'
+      : '';
 
   var regLinePath = regLineParts.join(' ');
   var regAreaPath =
@@ -263,14 +309,18 @@ export function StockChart(props: StockChartProps) {
   var scrubLeftPct = 0;
   var scrubTopPct = 0;
   var tooltipLeftPct = 50;
-  var scrubIsAH = false;
+  var scrubSessionSuffix = '';
   if (scrubPoint && activeIdx !== null) {
     scrubLeftPct = (pointX(activeIdx) / vbW) * 100;
     scrubTopPct = (pointY(scrubPoint.v) / vbH) * 100;
     tooltipLeftPct = scrubLeftPct;
     if (tooltipLeftPct < 14) tooltipLeftPct = 14;
     if (tooltipLeftPct > 86) tooltipLeftPct = 86;
-    scrubIsAH = hasAfterHours && scrubPoint.t > regularEnd;
+    if (hasPreMarket && scrubPoint.t < regularStart) {
+      scrubSessionSuffix = ' · Pre-Market';
+    } else if (hasAfterHours && scrubPoint.t > regularEnd) {
+      scrubSessionSuffix = ' · After Hours';
+    }
   }
 
   // 4 evenly spaced X-axis timestamps (proportional session bounds on 1D, data indices on multi-day)
@@ -303,7 +353,18 @@ export function StockChart(props: StockChartProps) {
         onTouchEnd={handleTouchEnd}
         onTouchCancel={handleTouchEnd}
       >
-        {/* Subtle shaded after-hours zone on 1D when extended-hours prints exist */}
+        {/* Subtle shaded Pre-Market zone on 1D during pre-market and early morning session */}
+        {hasPreMarket && regStartPct > 4 && regStartPct < 96 ? (
+          <div
+            class="stock-pm-zone"
+            style={{ width: regStartPct.toFixed(2) + '%' }}
+            aria-hidden="true"
+          >
+            <span class="stock-pm-badge">Pre-Market</span>
+          </div>
+        ) : null}
+
+        {/* Subtle shaded After Hours zone on 1D when post-market prints exist */}
         {hasAfterHours && regEndPct > 5 && regEndPct < 98 ? (
           <div
             class="stock-ah-zone"
@@ -354,6 +415,19 @@ export function StockChart(props: StockChartProps) {
             />
           ) : null}
 
+          {hasPreMarket && regStartX > 0 && regStartX < vbW ? (
+            <line
+              x1={regStartX.toFixed(1)}
+              y1="0"
+              x2={regStartX.toFixed(1)}
+              y2={String(vbH)}
+              stroke="rgba(203, 213, 225, 0.24)"
+              stroke-width="1"
+              stroke-dasharray="3 4"
+              vector-effect="non-scaling-stroke"
+            />
+          ) : null}
+
           {hasAfterHours && regEndX > 0 && regEndX < vbW ? (
             <line
               x1={regEndX.toFixed(1)}
@@ -363,6 +437,21 @@ export function StockChart(props: StockChartProps) {
               stroke="rgba(203, 213, 225, 0.24)"
               stroke-width="1"
               stroke-dasharray="3 4"
+              vector-effect="non-scaling-stroke"
+            />
+          ) : null}
+
+          {pmAreaPath ? <path d={pmAreaPath} fill={'url(#' + extGradId + ')'} /> : null}
+          {pmLinePath ? (
+            <path
+              d={pmLinePath}
+              fill="none"
+              stroke={strokeColor}
+              stroke-opacity="0.76"
+              stroke-width="2"
+              stroke-dasharray="4 3"
+              stroke-linecap="round"
+              stroke-linejoin="round"
               vector-effect="non-scaling-stroke"
             />
           ) : null}
@@ -380,7 +469,7 @@ export function StockChart(props: StockChartProps) {
             />
           ) : null}
 
-          {ahAreaPath ? <path d={ahAreaPath} fill={'url(#' + ahGradId + ')'} /> : null}
+          {ahAreaPath ? <path d={ahAreaPath} fill={'url(#' + extGradId + ')'} /> : null}
           {ahLinePath ? (
             <path
               d={ahLinePath}
@@ -436,7 +525,7 @@ export function StockChart(props: StockChartProps) {
               </span>
               <span class="stock-tooltip-time">
                 {formatChartTooltipTime(scrubPoint.t, props.range, props.timeFormat)}
-                {scrubIsAH ? ' · After Hours' : ''}
+                {scrubSessionSuffix}
               </span>
             </div>
           </div>
