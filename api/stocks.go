@@ -54,6 +54,8 @@ type StockHero struct {
 	ChangePct        float64      `json:"changePct"`
 	DayHigh          float64      `json:"dayHigh"`
 	DayLow           float64      `json:"dayLow"`
+	RangeHigh        float64      `json:"rangeHigh"`
+	RangeLow         float64      `json:"rangeLow"`
 	FiftyTwoWeekHigh float64      `json:"fiftyTwoWeekHigh"`
 	FiftyTwoWeekLow  float64      `json:"fiftyTwoWeekLow"`
 	Volume           int64        `json:"volume"`
@@ -85,6 +87,8 @@ type yfChartResult struct {
 	Timestamp  []int64     `json:"timestamp"`
 	Indicators struct {
 		Quote []struct {
+			High  []*float64 `json:"high"`
+			Low   []*float64 `json:"low"`
 			Close []*float64 `json:"close"`
 		} `json:"quote"`
 	} `json:"indicators"`
@@ -211,7 +215,7 @@ func StocksHandler(w http.ResponseWriter, r *http.Request) {
 		raw1D := make([]*yfChartResult, len(symbols))
 
 		// Limit concurrency cleanly to avoid overwhelming Yahoo Finance
-		sem := make(chan struct{}, 5)
+		sem := make(chan struct{}, 6)
 
 		for i, sc := range symbols {
 			wg.Add(1)
@@ -462,10 +466,69 @@ func buildStockQuote(cfg config.StockSymbolConfig, res *yfChartResult) StockQuot
 	}
 }
 
+func computeRangeHighLow(normRange string, res *yfChartResult, pts []StockPoint, price float64) (float64, float64) {
+	hasVal := false
+	minV := 0.0
+	maxV := 0.0
+
+	consider := func(v float64) {
+		if math.IsNaN(v) || math.IsInf(v, 0) || v <= 0 {
+			return
+		}
+		if !hasVal {
+			minV = v
+			maxV = v
+			hasVal = true
+			return
+		}
+		if v < minV {
+			minV = v
+		}
+		if v > maxV {
+			maxV = v
+		}
+	}
+
+	if res != nil && len(res.Indicators.Quote) > 0 {
+		q := res.Indicators.Quote[0]
+		for _, h := range q.High {
+			if h != nil {
+				consider(*h)
+			}
+		}
+		for _, l := range q.Low {
+			if l != nil {
+				consider(*l)
+			}
+		}
+	}
+
+	// Fallback / merge with valid close points
+	for _, p := range pts {
+		consider(p.V)
+	}
+	consider(price)
+
+	if normRange == "1d" && res != nil {
+		if res.Meta.RegularMarketHigh > 0 {
+			consider(res.Meta.RegularMarketHigh)
+		}
+		if res.Meta.RegularMarketLow > 0 {
+			consider(res.Meta.RegularMarketLow)
+		}
+	}
+
+	if !hasVal {
+		return 0, 0
+	}
+	return maxV, minV
+}
+
 func buildStockHero(cfg config.StockSymbolConfig, normRange string, res *yfChartResult) StockHero {
 	pts := extractValidPoints(res)
 	price := resolvePrice(res.Meta, pts)
 	prevClose := resolvePrevClose(res.Meta, pts)
+	rangeHigh, rangeLow := computeRangeHighLow(normRange, res, pts, price)
 
 	baseline := prevClose
 	if normRange != "1d" && len(pts) > 0 {
@@ -516,6 +579,8 @@ func buildStockHero(cfg config.StockSymbolConfig, normRange string, res *yfChart
 		ChangePct:        changePct,
 		DayHigh:          res.Meta.RegularMarketHigh,
 		DayLow:           res.Meta.RegularMarketLow,
+		RangeHigh:        rangeHigh,
+		RangeLow:         rangeLow,
 		FiftyTwoWeekHigh: res.Meta.FiftyTwoWeekHigh,
 		FiftyTwoWeekLow:  res.Meta.FiftyTwoWeekLow,
 		Volume:           res.Meta.RegularMarketVol,

@@ -70,6 +70,8 @@ func TestStocksHandlerEndToEndAndChartOnly(t *testing.T) {
 				"timestamp": [1732113000, 1732113300, 1732113600, 1732113900],
 				"indicators": {
 					"quote": [{
+						"high": [5902.0, null, 5918.0, 5928.0],
+						"low": [5882.0, null, 5900.0, 5912.0],
 						"close": [5890.0, null, 5910.0, 5920.5]
 					}]
 				}
@@ -112,8 +114,11 @@ func TestStocksHandlerEndToEndAndChartOnly(t *testing.T) {
 	if math.Abs(full.Hero.Change-40.5) > 0.01 {
 		t.Fatalf("expected 1D change 40.5, got %v", full.Hero.Change)
 	}
-	if len(full.Quotes) != 10 {
-		t.Fatalf("expected 10 watchlist quotes, got %d", len(full.Quotes))
+	if full.Hero.RangeHigh != 5930.0 || full.Hero.RangeLow != 5875.0 {
+		t.Fatalf("expected 1D range 5875..5930, got %v..%v", full.Hero.RangeLow, full.Hero.RangeHigh)
+	}
+	if len(full.Quotes) != 15 {
+		t.Fatalf("expected 15 watchlist quotes, got %d", len(full.Quotes))
 	}
 
 	// chartOnly=1 for 1y timeframe switching
@@ -134,5 +139,8 @@ func TestStocksHandlerEndToEndAndChartOnly(t *testing.T) {
 	// Multi-day change should compare against first point (5920.5 - 5890.0 = 30.5)
 	if math.Abs(chartResp.Hero.Change-30.5) > 0.01 {
 		t.Fatalf("expected 1y change 30.5, got %v", chartResp.Hero.Change)
+	}
+	if chartResp.Hero.RangeHigh != 5928.0 || chartResp.Hero.RangeLow != 5882.0 {
+		t.Fatalf("expected 1y range 5882..5928, got %v..%v", chartResp.Hero.RangeLow, chartResp.Hero.RangeHigh)
 	}
 }

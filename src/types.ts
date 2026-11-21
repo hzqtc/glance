@@ -154,6 +154,8 @@ export interface StockHero {
   changePct: number;
   dayHigh: number;
   dayLow: number;
+  rangeHigh?: number;
+  rangeLow?: number;
   fiftyTwoWeekHigh: number;
   fiftyTwoWeekLow: number;
   volume: number;

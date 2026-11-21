@@ -18,6 +18,11 @@ function getLogoBadgeStyle(symbol: string): LogoStyle {
   if (s === 'AMZN') return { bg: 'rgba(255, 153, 0, 0.16)' };
   if (s === 'META') return { bg: 'rgba(0, 129, 251, 0.18)' };
   if (s === 'TSLA') return { bg: 'rgba(227, 25, 55, 0.2)' };
+  if (s === 'AVGO') return { bg: 'rgba(204, 9, 47, 0.2)' };
+  if (s === 'TSM') return { bg: 'rgba(239, 68, 68, 0.18)' };
+  if (s === 'AMD') return { bg: 'rgba(248, 250, 252, 0.14)' };
+  if (s === 'NFLX') return { bg: 'rgba(229, 9, 20, 0.2)' };
+  if (s === 'BTC-USD' || s === 'BTC') return { bg: 'rgba(247, 147, 26, 0.2)' };
   if (s === '^GSPC') return { bg: 'rgba(56, 189, 248, 0.18)' };
   if (s === '^IXIC') return { bg: 'rgba(0, 160, 223, 0.18)' };
   if (s === '^TNX') return { bg: 'rgba(245, 158, 11, 0.18)' };
@@ -155,6 +160,79 @@ function renderMark(symbol: string, iconPx: number) {
     );
   }
 
+  // Broadcom (AVGO) — signature crimson pulse wave in circle
+  if (s === 'AVGO') {
+    return (
+      <svg width={iconPx} height={iconPx} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="12" cy="12" r="8.8" stroke="#f43f5e" stroke-width="2" />
+        <path
+          d="M5.2 12.8h2.9l1.8-4.5 2.5 7.4 2.1-4.8 1.4 1.9h2.9"
+          stroke="#fda4af"
+          stroke-width="1.9"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+      </svg>
+    );
+  }
+
+  // TSMC (TSM) — iconic semiconductor wafer grid
+  if (s === 'TSM') {
+    return (
+      <svg width={iconPx} height={iconPx} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="12" cy="12" r="8.6" stroke="#f87171" stroke-width="1.9" />
+        <line x1="8.5" y1="4.4" x2="8.5" y2="19.6" stroke="#f87171" stroke-width="1.3" opacity="0.75" />
+        <line x1="12" y1="3.6" x2="12" y2="20.4" stroke="#f87171" stroke-width="1.3" opacity="0.75" />
+        <line x1="15.5" y1="4.4" x2="15.5" y2="19.6" stroke="#f87171" stroke-width="1.3" opacity="0.75" />
+        <line x1="4.4" y1="9" x2="19.6" y2="9" stroke="#f87171" stroke-width="1.3" opacity="0.75" />
+        <line x1="3.8" y1="12.5" x2="20.2" y2="12.5" stroke="#f87171" stroke-width="1.3" opacity="0.75" />
+        <line x1="5.2" y1="16" x2="18.8" y2="16" stroke="#f87171" stroke-width="1.3" opacity="0.75" />
+      </svg>
+    );
+  }
+
+  // AMD — iconic geometric corner arrow emblem
+  if (s === 'AMD') {
+    return (
+      <svg width={iconPx} height={iconPx} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M5 5h14v14l-4.2-4.2V9.2H9.2L5 5z" fill="#f8fafc" />
+        <path d="M5 19v-5.8l4.2-4.2v5.8h5.8L10.8 19H5z" fill="#cbd5e1" />
+      </svg>
+    );
+  }
+
+  // Netflix (NFLX) — iconic crimson N ribbon
+  if (s === 'NFLX') {
+    return (
+      <svg width={iconPx} height={iconPx} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M6.5 4h3.2v16H6.5V4z" fill="#b91c1c" />
+        <path d="M14.3 4h3.2v16h-3.2V4z" fill="#b91c1c" />
+        <path d="M6.5 4h3.2l7.8 16h-3.2L6.5 4z" fill="#ef4444" />
+      </svg>
+    );
+  }
+
+  // Bitcoin (BTC-USD)
+  if (s === 'BTC-USD' || s === 'BTC') {
+    return (
+      <svg width={iconPx} height={iconPx} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path
+          d="M10.2 3.8v2.4M13.6 3.8v2.4M10.2 17.8v2.4M13.6 17.8v2.4"
+          stroke="#f7931a"
+          stroke-width="1.8"
+          stroke-linecap="round"
+        />
+        <path
+          d="M8.2 6.5h5.6c2 0 3.3 1 3.3 2.7 0 1.3-.8 2.2-2 2.5 1.5.3 2.5 1.3 2.5 2.9 0 2-1.5 3.1-3.8 3.1H8.2V6.5z"
+          stroke="#f7931a"
+          stroke-width="2"
+          stroke-linejoin="round"
+        />
+        <line x1="8.2" y1="11.8" x2="14.2" y2="11.8" stroke="#f7931a" stroke-width="1.9" />
+      </svg>
+    );
+  }
+
   // S&P 500 Index
   if (s === '^GSPC') {
     return (
@@ -205,7 +283,7 @@ function renderMark(symbol: string, iconPx: number) {
 
 export function StockLogo(props: StockLogoProps) {
   var isHero = props.size === 'hero';
-  var iconPx = isHero ? 28 : 15;
+  var iconPx = isHero ? 24 : 14;
   var style = getLogoBadgeStyle(props.symbol);
   var mark = renderMark(props.symbol, iconPx);
 

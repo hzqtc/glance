@@ -200,8 +200,26 @@ export function StocksDashboard(props: StocksDashboardProps) {
 
   var isPositive = hero ? hero.change >= 0 : true;
   var marketInfo = hero ? formatMarketState(hero.marketState) : null;
-  var row1 = quotes.slice(0, 5);
-  var row2 = quotes.slice(5, 10);
+
+  // Dynamic Low / High for the selected timeframe (uses backend full-series bounds, with points fallback)
+  var rangeLow = hero && hero.rangeLow && hero.rangeLow > 0 ? hero.rangeLow : 0;
+  var rangeHigh = hero && hero.rangeHigh && hero.rangeHigh > 0 ? hero.rangeHigh : 0;
+  if (hero && (rangeLow <= 0 || rangeHigh <= 0) && hero.points && hero.points.length > 0) {
+    var minP = hero.points[0].v;
+    var maxP = hero.points[0].v;
+    for (var k = 1; k < hero.points.length; k++) {
+      if (hero.points[k].v < minP) minP = hero.points[k].v;
+      if (hero.points[k].v > maxP) maxP = hero.points[k].v;
+    }
+    rangeLow = minP;
+    rangeHigh = maxP;
+  }
+
+  // Partition watchlist into rows of 5 (3 rows x 5 cards = 15 symbols)
+  var quoteRows: StockQuote[][] = [];
+  for (var r = 0; r < quotes.length && quoteRows.length < 3; r += 5) {
+    quoteRows.push(quotes.slice(r, r + 5));
+  }
 
   return (
     <div
@@ -273,17 +291,17 @@ export function StocksDashboard(props: StocksDashboardProps) {
                   </span>
                 </div>
                 <div class="stocks-hero-meta">
-                  {hero.dayHigh > 0 && hero.dayLow > 0 ? (
+                  {rangeHigh > 0 && rangeLow > 0 ? (
                     <span>
-                      Day {formatStockValue(hero.dayLow, hero.format)} –{' '}
-                      {formatStockValue(hero.dayHigh, hero.format)}
-                    </span>
-                  ) : null}
-                  {hero.fiftyTwoWeekHigh > 0 && hero.fiftyTwoWeekLow > 0 ? (
-                    <span>
-                      {hero.dayHigh > 0 ? <span class="hero-meta-sep">·</span> : null}
-                      52W {formatStockValue(hero.fiftyTwoWeekLow, hero.format)} –{' '}
-                      {formatStockValue(hero.fiftyTwoWeekHigh, hero.format)}
+                      {hero.range.toUpperCase()} Low{' '}
+                      <span class="stocks-meta-val">
+                        {formatStockValue(rangeLow, hero.format)}
+                      </span>
+                      <span class="hero-meta-sep">·</span>
+                      High{' '}
+                      <span class="stocks-meta-val">
+                        {formatStockValue(rangeHigh, hero.format)}
+                      </span>
                     </span>
                   ) : null}
                 </div>
@@ -340,34 +358,27 @@ export function StocksDashboard(props: StocksDashboardProps) {
           </div>
         )}
 
-        {quotes.length > 0 ? (
+        {quoteRows.length > 0 ? (
           <section class="stocks-grid" aria-label="Stock watchlist">
-            <div class="stocks-row">
-              {row1.map(function (q) {
-                return (
-                  <StockCard
-                    key={q.symbol}
-                    quote={q}
-                    isSelected={q.symbol === selectedSymbol}
-                    onSelect={handleSelectSymbol}
-                  />
-                );
-              })}
-            </div>
-            {row2.length > 0 ? (
-              <div class="stocks-row stocks-row-second">
-                {row2.map(function (q) {
-                  return (
-                    <StockCard
-                      key={q.symbol}
-                      quote={q}
-                      isSelected={q.symbol === selectedSymbol}
-                      onSelect={handleSelectSymbol}
-                    />
-                  );
-                })}
-              </div>
-            ) : null}
+            {quoteRows.map(function (row, rowIdx) {
+              return (
+                <div
+                  key={rowIdx}
+                  class={rowIdx === 0 ? 'stocks-row' : 'stocks-row stocks-row-next'}
+                >
+                  {row.map(function (q) {
+                    return (
+                      <StockCard
+                        key={q.symbol}
+                        quote={q}
+                        isSelected={q.symbol === selectedSymbol}
+                        onSelect={handleSelectSymbol}
+                      />
+                    );
+                  })}
+                </div>
+              );
+            })}
           </section>
         ) : null}
       </div>

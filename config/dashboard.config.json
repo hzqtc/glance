@@ -60,7 +60,12 @@
       { "symbol": "GOOGL", "label": "GOOGL", "name": "Alphabet", "format": "currency" },
       { "symbol": "AMZN", "label": "AMZN", "name": "Amazon", "format": "currency" },
       { "symbol": "META", "label": "META", "name": "Meta", "format": "currency" },
-      { "symbol": "TSLA", "label": "TSLA", "name": "Tesla", "format": "currency" }
+      { "symbol": "TSLA", "label": "TSLA", "name": "Tesla", "format": "currency" },
+      { "symbol": "AVGO", "label": "AVGO", "name": "Broadcom", "format": "currency" },
+      { "symbol": "TSM", "label": "TSM", "name": "TSMC", "format": "currency" },
+      { "symbol": "AMD", "label": "AMD", "name": "AMD", "format": "currency" },
+      { "symbol": "NFLX", "label": "NFLX", "name": "Netflix", "format": "currency" },
+      { "symbol": "BTC-USD", "label": "BTC", "name": "Bitcoin", "format": "currency" }
     ]
   },
   "widgets": {

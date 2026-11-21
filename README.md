@@ -13,8 +13,8 @@ An ambient personal wall dashboard PWA designed for an **iPad mini 2 (iOS 12.5.7
   - **5-Day Forecast + Air & Daylight:** 5-day outlook with proportional Low→High temperature range bars alongside live US AQI, UV Index, Sunrise/Sunset, daylight duration, and countdown.
   - **Bottom City Row:** Displays all configured cities on a single landscape row (**Sunnyvale**, **San Francisco**, **Shanghai**, **Tokyo** by default) with live clocks, relative hour offsets (`HOME`, `SAME`, `+16h`, `+17h`), `+1d` day badges, and Feels Like / Wind / Humidity / AQI stats. Tap any city card to switch the top two rows and living sky to that location.
 - **Stocks Dashboard (Slide 2):**
-  - **Selected Symbol Hero & Time-Series Chart:** Large ticker, price, gain/loss delta, Day/52W ranges, subtle emerald/coral atmospheric backdrop glow, **9 timeframes (`1D`, `1W`, `1M`, `YTD`, `1Y`, `2Y`, `5Y`, `10Y`, `ALL`)**, and a crisp vector SVG area chart.
-  - **2×5 Watchlist Grid:** 10 tappable cards (**S&P 500**, **NASDAQ**, **10Y Bond**, **NVDA**, **AAPL**, **MSFT**, **GOOGL**, **AMZN**, **META**, **TSLA**) with live quotes, percent change pills, and mini intraday sparklines.
+  - **Selected Symbol Hero & Time-Series Chart:** Ticker with vector company/index logo, price, gain/loss delta, dynamic Low/High for the selected timeframe, subtle emerald/coral atmospheric backdrop glow, **9 timeframes (`1D`, `1W`, `1M`, `YTD`, `1Y`, `2Y`, `5Y`, `10Y`, `ALL`)**, and a crisp vector SVG area chart.
+  - **3×5 Watchlist Grid:** 15 tappable cards (**S&P 500**, **NASDAQ**, **10Y Bond**, **NVDA**, **AAPL** / **MSFT**, **GOOGL**, **AMZN**, **META**, **TSLA** / **AVGO**, **TSM**, **AMD**, **NFLX**, **BTC**) with vector logos, live quotes, percent change pills, and mini intraday sparklines.
   - **Smart Market-Hours Polling:** Refreshes every 2 minutes during US market hours and every 15 minutes after-hours/weekends.
 - **Minimalist Top-Center Controls:**
   - **Motion / Static icon toggle:** Switch between animated sky and 0-FPS static sky (saved per-device in `localStorage` so older iPad mini 2 hardware stays cool 24/7 while newer devices stay animated).
