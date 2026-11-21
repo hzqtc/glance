@@ -13,7 +13,7 @@ import {
   parseMinutesFromHHMM,
 } from './utils/time';
 import { describeWMO } from './utils/weather';
-import { getSkyThemeMode } from './canvas/skyPalettes';
+import { computeTargetSky, getSkyThemeMode } from './canvas/skyPalettes';
 import { AtmosphereCanvas } from './canvas/AtmosphereCanvas';
 import { TopControls } from './components/TopControls';
 import { HeroSpotlight } from './components/HeroSpotlight';
@@ -190,6 +190,23 @@ function isInsideClass(target: EventTarget | null, className: string): boolean {
   return false;
 }
 
+function toHex2(n: number): string {
+  var c = Math.max(0, Math.min(255, Math.round(n)));
+  var h = c.toString(16);
+  return h.length < 2 ? '0' + h : h;
+}
+
+function setThemeColorMeta(hex: string): void {
+  try {
+    var meta = document.querySelector('meta[name="theme-color"]');
+    if (meta && meta.getAttribute('content') !== hex) {
+      meta.setAttribute('content', hex);
+    }
+  } catch (_err) {
+    // Ignore DOM errors
+  }
+}
+
 function clearCachedDashboardData(): void {
   try {
     window.localStorage.removeItem(WEATHER_STORAGE_KEY);
@@ -271,6 +288,7 @@ export function App() {
   }
 
   if (authState === 'locked') {
+    setThemeColorMeta('#0b1322');
     return (
       <PasscodeGate
         misconfigured={isMisconfigured}
@@ -352,6 +370,24 @@ function DashboardShell(props: DashboardShellProps) {
   var _preloadState = useState<boolean>(false);
   var preloadReady = _preloadState[0];
   var setPreloadReady = _preloadState[1];
+
+  var _vpWidthState = useState<number>(function () {
+    return typeof window !== 'undefined' ? Math.round(window.innerWidth) : 1024;
+  });
+  var viewportWidth = _vpWidthState[0];
+  var setViewportWidth = _vpWidthState[1];
+
+  useEffect(function () {
+    function handleResize() {
+      setViewportWidth(Math.round(window.innerWidth));
+    }
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleResize);
+    return function () {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleResize);
+    };
+  }, []);
 
   var _pauseBumpState = useState<number>(0);
   var pauseBump = _pauseBumpState[0];
@@ -697,6 +733,28 @@ function DashboardShell(props: DashboardShellProps) {
   var themeMode = getSkyThemeMode(canvasMinutes, sunriseMin, sunsetMin);
   var moonPhase = getMoonPhase(nowMs);
 
+  // Sync iPadOS/Safari <meta name="theme-color"> to the active slide's top sky color
+  var currentSky = computeTargetSky(
+    canvasMinutes,
+    sunriseMin,
+    sunsetMin,
+    canvasWeatherKind,
+    canvasCloudCover
+  );
+  var topThemeColor =
+    activeSlide === 0
+      ? '#' +
+        toHex2(currentSky.top[0]) +
+        toHex2(currentSky.top[1]) +
+        toHex2(currentSky.top[2])
+      : '#0b1322';
+  useEffect(
+    function () {
+      setThemeColorMeta(topThemeColor);
+    },
+    [topThemeColor]
+  );
+
   function handleSelectCity(cityId: string) {
     setSelectedCityId(cityId);
   }
@@ -830,7 +888,7 @@ function DashboardShell(props: DashboardShellProps) {
     rootClass += ' anim-paused';
   }
 
-  var trackOffsetPct = -(activeSlide * (100 / TOTAL_SLIDES));
+  var trackOffsetPx = -(activeSlide * viewportWidth);
 
   return (
     <div
@@ -841,7 +899,7 @@ function DashboardShell(props: DashboardShellProps) {
       <div
         class="carousel-track"
         style={{
-          transform: 'translate3d(' + trackOffsetPct.toFixed(4) + '%, 0, 0)',
+          transform: 'translate3d(' + String(trackOffsetPx) + 'px, 0, 0)',
         }}
       >
         {/* Slide 0: Weather Dashboard */}
