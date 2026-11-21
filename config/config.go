@@ -29,6 +29,12 @@ type RefreshConfig struct {
 	DailyReloadHour int `json:"dailyReloadHour"`
 }
 
+type CarouselConfig struct {
+	AutoRotate         bool `json:"autoRotate"`
+	IntervalSeconds    int  `json:"intervalSeconds"`
+	ManualPauseSeconds int  `json:"manualPauseSeconds"`
+}
+
 type CityConfig struct {
 	ID       string  `json:"id"`
 	Name     string  `json:"name"`
@@ -72,6 +78,7 @@ type DashboardConfig struct {
 	Hero       HeroConfig      `json:"hero"`
 	NightMode  NightModeConfig `json:"nightMode"`
 	Refresh    RefreshConfig   `json:"refresh"`
+	Carousel   CarouselConfig  `json:"carousel"`
 	Cities     []CityConfig    `json:"cities"`
 	Stocks     StocksConfig    `json:"stocks"`
 	Widgets    WidgetsConfig   `json:"widgets"`
@@ -108,6 +115,12 @@ func ParseAndNormalizeConfig(raw []byte) (DashboardConfig, error) {
 	}
 	if cfg.Refresh.PollMinutes < 1 {
 		cfg.Refresh.PollMinutes = 10
+	}
+	if cfg.Carousel.IntervalSeconds < 5 {
+		cfg.Carousel.IntervalSeconds = 30
+	}
+	if cfg.Carousel.ManualPauseSeconds < 0 {
+		cfg.Carousel.ManualPauseSeconds = 300
 	}
 	if cfg.NightMode.DimOpacity <= 0 || cfg.NightMode.DimOpacity > 0.9 {
 		cfg.NightMode.DimOpacity = 0.55

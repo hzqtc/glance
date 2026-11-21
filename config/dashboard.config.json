@@ -14,6 +14,11 @@
     "pollMinutes": 10,
     "dailyReloadHour": 3
   },
+  "carousel": {
+    "autoRotate": true,
+    "intervalSeconds": 30,
+    "manualPauseSeconds": 300
+  },
   "cities": [
     {
       "id": "sunnyvale",

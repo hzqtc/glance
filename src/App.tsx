@@ -251,11 +251,17 @@ export function App() {
   var isReady = _readyState[0];
   var setIsReady = _readyState[1];
 
+  var _pauseBumpState = useState<number>(0);
+  var pauseBump = _pauseBumpState[0];
+  var setPauseBump = _pauseBumpState[1];
+
   var bootTimeRef = useRef<number>(Date.now());
   var pollTimerRef = useRef<number | null>(null);
   var reloadTriggeredRef = useRef<boolean>(false);
   var deployedVersionRef = useRef<string | null>(null);
   var touchStartRef = useRef<{ x: number; y: number; ignore: boolean } | null>(null);
+  var manualPauseUntilRef = useRef<number>(0);
+  var manualPauseSecRef = useRef<number>(300);
 
   // Entrance transition trigger
   useEffect(function () {
@@ -267,14 +273,28 @@ export function App() {
     };
   }, []);
 
-  // Desktop keyboard left/right arrow navigation between dashboards
+  function pauseAutoRotate() {
+    manualPauseUntilRef.current = Date.now() + manualPauseSecRef.current * 1000;
+    setPauseBump(function (n) {
+      return n + 1;
+    });
+  }
+
+  function handleManualSlideSelect(nextSlide: number) {
+    pauseAutoRotate();
+    setActiveSlide(nextSlide);
+  }
+
+  // Desktop keyboard left/right arrow navigation between dashboards (pauses auto-rotate)
   useEffect(function () {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === 'ArrowRight') {
+        pauseAutoRotate();
         setActiveSlide(function (prev) {
           return prev < TOTAL_SLIDES - 1 ? prev + 1 : prev;
         });
       } else if (e.key === 'ArrowLeft') {
+        pauseAutoRotate();
         setActiveSlide(function (prev) {
           return prev > 0 ? prev - 1 : prev;
         });
@@ -394,6 +414,56 @@ export function App() {
     data && data.config && data.config.refresh
       ? data.config.refresh.dailyReloadHour
       : 3;
+
+  var carouselCfg = data && data.config ? data.config.carousel : null;
+  var autoRotate = carouselCfg ? carouselCfg.autoRotate : true;
+  var rotateIntervalSec =
+    carouselCfg && carouselCfg.intervalSeconds >= 5
+      ? carouselCfg.intervalSeconds
+      : 30;
+  var manualPauseSec =
+    carouselCfg && carouselCfg.manualPauseSeconds >= 0
+      ? carouselCfg.manualPauseSeconds
+      : 300;
+  manualPauseSecRef.current = manualPauseSec;
+
+  // Auto-rotate dashboards every intervalSeconds; pauses for manualPauseSeconds on manual switch
+  useEffect(
+    function () {
+      if (!autoRotate || rotateIntervalSec <= 0) {
+        return;
+      }
+      var timerId: number | null = null;
+
+      function scheduleNext() {
+        var now = Date.now();
+        var pauseLeft = manualPauseUntilRef.current - now;
+        var delayMs = pauseLeft > 0 ? pauseLeft : rotateIntervalSec * 1000;
+        timerId = window.setTimeout(function () {
+          if (document.hidden) {
+            scheduleNext();
+            return;
+          }
+          if (Date.now() < manualPauseUntilRef.current) {
+            scheduleNext();
+            return;
+          }
+          setActiveSlide(function (prev) {
+            return (prev + 1) % TOTAL_SLIDES;
+          });
+        }, delayMs);
+      }
+
+      scheduleNext();
+
+      return function () {
+        if (timerId !== null) {
+          window.clearTimeout(timerId);
+        }
+      };
+    },
+    [autoRotate, rotateIntervalSec, manualPauseSec, activeSlide, pauseBump]
+  );
 
   var weatherById: { [id: string]: CityWeather } = {};
   if (data && data.weather) {
@@ -605,9 +675,9 @@ export function App() {
       return;
     }
     if (dx < 0 && activeSlide < TOTAL_SLIDES - 1) {
-      setActiveSlide(activeSlide + 1);
+      handleManualSlideSelect(activeSlide + 1);
     } else if (dx > 0 && activeSlide > 0) {
-      setActiveSlide(activeSlide - 1);
+      handleManualSlideSelect(activeSlide - 1);
     }
   }
 
@@ -768,7 +838,7 @@ export function App() {
           type="button"
           class={activeSlide === 0 ? 'carousel-dot carousel-dot-active' : 'carousel-dot'}
           onClick={function () {
-            setActiveSlide(0);
+            handleManualSlideSelect(0);
           }}
           aria-label="Weather dashboard"
           aria-current={activeSlide === 0 ? 'page' : undefined}
@@ -777,7 +847,7 @@ export function App() {
           type="button"
           class={activeSlide === 1 ? 'carousel-dot carousel-dot-active' : 'carousel-dot'}
           onClick={function () {
-            setActiveSlide(1);
+            handleManualSlideSelect(1);
           }}
           aria-label="Stocks dashboard"
           aria-current={activeSlide === 1 ? 'page' : undefined}
@@ -786,7 +856,7 @@ export function App() {
           type="button"
           class={activeSlide === 2 ? 'carousel-dot carousel-dot-active' : 'carousel-dot'}
           onClick={function () {
-            setActiveSlide(2);
+            handleManualSlideSelect(2);
           }}
           aria-label="Calendar dashboard"
           aria-current={activeSlide === 2 ? 'page' : undefined}

@@ -21,6 +21,12 @@ export interface RefreshConfig {
   dailyReloadHour: number;
 }
 
+export interface CarouselConfig {
+  autoRotate: boolean;
+  intervalSeconds: number;
+  manualPauseSeconds: number;
+}
+
 export interface CityConfig {
   id: string;
   name: string;
@@ -64,6 +70,7 @@ export interface DashboardConfig {
   hero: HeroConfig;
   nightMode: NightModeConfig;
   refresh: RefreshConfig;
+  carousel?: CarouselConfig;
   cities: CityConfig[];
   stocks?: StocksConfig;
   widgets: WidgetsConfig;
