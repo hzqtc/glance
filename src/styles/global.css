@@ -2277,14 +2277,10 @@ body,
   min-width: 0;
 }
 
-/* Separate Calendars Card (parallel unit below Selected Day View) */
+/* Parallel Calendars List (directly below Selected Day card, no outer card wrapper) */
 .cal-sources-card {
   flex-shrink: 0;
-  margin-top: 12px;
-  padding: 10px 12px;
-  border-radius: 20px;
-  background-color: var(--surface-card);
-  box-shadow: 0 8px 24px var(--card-shadow);
+  margin-top: 10px;
   display: flex;
   flex-direction: column;
 }
@@ -2294,9 +2290,9 @@ body,
   display: flex;
   flex-direction: row;
   align-items: center;
-  padding: 5px 8px;
-  border-radius: 9px;
-  background-color: rgba(255, 255, 255, 0.05);
+  padding: 6px 10px;
+  border-radius: 10px;
+  background-color: var(--surface-card);
   cursor: pointer;
   outline: none;
   -webkit-tap-highlight-color: transparent;
@@ -2304,16 +2300,16 @@ body,
 }
 
 .cal-toggle-row:not(:last-child) {
-  margin-bottom: 4px;
+  margin-bottom: 5px;
 }
 
 .cal-toggle-row:active {
-  background-color: rgba(255, 255, 255, 0.12);
+  background-color: var(--surface-card-active);
 }
 
 .cal-toggle-row-off {
-  opacity: 0.48;
-  background-color: transparent;
+  opacity: 0.44;
+  background-color: rgba(22, 34, 60, 0.24);
 }
 
 .cal-toggle-dot {
