@@ -7,6 +7,8 @@ import (
 	"math"
 	"net/http"
 	"net/http/httptest"
+	"strings"
+	"sync/atomic"
 	"testing"
 )
 
@@ -80,10 +82,12 @@ func TestStocksHandlerEndToEndAndChartOnly(t *testing.T) {
 		}
 	}`
 
+	var chartCalls int32
+	var sparkCalls int32
+
 	origClient := stocksHTTPClient
 	stocksHTTPClient = &http.Client{
 		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
-			u := r.URL.String()
 			if r.URL.Host == "fc.yahoo.com" {
 				return &http.Response{
 					StatusCode: http.StatusNotFound,
@@ -106,7 +110,27 @@ func TestStocksHandlerEndToEndAndChartOnly(t *testing.T) {
 					Body:       io.NopCloser(bytes.NewBufferString(mockQuotes)),
 				}, nil
 			}
-			_ = u
+			if r.URL.Path == "/v8/finance/spark" {
+				atomic.AddInt32(&sparkCalls, 1)
+				syms := strings.Split(r.URL.Query().Get("symbols"), ",")
+				payload := make(map[string]any, len(syms))
+				for _, sym := range syms {
+					payload[sym] = map[string]any{
+						"symbol":             sym,
+						"regularMarketPrice": 5920.5,
+						"chartPreviousClose": 5880.0,
+						"timestamp":          []int64{1732113000, 1732113300, 1732113600, 1732113900},
+						"close":              []any{5890.0, nil, 5910.0, 5920.5},
+					}
+				}
+				b, _ := json.Marshal(payload)
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Header:     http.Header{"Content-Type": []string{"application/json"}},
+					Body:       io.NopCloser(bytes.NewReader(b)),
+				}, nil
+			}
+			atomic.AddInt32(&chartCalls, 1)
 			return &http.Response{
 				StatusCode: http.StatusOK,
 				Header:     http.Header{"Content-Type": []string{"application/json"}},
@@ -122,13 +146,17 @@ func TestStocksHandlerEndToEndAndChartOnly(t *testing.T) {
 		yfSessionMu.Unlock()
 	}()
 
-	// Full load (hero + 10 watchlist quotes)
+	// Full load (hero + 20 watchlist quotes) should only make 1 spark RPC + 1 hero chart RPC
 	req := httptest.NewRequest(http.MethodGet, "/api/stocks?symbol=%5EGSPC&range=1d", nil)
 	rec := httptest.NewRecorder()
 	StocksHandler(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if atomic.LoadInt32(&sparkCalls) != 1 || atomic.LoadInt32(&chartCalls) != 1 {
+		t.Fatalf("expected 1 batched spark call and 1 hero chart call, got spark=%d chart=%d",
+			atomic.LoadInt32(&sparkCalls), atomic.LoadInt32(&chartCalls))
 	}
 
 	var full StocksResponse
@@ -194,5 +222,39 @@ func TestStocksHandlerEndToEndAndChartOnly(t *testing.T) {
 	}
 	if math.Abs(full1Y.Quotes[0].Change-30.5) > 0.01 {
 		t.Fatalf("expected 1y card change 30.5, got %v", full1Y.Quotes[0].Change)
+	}
+}
+
+func TestDecodeYahooSparkBodyFormats(t *testing.T) {
+	// Format 1: {"spark":{"result":[{"symbol":"NVDA","response":[...]}]}}
+	wrapped := `{
+		"spark": {
+			"result": [{
+				"symbol": "NVDA",
+				"response": [{
+					"meta": {"symbol": "NVDA", "regularMarketPrice": 145.5, "chartPreviousClose": 140.0},
+					"timestamp": [1732113000, 1732113900],
+					"indicators": {"quote": [{"close": [141.0, 145.5]}]}
+				}]
+			}]
+		}
+	}`
+	m1 := decodeYahooSparkBody([]byte(wrapped))
+	if res, ok := m1["NVDA"]; !ok || res.Meta.RegularMarketPrice != 145.5 || len(extractValidPoints(res)) != 2 {
+		t.Fatalf("wrapped spark decode failed: %+v", m1)
+	}
+
+	// Format 2: Root-keyed flat {"AAPL": {"chartPreviousClose":..., "timestamp":[...], "close":[...]}}
+	flat := `{
+		"AAPL": {
+			"symbol": "AAPL",
+			"chartPreviousClose": 220.0,
+			"timestamp": [1732113000, 1732113900],
+			"close": [221.0, 224.25]
+		}
+	}`
+	m2 := decodeYahooSparkBody([]byte(flat))
+	if res, ok := m2["AAPL"]; !ok || res.Meta.ChartPreviousClose != 220.0 || len(extractValidPoints(res)) != 2 {
+		t.Fatalf("flat spark decode failed: %+v", m2)
 	}
 }

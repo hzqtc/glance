@@ -18,6 +18,8 @@ import (
 var (
 	yahooChartPrimaryURL  = "https://query1.finance.yahoo.com/v8/finance/chart/"
 	yahooChartFallbackURL = "https://query2.finance.yahoo.com/v8/finance/chart/"
+	yahooSparkPrimaryURL  = "https://query1.finance.yahoo.com/v8/finance/spark"
+	yahooSparkFallbackURL = "https://query2.finance.yahoo.com/v8/finance/spark"
 	yahooCookieURL        = "https://fc.yahoo.com"
 	yahooCrumbURL         = "https://query1.finance.yahoo.com/v1/test/getcrumb"
 	yahooQuotePrimaryURL  = "https://query1.finance.yahoo.com/v7/finance/quote"
@@ -233,69 +235,44 @@ func StocksHandler(w http.ResponseWriter, r *http.Request) {
 	} else {
 		symbols := cfg.Stocks.Symbols
 		quotes = make([]StockQuote, len(symbols))
-		rawCards := make([]*yfChartResult, len(symbols))
 		cardSpec := mapCardRangeSpec(normRange, spec)
 
+		allSyms := make([]string, len(symbols))
 		heroInWatchlistIdx := -1
 		for i, sc := range symbols {
+			allSyms[i] = sc.Symbol
 			if strings.EqualFold(sc.Symbol, heroCfg.Symbol) {
 				heroInWatchlistIdx = i
-				break
 			}
 		}
-		needDedicatedHero := heroInWatchlistIdx < 0 || cardSpec != spec
 
-		// Limit concurrency cleanly to avoid overwhelming Yahoo Finance
-		sem := make(chan struct{}, 8)
+		// Launch 3 concurrent batched RPCs:
+		// 1) /v8/finance/spark for all 20 watchlist cards in a single call
+		// 2) /v8/finance/chart/{hero} for high-res hero chart + exact range high/low + meta
+		// 3) /v7/finance/quote for batched marketCap across all symbols
+		var (
+			sparkMap   map[string]*yfChartResult
+			marketCaps map[string]float64
+		)
 
-		for i, sc := range symbols {
-			wg.Add(1)
-			go func(idx int, item config.StockSymbolConfig) {
-				defer wg.Done()
-				sem <- struct{}{}
-				defer func() { <-sem }()
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			sparkMap = fetchYahooSparkBatched(allSyms, cardSpec)
+		}()
 
-				res, err := fetchYahooChart(item.Symbol, cardSpec)
-				if err != nil {
-					quotes[idx] = StockQuote{
-						Symbol:      item.Symbol,
-						Label:       item.Label,
-						Name:        item.Name,
-						Format:      item.Format,
-						Sparkline:   []float64{},
-						Unavailable: true,
-					}
-					return
-				}
-				rawCards[idx] = res
-				quotes[idx] = buildStockQuote(item, normRange, res)
-			}(i, sc)
-		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			res, err := fetchYahooChart(heroCfg.Symbol, spec)
+			if err != nil {
+				heroErr = err
+				return
+			}
+			h := buildStockHero(heroCfg, normRange, res)
+			hero = &h
+		}()
 
-		// Fetch dedicated hero chart when higher resolution is needed (e.g. 5m on 1D) or ad-hoc symbol
-		if needDedicatedHero {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				sem <- struct{}{}
-				defer func() { <-sem }()
-
-				res, err := fetchYahooChart(heroCfg.Symbol, spec)
-				if err != nil {
-					heroErr = err
-					return
-				}
-				h := buildStockHero(heroCfg, normRange, res)
-				hero = &h
-			}()
-		}
-
-		// Best-effort batched marketCap fetch (single Yahoo v7 quote call with cookie+crumb)
-		var marketCaps map[string]float64
-		allSyms := make([]string, len(symbols))
-		for i, sc := range symbols {
-			allSyms[i] = sc.Symbol
-		}
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -304,11 +281,59 @@ func StocksHandler(w http.ResponseWriter, r *http.Request) {
 
 		wg.Wait()
 
-		// Reuse watchlist result for hero when specs match (or as fallback if dedicated fetch failed)
-		if hero == nil && heroInWatchlistIdx >= 0 && rawCards[heroInWatchlistIdx] != nil {
-			h := buildStockHero(heroCfg, normRange, rawCards[heroInWatchlistIdx])
-			hero = &h
-			heroErr = nil
+		// Populate quotes from batched spark response; collect any missing symbols for chart fallback
+		var missingIdx []int
+		for i, sc := range symbols {
+			if res, ok := sparkMap[strings.ToUpper(sc.Symbol)]; ok && res != nil && len(extractValidPoints(res)) > 0 {
+				quotes[i] = buildStockQuote(sc, normRange, res)
+			} else {
+				missingIdx = append(missingIdx, i)
+			}
+		}
+
+		// Automatic per-symbol fallback ONLY for symbols missing from batched spark response
+		if len(missingIdx) > 0 {
+			var fbWg sync.WaitGroup
+			sem := make(chan struct{}, 8)
+			for _, idx := range missingIdx {
+				fbWg.Add(1)
+				go func(i int, item config.StockSymbolConfig) {
+					defer fbWg.Done()
+					sem <- struct{}{}
+					defer func() { <-sem }()
+
+					res, err := fetchYahooChart(item.Symbol, cardSpec)
+					if err != nil {
+						quotes[i] = StockQuote{
+							Symbol:      item.Symbol,
+							Label:       item.Label,
+							Name:        item.Name,
+							Format:      item.Format,
+							Sparkline:   []float64{},
+							Unavailable: true,
+						}
+						return
+					}
+					quotes[i] = buildStockQuote(item, normRange, res)
+				}(idx, symbols[idx])
+			}
+			fbWg.Wait()
+		}
+
+		// Fallback hero from spark if dedicated chart call failed
+		if hero == nil && heroInWatchlistIdx >= 0 {
+			if res, ok := sparkMap[strings.ToUpper(heroCfg.Symbol)]; ok && res != nil {
+				h := buildStockHero(heroCfg, normRange, res)
+				hero = &h
+				heroErr = nil
+			}
+		}
+
+		// Keep the selected hero's matching card 100% consistent with hero price/change
+		if hero != nil && heroInWatchlistIdx >= 0 && !quotes[heroInWatchlistIdx].Unavailable {
+			quotes[heroInWatchlistIdx].Price = hero.Price
+			quotes[heroInWatchlistIdx].Change = hero.Change
+			quotes[heroInWatchlistIdx].ChangePct = hero.ChangePct
 		}
 
 		// Attach fetched market caps to quotes and hero
@@ -417,6 +442,187 @@ func fetchYahooChartFromURL(reqURL string) (*yfChartResult, error) {
 		return nil, fmt.Errorf("empty yahoo chart result")
 	}
 	return &env.Chart.Result[0], nil
+}
+
+// fetchYahooSparkBatched fetches close-price sparklines for up to 20 symbols per HTTP request
+// via Yahoo Finance's /v8/finance/spark endpoint (chunking automatically if >20 symbols).
+func fetchYahooSparkBatched(symbols []string, spec yahooRangeSpec) map[string]*yfChartResult {
+	out := make(map[string]*yfChartResult, len(symbols))
+	if len(symbols) == 0 {
+		return out
+	}
+
+	const batchSize = 20
+	for start := 0; start < len(symbols); start += batchSize {
+		end := start + batchSize
+		if end > len(symbols) {
+			end = len(symbols)
+		}
+		chunk := symbols[start:end]
+		partial := fetchYahooSparkChunk(chunk, spec)
+		for k, v := range partial {
+			out[k] = v
+		}
+	}
+	return out
+}
+
+func fetchYahooSparkChunk(symbols []string, spec yahooRangeSpec) map[string]*yfChartResult {
+	params := url.Values{}
+	params.Set("symbols", strings.Join(symbols, ","))
+	params.Set("range", spec.Range)
+	params.Set("interval", spec.Interval)
+	params.Set("includePrePost", "false")
+	qs := params.Encode()
+
+	urls := []string{
+		yahooSparkPrimaryURL + "?" + qs,
+		yahooSparkFallbackURL + "?" + qs,
+	}
+
+	const ua = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
+
+	for _, u := range urls {
+		req, err := http.NewRequest(http.MethodGet, u, nil)
+		if err != nil {
+			continue
+		}
+		req.Header.Set("User-Agent", ua)
+		req.Header.Set("Accept", "application/json")
+
+		resp, err := stocksHTTPClient.Do(req)
+		if err != nil {
+			continue
+		}
+		body, readErr := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		if readErr != nil || resp.StatusCode != http.StatusOK {
+			continue
+		}
+
+		parsed := decodeYahooSparkBody(body)
+		if len(parsed) > 0 {
+			return parsed
+		}
+	}
+	return nil
+}
+
+// decodeYahooSparkBody supports both Yahoo /v8/finance/spark response shapes:
+// 1) {"spark":{"result":[{"symbol":"NVDA","response":[{meta,timestamp,indicators}]}]}}
+// 2) {"NVDA":{"symbol":"NVDA","chartPreviousClose":...,"timestamp":[...],"close":[...]}}
+func decodeYahooSparkBody(body []byte) map[string]*yfChartResult {
+	out := make(map[string]*yfChartResult)
+
+	// Format 1: {"spark": {"result": [...]}}
+	var wrapped struct {
+		Spark *struct {
+			Result []struct {
+				Symbol   string          `json:"symbol"`
+				Response []yfChartResult `json:"response"`
+			} `json:"result"`
+		} `json:"spark"`
+	}
+	if err := json.Unmarshal(body, &wrapped); err == nil && wrapped.Spark != nil && len(wrapped.Spark.Result) > 0 {
+		for _, item := range wrapped.Spark.Result {
+			if len(item.Response) == 0 {
+				continue
+			}
+			r := item.Response[0]
+			sym := item.Symbol
+			if sym == "" {
+				sym = r.Meta.Symbol
+			}
+			if sym != "" {
+				copyR := r
+				out[strings.ToUpper(sym)] = &copyR
+			}
+		}
+		if len(out) > 0 {
+			return out
+		}
+	}
+
+	// Format 2: Root-keyed {"NVDA": {...}, "AAPL": {...}}
+	var root map[string]json.RawMessage
+	if err := json.Unmarshal(body, &root); err != nil {
+		return out
+	}
+
+	type flatSparkEntry struct {
+		Symbol             string          `json:"symbol"`
+		RegularMarketPrice float64         `json:"regularMarketPrice"`
+		ChartPreviousClose float64         `json:"chartPreviousClose"`
+		PreviousClose      float64         `json:"previousClose"`
+		Timestamp          []int64         `json:"timestamp"`
+		Close              []*float64      `json:"close"`
+		Response           []yfChartResult `json:"response"`
+		Meta               *yfChartMeta    `json:"meta"`
+		Indicators         *struct {
+			Quote []struct {
+				High  []*float64 `json:"high"`
+				Low   []*float64 `json:"low"`
+				Close []*float64 `json:"close"`
+			} `json:"quote"`
+		} `json:"indicators"`
+	}
+
+	for key, raw := range root {
+		lowerKey := strings.ToLower(key)
+		if lowerKey == "spark" || lowerKey == "error" || lowerKey == "finance" {
+			continue
+		}
+		var entry flatSparkEntry
+		if err := json.Unmarshal(raw, &entry); err != nil {
+			continue
+		}
+		sym := entry.Symbol
+		if sym == "" {
+			sym = key
+		}
+		if len(entry.Response) > 0 {
+			copyR := entry.Response[0]
+			out[strings.ToUpper(sym)] = &copyR
+			continue
+		}
+		if entry.Indicators != nil && len(entry.Indicators.Quote) > 0 {
+			r := yfChartResult{
+				Timestamp: entry.Timestamp,
+			}
+			if entry.Meta != nil {
+				r.Meta = *entry.Meta
+			} else {
+				r.Meta = yfChartMeta{
+					Symbol:             sym,
+					RegularMarketPrice: entry.RegularMarketPrice,
+					ChartPreviousClose: entry.ChartPreviousClose,
+					PreviousClose:      entry.PreviousClose,
+				}
+			}
+			r.Indicators.Quote = entry.Indicators.Quote
+			out[strings.ToUpper(sym)] = &r
+			continue
+		}
+		if len(entry.Close) > 0 && len(entry.Timestamp) > 0 {
+			r := yfChartResult{
+				Meta: yfChartMeta{
+					Symbol:             sym,
+					RegularMarketPrice: entry.RegularMarketPrice,
+					ChartPreviousClose: entry.ChartPreviousClose,
+					PreviousClose:      entry.PreviousClose,
+				},
+				Timestamp: entry.Timestamp,
+			}
+			r.Indicators.Quote = []struct {
+				High  []*float64 `json:"high"`
+				Low   []*float64 `json:"low"`
+				Close []*float64 `json:"close"`
+			}{{Close: entry.Close}}
+			out[strings.ToUpper(sym)] = &r
+		}
+	}
+
+	return out
 }
 
 func extractValidPoints(res *yfChartResult) []StockPoint {
