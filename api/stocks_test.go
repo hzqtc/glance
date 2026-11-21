@@ -84,6 +84,7 @@ func TestStocksHandlerEndToEndAndChartOnly(t *testing.T) {
 
 	var chartCalls int32
 	var sparkCalls int32
+	var quoteCalls int32
 
 	origClient := stocksHTTPClient
 	stocksHTTPClient = &http.Client{
@@ -103,7 +104,8 @@ func TestStocksHandlerEndToEndAndChartOnly(t *testing.T) {
 				}, nil
 			}
 			if r.URL.Path == "/v7/finance/quote" {
-				mockQuotes := `{"quoteResponse":{"result":[{"symbol":"NVDA","marketCap":3420000000000},{"symbol":"^GSPC","marketCap":0}]}}`
+				atomic.AddInt32(&quoteCalls, 1)
+				mockQuotes := `{"quoteResponse":{"result":[{"symbol":"NVDA","marketState":"POST","marketCap":3420000000000,"postMarketPrice":146.2,"postMarketChange":3.85,"postMarketChangePercent":2.71},{"symbol":"^GSPC","marketCap":0}]}}`
 				return &http.Response{
 					StatusCode: http.StatusOK,
 					Header:     http.Header{"Content-Type": []string{"application/json"}},
@@ -144,6 +146,10 @@ func TestStocksHandlerEndToEndAndChartOnly(t *testing.T) {
 		yfSessionJar = nil
 		yfSessionCrumb = ""
 		yfSessionMu.Unlock()
+		yfQuoteCacheMu.Lock()
+		yfQuoteCache = nil
+		yfQuoteCacheKey = ""
+		yfQuoteCacheMu.Unlock()
 	}()
 
 	// Full load (hero + 20 watchlist quotes) should only make 1 spark RPC + 1 hero chart RPC
@@ -222,6 +228,13 @@ func TestStocksHandlerEndToEndAndChartOnly(t *testing.T) {
 	}
 	if math.Abs(full1Y.Quotes[0].Change-30.5) > 0.01 {
 		t.Fatalf("expected 1y card change 30.5, got %v", full1Y.Quotes[0].Change)
+	}
+	// Quote meta should have been served from in-memory cache on 2nd full load (only 1 total /v7/quote RPC)
+	if atomic.LoadInt32(&quoteCalls) != 1 {
+		t.Fatalf("expected cached /v7/quote meta (1 total call), got %d", atomic.LoadInt32(&quoteCalls))
+	}
+	if full1Y.Hero == nil || full1Y.Hero.MarketCap != 3420000000000 {
+		t.Fatalf("expected cached marketCap on NVDA hero, got %+v", full1Y.Hero)
 	}
 }
 

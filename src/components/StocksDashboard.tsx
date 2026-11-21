@@ -16,6 +16,7 @@ import {
   formatHeroValue,
   formatMarketCap,
   formatMarketState,
+  formatMarketTimestamp,
   formatStockDelta,
   formatStockPct,
   formatStockValue,
@@ -110,6 +111,8 @@ export function StocksDashboard(props: StocksDashboardProps) {
   var selectedSymbolRef = useRef<string>(selectedSymbol);
   var selectedRangeRef = useRef<StockRange>(selectedRange);
   var rangeQuotesCacheRef = useRef<{ [rng: string]: StockQuote[] }>({});
+  var heroCacheRef = useRef<{ [key: string]: { hero: StockHero; ts: number } }>({});
+  var marketHoursRef = useRef<boolean>(false);
   selectedSymbolRef.current = selectedSymbol;
   selectedRangeRef.current = selectedRange;
 
@@ -120,10 +123,10 @@ export function StocksDashboard(props: StocksDashboardProps) {
     showLoading?: boolean
   ) {
     var seq = ++reqSeqRef.current;
-    if (chartOnly || showLoading) {
+    if (chartOnly && showLoading !== false) {
       setIsChartLoading(true);
-    }
-    if (!chartOnly && showLoading) {
+    } else if (!chartOnly && showLoading) {
+      setIsChartLoading(true);
       setIsCardsLoading(true);
     }
 
@@ -143,7 +146,12 @@ export function StocksDashboard(props: StocksDashboardProps) {
       })
       .then(function (json: StocksResponse) {
         if (seq !== reqSeqRef.current) return json;
+        marketHoursRef.current = Boolean(json.marketHours);
         if (json.hero) {
+          heroCacheRef.current[json.hero.symbol + ':' + json.hero.range] = {
+            hero: json.hero,
+            ts: Date.now(),
+          };
           setHero(json.hero);
         }
         if (!chartOnly && json.quotes && json.quotes.length > 0) {
@@ -220,18 +228,36 @@ export function StocksDashboard(props: StocksDashboardProps) {
     if (sym === selectedSymbol && hero && hero.symbol === sym) return;
     setScrubPoint(null);
     setSelectedSymbol(sym);
-    fetchStocks(sym, selectedRange, true);
+
+    var cacheKey = sym + ':' + selectedRange;
+    var cached = heroCacheRef.current[cacheKey];
+    var ttlMs = marketHoursRef.current ? 60 * 1000 : 10 * 60 * 1000;
+    if (cached) {
+      setHero(cached.hero);
+      if (Date.now() - cached.ts < ttlMs) {
+        return;
+      }
+      // Stale hit: paint immediately, refresh silently without dimming chart
+      fetchStocks(sym, selectedRange, true, false);
+      return;
+    }
+    fetchStocks(sym, selectedRange, true, true);
   }
 
   function handleSelectRange(rng: StockRange) {
     if (rng === selectedRange) return;
     setScrubPoint(null);
     setSelectedRange(rng);
+
+    var cachedHero = heroCacheRef.current[selectedSymbol + ':' + rng];
+    if (cachedHero) {
+      setHero(cachedHero.hero);
+    }
     var cachedQuotes = rangeQuotesCacheRef.current[rng];
     if (cachedQuotes && cachedQuotes.length > 0) {
       setQuotes(cachedQuotes);
     }
-    fetchStocks(selectedSymbol, rng, false, true);
+    fetchStocks(selectedSymbol, rng, false, !cachedQuotes);
   }
 
   var displayPrice = hero ? (scrubPoint ? scrubPoint.v : hero.price) : 0;
@@ -317,6 +343,11 @@ export function StocksDashboard(props: StocksDashboardProps) {
                   <span class="hero-location-label">
                     {marketInfo ? marketInfo.label : 'Markets'}
                   </span>
+                  {hero.marketTime ? (
+                    <span class="stocks-updated-tag">
+                      · {formatMarketTimestamp(hero.marketTime, props.timeFormat)}
+                    </span>
+                  ) : null}
                   {hero.exchange ? (
                     <span class="stocks-exchange-tag">
                       {formatExchangeName(hero.exchange)}
@@ -387,6 +418,19 @@ export function StocksDashboard(props: StocksDashboardProps) {
                       </span>
                     </span>
                   ) : null}
+                  {hero.extendedPrice && hero.extendedPrice > 0 && hero.extendedLabel ? (
+                    <span
+                      class={
+                        (hero.extendedChange || 0) >= 0
+                          ? 'stocks-ext-pill stocks-ext-up'
+                          : 'stocks-ext-pill stocks-ext-down'
+                      }
+                    >
+                      {hero.extendedLabel}{' '}
+                      {formatHeroValue(hero.extendedPrice, hero.format, hero.currency)}{' '}
+                      ({formatStockPct(hero.extendedChangePct || 0)})
+                    </span>
+                  ) : null}
                 </div>
               </div>
             </section>
@@ -424,6 +468,10 @@ export function StocksDashboard(props: StocksDashboardProps) {
                 timeFormat={props.timeFormat}
                 isPositive={isPositive}
                 isLoading={isChartLoading}
+                sessionStart={hero.sessionStart}
+                regularStart={hero.regularStart}
+                regularEnd={hero.regularEnd}
+                sessionEnd={hero.sessionEnd}
                 onScrub={setScrubPoint}
               />
             </section>
@@ -459,6 +507,7 @@ export function StocksDashboard(props: StocksDashboardProps) {
                         key={q.symbol}
                         quote={q}
                         metric={props.cardMetric}
+                        range={selectedRange}
                         isSelected={q.symbol === selectedSymbol}
                         onSelect={handleSelectSymbol}
                       />

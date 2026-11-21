@@ -14,6 +14,10 @@ interface StockChartProps {
   timeFormat: TimeFormat;
   isPositive: boolean;
   isLoading: boolean;
+  sessionStart?: number;
+  regularStart?: number;
+  regularEnd?: number;
+  sessionEnd?: number;
   onScrub?: (point: StockPoint | null) => void;
 }
 
@@ -22,6 +26,7 @@ export function StockChart(props: StockChartProps) {
   var isPositive = props.isPositive;
   var strokeColor = isPositive ? '#34d399' : '#fb7185';
   var gradId = isPositive ? 'stock-area-up' : 'stock-area-down';
+  var ahGradId = isPositive ? 'stock-ah-area-up' : 'stock-ah-area-down';
 
   var _activeIdxState = useState<number | null>(null);
   var activeIdx = _activeIdxState[0];
@@ -70,25 +75,122 @@ export function StockChart(props: StockChartProps) {
   var vbW = 800;
   var vbH = 200;
 
-  var lineParts: string[] = [];
+  // Proportional 1D trading-session axis (e.g. 6:30 AM - 1:00 PM PT, extending to 5:00 PM PT with after-hours)
+  var sessionStart = props.sessionStart || 0;
+  var sessionEnd = props.sessionEnd || 0;
+  var regularEnd = props.regularEnd || 0;
+  var useProportional1D =
+    props.range === '1d' &&
+    sessionStart > 0 &&
+    sessionEnd > sessionStart &&
+    pts[pts.length - 1].t >= sessionStart &&
+    pts[0].t <= sessionEnd;
+  var sessionSpan = useProportional1D ? sessionEnd - sessionStart : 1;
+
+  function pointX(idx: number): number {
+    if (useProportional1D) {
+      var ratio = (pts[idx].t - sessionStart) / sessionSpan;
+      if (ratio < 0) ratio = 0;
+      if (ratio > 1) ratio = 1;
+      return ratio * vbW;
+    }
+    return (idx / (pts.length - 1)) * vbW;
+  }
+
+  function pointY(val: number): number {
+    return vbH - ((val - yMin) / ySpan) * vbH;
+  }
+
+  // Detect whether after-hours points exist past regularEnd on 1D
+  var hasAfterHours =
+    useProportional1D &&
+    regularEnd > sessionStart &&
+    regularEnd < sessionEnd &&
+    pts[pts.length - 1].t > regularEnd;
+
+  var regEndPct = hasAfterHours
+    ? ((regularEnd - sessionStart) / sessionSpan) * 100
+    : -1;
+  var regEndX = hasAfterHours ? (regEndPct / 100) * vbW : -1;
+
+  var regLineParts: string[] = [];
+  var ahLineParts: string[] = [];
+  var regFirstX = 0;
+  var regLastX = 0;
+  var ahFirstX = 0;
+  var ahLastX = 0;
   var lastX = 0;
   var lastY = 0;
 
   for (var j = 0; j < pts.length; j++) {
-    var x = (j / (pts.length - 1)) * vbW;
-    var y = vbH - ((pts[j].v - yMin) / ySpan) * vbH;
-    lineParts.push((j === 0 ? 'M ' : 'L ') + x.toFixed(1) + ' ' + y.toFixed(1));
+    var px = pointX(j);
+    var py = pointY(pts[j].v);
+    var isAH = hasAfterHours && pts[j].t > regularEnd;
+
+    if (!isAH) {
+      if (regLineParts.length === 0) {
+        regFirstX = px;
+        regLineParts.push('M ' + px.toFixed(1) + ' ' + py.toFixed(1));
+      } else {
+        regLineParts.push('L ' + px.toFixed(1) + ' ' + py.toFixed(1));
+      }
+      regLastX = px;
+    } else {
+      if (ahLineParts.length === 0) {
+        // Connect smoothly from last regular point if present
+        if (j > 0 && regLineParts.length > 0) {
+          var prevX = pointX(j - 1);
+          var prevY = pointY(pts[j - 1].v);
+          ahFirstX = prevX;
+          ahLineParts.push('M ' + prevX.toFixed(1) + ' ' + prevY.toFixed(1));
+          ahLineParts.push('L ' + px.toFixed(1) + ' ' + py.toFixed(1));
+        } else {
+          ahFirstX = px;
+          ahLineParts.push('M ' + px.toFixed(1) + ' ' + py.toFixed(1));
+        }
+      } else {
+        ahLineParts.push('L ' + px.toFixed(1) + ' ' + py.toFixed(1));
+      }
+      ahLastX = px;
+    }
+
     if (j === pts.length - 1) {
-      lastX = x;
-      lastY = y;
+      lastX = px;
+      lastY = py;
     }
   }
 
-  var linePath = lineParts.join(' ');
-  var areaPath =
-    linePath + ' L ' + String(vbW) + ' ' + String(vbH) + ' L 0 ' + String(vbH) + ' Z';
+  var regLinePath = regLineParts.join(' ');
+  var regAreaPath =
+    regLineParts.length >= 2
+      ? regLinePath +
+        ' L ' +
+        regLastX.toFixed(1) +
+        ' ' +
+        String(vbH) +
+        ' L ' +
+        regFirstX.toFixed(1) +
+        ' ' +
+        String(vbH) +
+        ' Z'
+      : '';
 
-  var baseY = hasBaseline ? vbH - ((props.baseline - yMin) / ySpan) * vbH : -1;
+  var ahLinePath = ahLineParts.join(' ');
+  var ahAreaPath =
+    ahLineParts.length >= 2
+      ? ahLinePath +
+        ' L ' +
+        ahLastX.toFixed(1) +
+        ' ' +
+        String(vbH) +
+        ' L ' +
+        ahFirstX.toFixed(1) +
+        ' ' +
+        String(vbH) +
+        ' Z'
+      : '';
+
+  var baseY = hasBaseline ? pointY(props.baseline) : -1;
   var basePct = hasBaseline ? (baseY / vbH) * 100 : -1;
   var dotLeftPct = (lastX / vbW) * 100;
   var dotTopPct = (lastY / vbH) * 100;
@@ -101,9 +203,24 @@ export function StockChart(props: StockChartProps) {
     var ratio = (clientX - rect.left) / rect.width;
     if (ratio < 0) ratio = 0;
     if (ratio > 1) ratio = 1;
-    var idx = Math.round(ratio * (pts.length - 1));
-    if (idx < 0) idx = 0;
-    if (idx >= pts.length) idx = pts.length - 1;
+
+    var idx = 0;
+    if (useProportional1D) {
+      var targetX = ratio * vbW;
+      var bestDist = Infinity;
+      for (var k = 0; k < pts.length; k++) {
+        var dist = Math.abs(pointX(k) - targetX);
+        if (dist < bestDist) {
+          bestDist = dist;
+          idx = k;
+        }
+      }
+    } else {
+      idx = Math.round(ratio * (pts.length - 1));
+      if (idx < 0) idx = 0;
+      if (idx >= pts.length) idx = pts.length - 1;
+    }
+
     setActiveIdx(idx);
     if (props.onScrub) {
       props.onScrub(pts[idx]);
@@ -146,22 +263,33 @@ export function StockChart(props: StockChartProps) {
   var scrubLeftPct = 0;
   var scrubTopPct = 0;
   var tooltipLeftPct = 50;
+  var scrubIsAH = false;
   if (scrubPoint && activeIdx !== null) {
-    scrubLeftPct = (activeIdx / (pts.length - 1)) * 100;
-    var scrubY = vbH - ((scrubPoint.v - yMin) / ySpan) * vbH;
-    scrubTopPct = (scrubY / vbH) * 100;
+    scrubLeftPct = (pointX(activeIdx) / vbW) * 100;
+    scrubTopPct = (pointY(scrubPoint.v) / vbH) * 100;
     tooltipLeftPct = scrubLeftPct;
-    if (tooltipLeftPct < 13) tooltipLeftPct = 13;
-    if (tooltipLeftPct > 87) tooltipLeftPct = 87;
+    if (tooltipLeftPct < 14) tooltipLeftPct = 14;
+    if (tooltipLeftPct > 86) tooltipLeftPct = 86;
+    scrubIsAH = hasAfterHours && scrubPoint.t > regularEnd;
   }
 
-  // 4 evenly spaced X-axis timestamps
-  var tickIndices = [
-    0,
-    Math.floor((pts.length - 1) * 0.33),
-    Math.floor((pts.length - 1) * 0.67),
-    pts.length - 1,
-  ];
+  // 4 evenly spaced X-axis timestamps (proportional session bounds on 1D, data indices on multi-day)
+  var xAxisTimestamps: number[];
+  if (useProportional1D) {
+    xAxisTimestamps = [
+      sessionStart,
+      Math.round(sessionStart + sessionSpan * 0.33),
+      Math.round(sessionStart + sessionSpan * 0.67),
+      sessionEnd,
+    ];
+  } else {
+    xAxisTimestamps = [
+      pts[0].t,
+      pts[Math.floor((pts.length - 1) * 0.33)].t,
+      pts[Math.floor((pts.length - 1) * 0.67)].t,
+      pts[pts.length - 1].t,
+    ];
+  }
 
   return (
     <div class={props.isLoading ? 'stock-chart-wrap stock-chart-loading' : 'stock-chart-wrap'}>
@@ -175,6 +303,17 @@ export function StockChart(props: StockChartProps) {
         onTouchEnd={handleTouchEnd}
         onTouchCancel={handleTouchEnd}
       >
+        {/* Subtle shaded after-hours zone on 1D when extended-hours prints exist */}
+        {hasAfterHours && regEndPct > 5 && regEndPct < 98 ? (
+          <div
+            class="stock-ah-zone"
+            style={{ left: regEndPct.toFixed(2) + '%' }}
+            aria-hidden="true"
+          >
+            <span class="stock-ah-badge">AH</span>
+          </div>
+        ) : null}
+
         <svg
           class="stock-chart-svg"
           viewBox={'0 0 ' + String(vbW) + ' ' + String(vbH)}
@@ -192,6 +331,14 @@ export function StockChart(props: StockChartProps) {
               <stop offset="85%" stop-color="#fb7185" stop-opacity="0.04" />
               <stop offset="100%" stop-color="#fb7185" stop-opacity="0" />
             </linearGradient>
+            <linearGradient id="stock-ah-area-up" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#34d399" stop-opacity="0.16" />
+              <stop offset="100%" stop-color="#34d399" stop-opacity="0" />
+            </linearGradient>
+            <linearGradient id="stock-ah-area-down" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#fb7185" stop-opacity="0.16" />
+              <stop offset="100%" stop-color="#fb7185" stop-opacity="0" />
+            </linearGradient>
           </defs>
 
           {hasBaseline && baseY >= 0 && baseY <= vbH ? (
@@ -207,16 +354,46 @@ export function StockChart(props: StockChartProps) {
             />
           ) : null}
 
-          <path d={areaPath} fill={'url(#' + gradId + ')'} />
-          <path
-            d={linePath}
-            fill="none"
-            stroke={strokeColor}
-            stroke-width="2.4"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            vector-effect="non-scaling-stroke"
-          />
+          {hasAfterHours && regEndX > 0 && regEndX < vbW ? (
+            <line
+              x1={regEndX.toFixed(1)}
+              y1="0"
+              x2={regEndX.toFixed(1)}
+              y2={String(vbH)}
+              stroke="rgba(203, 213, 225, 0.24)"
+              stroke-width="1"
+              stroke-dasharray="3 4"
+              vector-effect="non-scaling-stroke"
+            />
+          ) : null}
+
+          {regAreaPath ? <path d={regAreaPath} fill={'url(#' + gradId + ')'} /> : null}
+          {regLinePath ? (
+            <path
+              d={regLinePath}
+              fill="none"
+              stroke={strokeColor}
+              stroke-width="2.4"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              vector-effect="non-scaling-stroke"
+            />
+          ) : null}
+
+          {ahAreaPath ? <path d={ahAreaPath} fill={'url(#' + ahGradId + ')'} /> : null}
+          {ahLinePath ? (
+            <path
+              d={ahLinePath}
+              fill="none"
+              stroke={strokeColor}
+              stroke-opacity="0.76"
+              stroke-width="2"
+              stroke-dasharray="4 3"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              vector-effect="non-scaling-stroke"
+            />
+          ) : null}
         </svg>
 
         {/* Resting latest price dot (hidden while actively scrubbing) */}
@@ -259,6 +436,7 @@ export function StockChart(props: StockChartProps) {
               </span>
               <span class="stock-tooltip-time">
                 {formatChartTooltipTime(scrubPoint.t, props.range, props.timeFormat)}
+                {scrubIsAH ? ' · AH' : ''}
               </span>
             </div>
           </div>
@@ -277,10 +455,10 @@ export function StockChart(props: StockChartProps) {
       </div>
 
       <div class="stock-x-axis">
-        {tickIndices.map(function (idx, i) {
+        {xAxisTimestamps.map(function (ts, idx) {
           return (
-            <span class="stock-x-label" key={String(i) + '-' + String(pts[idx].t)}>
-              {formatChartAxisTime(pts[idx].t, props.range, props.timeFormat)}
+            <span class="stock-x-label" key={String(idx) + '-' + String(ts)}>
+              {formatChartAxisTime(ts, props.range, props.timeFormat)}
             </span>
           );
         })}

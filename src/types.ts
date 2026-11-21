@@ -148,6 +148,7 @@ export interface StockHero {
   currency: string;
   exchange: string;
   marketState: string;
+  marketTime?: number;
   range: StockRange;
   price: number;
   previousClose: number;
@@ -155,6 +156,14 @@ export interface StockHero {
   change: number;
   changePct: number;
   marketCap?: number;
+  extendedLabel?: string;
+  extendedPrice?: number;
+  extendedChange?: number;
+  extendedChangePct?: number;
+  sessionStart?: number;
+  regularStart?: number;
+  regularEnd?: number;
+  sessionEnd?: number;
   dayHigh: number;
   dayLow: number;
   rangeHigh?: number;

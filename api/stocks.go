@@ -32,6 +32,11 @@ var (
 	yfSessionJar     http.CookieJar
 	yfSessionCrumb   string
 	yfSessionExpires time.Time
+
+	yfQuoteCacheMu  sync.Mutex
+	yfQuoteCache    map[string]yfQuoteMetaItem
+	yfQuoteCacheKey string
+	yfQuoteCacheExp time.Time
 )
 
 type StockPoint struct {
@@ -59,16 +64,25 @@ type StockHero struct {
 	Name             string       `json:"name"`
 	Format           string       `json:"format"`
 	Currency         string       `json:"currency"`
-	Exchange         string       `json:"exchange"`
-	MarketState      string       `json:"marketState"`
-	Range            string       `json:"range"`
-	Price            float64      `json:"price"`
-	PreviousClose    float64      `json:"previousClose"`
-	Baseline         float64      `json:"baseline"`
-	Change           float64      `json:"change"`
-	ChangePct        float64      `json:"changePct"`
-	MarketCap        float64      `json:"marketCap,omitempty"`
-	DayHigh          float64      `json:"dayHigh"`
+	Exchange          string       `json:"exchange"`
+	MarketState       string       `json:"marketState"`
+	MarketTime        int64        `json:"marketTime,omitempty"`
+	Range             string       `json:"range"`
+	Price             float64      `json:"price"`
+	PreviousClose     float64      `json:"previousClose"`
+	Baseline          float64      `json:"baseline"`
+	Change            float64      `json:"change"`
+	ChangePct         float64      `json:"changePct"`
+	MarketCap         float64      `json:"marketCap,omitempty"`
+	ExtendedLabel     string       `json:"extendedLabel,omitempty"`
+	ExtendedPrice     float64      `json:"extendedPrice,omitempty"`
+	ExtendedChange    float64      `json:"extendedChange,omitempty"`
+	ExtendedChangePct float64      `json:"extendedChangePct,omitempty"`
+	SessionStart      int64        `json:"sessionStart,omitempty"`
+	RegularStart      int64        `json:"regularStart,omitempty"`
+	RegularEnd        int64        `json:"regularEnd,omitempty"`
+	SessionEnd        int64        `json:"sessionEnd,omitempty"`
+	DayHigh           float64      `json:"dayHigh"`
 	DayLow           float64      `json:"dayLow"`
 	RangeHigh        float64      `json:"rangeHigh"`
 	RangeLow         float64      `json:"rangeLow"`
@@ -110,21 +124,32 @@ type yfChartResult struct {
 	} `json:"indicators"`
 }
 
+type yfTradingPeriod struct {
+	Start int64 `json:"start"`
+	End   int64 `json:"end"`
+}
+
 type yfChartMeta struct {
-	Symbol             string  `json:"symbol"`
-	ShortName          string  `json:"shortName"`
-	LongName           string  `json:"longName"`
-	Currency           string  `json:"currency"`
-	ExchangeName       string  `json:"exchangeName"`
-	MarketState        string  `json:"marketState"`
-	RegularMarketPrice float64 `json:"regularMarketPrice"`
-	ChartPreviousClose float64 `json:"chartPreviousClose"`
-	PreviousClose      float64 `json:"previousClose"`
-	RegularMarketHigh  float64 `json:"regularMarketDayHigh"`
-	RegularMarketLow   float64 `json:"regularMarketDayLow"`
-	FiftyTwoWeekHigh   float64 `json:"fiftyTwoWeekHigh"`
-	FiftyTwoWeekLow    float64 `json:"fiftyTwoWeekLow"`
-	RegularMarketVol   int64   `json:"regularMarketVolume"`
+	Symbol               string  `json:"symbol"`
+	ShortName            string  `json:"shortName"`
+	LongName             string  `json:"longName"`
+	Currency             string  `json:"currency"`
+	ExchangeName         string  `json:"exchangeName"`
+	MarketState          string  `json:"marketState"`
+	RegularMarketTime    int64   `json:"regularMarketTime"`
+	RegularMarketPrice   float64 `json:"regularMarketPrice"`
+	ChartPreviousClose   float64 `json:"chartPreviousClose"`
+	PreviousClose        float64 `json:"previousClose"`
+	RegularMarketHigh    float64 `json:"regularMarketDayHigh"`
+	RegularMarketLow     float64 `json:"regularMarketDayLow"`
+	FiftyTwoWeekHigh     float64 `json:"fiftyTwoWeekHigh"`
+	FiftyTwoWeekLow      float64 `json:"fiftyTwoWeekLow"`
+	RegularMarketVol     int64   `json:"regularMarketVolume"`
+	CurrentTradingPeriod struct {
+		Pre     yfTradingPeriod `json:"pre"`
+		Regular yfTradingPeriod `json:"regular"`
+		Post    yfTradingPeriod `json:"post"`
+	} `json:"currentTradingPeriod"`
 }
 
 type yahooRangeSpec struct {
@@ -223,14 +248,19 @@ func StocksHandler(w http.ResponseWriter, r *http.Request) {
 		wg      sync.WaitGroup
 	)
 
+	includeHeroPrePost := normRange == "1d"
+
 	// Fetch hero series (and reuse if chartOnly or non-1d)
 	if chartOnly {
-		heroRes, err := fetchYahooChart(heroCfg.Symbol, spec)
+		heroRes, err := fetchYahooChart(heroCfg.Symbol, spec, includeHeroPrePost)
 		if err != nil {
 			writeStocksError(w, http.StatusBadGateway, fmt.Sprintf("failed to fetch stock chart: %v", err))
 			return
 		}
 		h := buildStockHero(heroCfg, normRange, heroRes)
+		if cached, ok := lookupCachedQuoteMeta(h.Symbol); ok {
+			applyQuoteMetaToHero(&h, cached)
+		}
 		hero = &h
 	} else {
 		symbols := cfg.Stocks.Symbols
@@ -246,13 +276,13 @@ func StocksHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		// Launch 3 concurrent batched RPCs:
+		// Launch up to 3 concurrent batched RPCs:
 		// 1) /v8/finance/spark for all 20 watchlist cards in a single call
-		// 2) /v8/finance/chart/{hero} for high-res hero chart + exact range high/low + meta
-		// 3) /v7/finance/quote for batched marketCap across all symbols
+		// 2) /v8/finance/chart/{hero} for high-res hero chart (+ after-hours on 1D) + range high/low
+		// 3) /v7/finance/quote for batched marketCap + extended-hours (cached in memory so range switches use 0 RPCs)
 		var (
-			sparkMap   map[string]*yfChartResult
-			marketCaps map[string]float64
+			sparkMap  map[string]*yfChartResult
+			quoteMeta map[string]yfQuoteMetaItem
 		)
 
 		wg.Add(1)
@@ -264,7 +294,7 @@ func StocksHandler(w http.ResponseWriter, r *http.Request) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			res, err := fetchYahooChart(heroCfg.Symbol, spec)
+			res, err := fetchYahooChart(heroCfg.Symbol, spec, includeHeroPrePost)
 			if err != nil {
 				heroErr = err
 				return
@@ -276,7 +306,7 @@ func StocksHandler(w http.ResponseWriter, r *http.Request) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			marketCaps = fetchYahooMarketCaps(allSyms)
+			quoteMeta = fetchYahooQuoteMetaCached(allSyms)
 		}()
 
 		wg.Wait()
@@ -302,7 +332,7 @@ func StocksHandler(w http.ResponseWriter, r *http.Request) {
 					sem <- struct{}{}
 					defer func() { <-sem }()
 
-					res, err := fetchYahooChart(item.Symbol, cardSpec)
+					res, err := fetchYahooChart(item.Symbol, cardSpec, false)
 					if err != nil {
 						quotes[i] = StockQuote{
 							Symbol:      item.Symbol,
@@ -336,16 +366,16 @@ func StocksHandler(w http.ResponseWriter, r *http.Request) {
 			quotes[heroInWatchlistIdx].ChangePct = hero.ChangePct
 		}
 
-		// Attach fetched market caps to quotes and hero
-		if len(marketCaps) > 0 {
+		// Attach cached/fetched market caps & extended hours to quotes and hero
+		if len(quoteMeta) > 0 {
 			for i := range quotes {
-				if capVal, ok := marketCaps[strings.ToUpper(quotes[i].Symbol)]; ok && capVal > 0 {
-					quotes[i].MarketCap = capVal
+				if meta, ok := quoteMeta[strings.ToUpper(quotes[i].Symbol)]; ok && meta.MarketCap > 0 {
+					quotes[i].MarketCap = meta.MarketCap
 				}
 			}
 			if hero != nil {
-				if capVal, ok := marketCaps[strings.ToUpper(hero.Symbol)]; ok && capVal > 0 {
-					hero.MarketCap = capVal
+				if meta, ok := quoteMeta[strings.ToUpper(hero.Symbol)]; ok {
+					applyQuoteMetaToHero(hero, meta)
 				}
 			}
 		}
@@ -385,12 +415,16 @@ func StocksHandler(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(resp)
 }
 
-func fetchYahooChart(symbol string, spec yahooRangeSpec) (*yfChartResult, error) {
+func fetchYahooChart(symbol string, spec yahooRangeSpec, includePrePost bool) (*yfChartResult, error) {
 	escaped := url.PathEscape(symbol)
 	params := url.Values{}
 	params.Set("range", spec.Range)
 	params.Set("interval", spec.Interval)
-	params.Set("includePrePost", "false")
+	if includePrePost {
+		params.Set("includePrePost", "true")
+	} else {
+		params.Set("includePrePost", "false")
+	}
 	qs := params.Encode()
 
 	urls := []string{
@@ -735,7 +769,7 @@ func buildStockQuote(cfg config.StockSymbolConfig, normRange string, res *yfChar
 	}
 }
 
-func computeRangeHighLow(normRange string, res *yfChartResult, pts []StockPoint, price float64) (float64, float64) {
+func computeRangeHighLow(normRange string, res *yfChartResult, pts []StockPoint, price float64, minTimestamp int64) (float64, float64) {
 	hasVal := false
 	minV := 0.0
 	maxV := 0.0
@@ -760,12 +794,19 @@ func computeRangeHighLow(normRange string, res *yfChartResult, pts []StockPoint,
 
 	if res != nil && len(res.Indicators.Quote) > 0 {
 		q := res.Indicators.Quote[0]
-		for _, h := range q.High {
+		ts := res.Timestamp
+		for i, h := range q.High {
+			if minTimestamp > 0 && i < len(ts) && ts[i] < minTimestamp {
+				continue
+			}
 			if h != nil {
 				consider(*h)
 			}
 		}
-		for _, l := range q.Low {
+		for i, l := range q.Low {
+			if minTimestamp > 0 && i < len(ts) && ts[i] < minTimestamp {
+				continue
+			}
 			if l != nil {
 				consider(*l)
 			}
@@ -794,10 +835,96 @@ func computeRangeHighLow(normRange string, res *yfChartResult, pts []StockPoint,
 }
 
 func buildStockHero(cfg config.StockSymbolConfig, normRange string, res *yfChartResult) StockHero {
-	pts := extractValidPoints(res)
-	price := resolvePrice(res.Meta, pts)
-	prevClose := resolvePrevClose(res.Meta, pts)
-	rangeHigh, rangeLow := computeRangeHighLow(normRange, res, pts, price)
+	allPts := extractValidPoints(res)
+	price := resolvePrice(res.Meta, allPts)
+	prevClose := resolvePrevClose(res.Meta, allPts)
+
+	marketState := res.Meta.MarketState
+	if marketState == "" {
+		if isUSMarketHoursNow(time.Now().UTC()) {
+			marketState = "REGULAR"
+		} else {
+			marketState = "CLOSED"
+		}
+	}
+
+	var (
+		pts               = allPts
+		sessionStart      int64
+		regularStart      int64
+		regularEnd        int64
+		sessionEnd        int64
+		extendedLabel     string
+		extendedPrice     float64
+		extendedChange    float64
+		extendedChangePct float64
+		minRangeTs        int64
+	)
+
+	// On 1D hero chart:
+	// - Frame regular session proportionally (e.g. 6:30 AM - 1:00 PM PT)
+	// - Include after-hours points seamlessly after regular close (extending axis to post.end)
+	// - Filter out pre-market points unless currently in PRE-market so regular hours stay wide & clean
+	if normRange == "1d" && res != nil {
+		tp := res.Meta.CurrentTradingPeriod
+		if tp.Regular.Start > 0 && tp.Regular.End > tp.Regular.Start {
+			regularStart = tp.Regular.Start
+			regularEnd = tp.Regular.End
+
+			upperState := strings.ToUpper(marketState)
+			hasPrePoints := false
+			hasPostPoints := false
+			for _, p := range allPts {
+				if p.T < regularStart {
+					hasPrePoints = true
+				}
+				if p.T > regularEnd {
+					hasPostPoints = true
+				}
+			}
+
+			if upperState == "PRE" && hasPrePoints && tp.Pre.Start > 0 {
+				sessionStart = tp.Pre.Start
+				sessionEnd = regularEnd
+				minRangeTs = sessionStart
+			} else {
+				// Filter to Regular + After-Hours (>= regularStart) when regular/post points exist
+				filtered := make([]StockPoint, 0, len(allPts))
+				for _, p := range allPts {
+					if p.T >= regularStart {
+						filtered = append(filtered, p)
+					}
+				}
+				if len(filtered) >= 2 {
+					pts = filtered
+					minRangeTs = regularStart
+				}
+				sessionStart = regularStart
+				if hasPostPoints {
+					lastT := pts[len(pts)-1].T
+					sessionEnd = tp.Post.End
+					if lastT > sessionEnd {
+						sessionEnd = lastT
+					}
+				} else {
+					sessionEnd = regularEnd
+				}
+			}
+
+			// Fallback after-hours summary from 1D chart tail (overridden if /v7/quote provides official postMarket*)
+			if hasPostPoints && len(pts) > 0 && price > 0 {
+				lastPt := pts[len(pts)-1]
+				if lastPt.T > regularEnd && lastPt.V > 0 {
+					extendedLabel = "AH"
+					extendedPrice = lastPt.V
+					extendedChange = lastPt.V - price
+					extendedChangePct = (extendedChange / price) * 100
+				}
+			}
+		}
+	}
+
+	rangeHigh, rangeLow := computeRangeHighLow(normRange, res, pts, price, minRangeTs)
 
 	baseline := prevClose
 	if normRange != "1d" && len(pts) > 0 {
@@ -823,37 +950,69 @@ func buildStockHero(cfg config.StockSymbolConfig, normRange string, res *yfChart
 		}
 	}
 
-	marketState := res.Meta.MarketState
-	if marketState == "" {
-		if isUSMarketHoursNow(time.Now().UTC()) {
-			marketState = "REGULAR"
-		} else {
-			marketState = "CLOSED"
-		}
+	marketTime := res.Meta.RegularMarketTime
+	if marketTime <= 0 && len(pts) > 0 {
+		marketTime = pts[len(pts)-1].T
 	}
 
 	return StockHero{
-		Symbol:           cfg.Symbol,
-		Label:            cfg.Label,
-		Name:             name,
-		Format:           cfg.Format,
-		Currency:         res.Meta.Currency,
-		Exchange:         res.Meta.ExchangeName,
-		MarketState:      marketState,
-		Range:            normRange,
-		Price:            price,
-		PreviousClose:    prevClose,
-		Baseline:         baseline,
-		Change:           change,
-		ChangePct:        changePct,
-		DayHigh:          res.Meta.RegularMarketHigh,
-		DayLow:           res.Meta.RegularMarketLow,
-		RangeHigh:        rangeHigh,
-		RangeLow:         rangeLow,
-		FiftyTwoWeekHigh: res.Meta.FiftyTwoWeekHigh,
-		FiftyTwoWeekLow:  res.Meta.FiftyTwoWeekLow,
-		Volume:           res.Meta.RegularMarketVol,
-		Points:           downsamplePoints(pts, 140),
+		Symbol:            cfg.Symbol,
+		Label:             cfg.Label,
+		Name:              name,
+		Format:            cfg.Format,
+		Currency:          res.Meta.Currency,
+		Exchange:          res.Meta.ExchangeName,
+		MarketState:       marketState,
+		MarketTime:        marketTime,
+		Range:             normRange,
+		Price:             price,
+		PreviousClose:     prevClose,
+		Baseline:          baseline,
+		Change:            change,
+		ChangePct:         changePct,
+		ExtendedLabel:     extendedLabel,
+		ExtendedPrice:     extendedPrice,
+		ExtendedChange:    extendedChange,
+		ExtendedChangePct: extendedChangePct,
+		SessionStart:      sessionStart,
+		RegularStart:      regularStart,
+		RegularEnd:        regularEnd,
+		SessionEnd:        sessionEnd,
+		DayHigh:           res.Meta.RegularMarketHigh,
+		DayLow:            res.Meta.RegularMarketLow,
+		RangeHigh:         rangeHigh,
+		RangeLow:          rangeLow,
+		FiftyTwoWeekHigh:  res.Meta.FiftyTwoWeekHigh,
+		FiftyTwoWeekLow:   res.Meta.FiftyTwoWeekLow,
+		Volume:            res.Meta.RegularMarketVol,
+		Points:            downsamplePoints(pts, 160),
+	}
+}
+
+func applyQuoteMetaToHero(hero *StockHero, meta yfQuoteMetaItem) {
+	if hero == nil {
+		return
+	}
+	if meta.MarketCap > 0 {
+		hero.MarketCap = meta.MarketCap
+	}
+	if hero.MarketTime <= 0 && meta.RegularMarketTime > 0 {
+		hero.MarketTime = meta.RegularMarketTime
+	}
+	state := strings.ToUpper(hero.MarketState)
+	if state == "" {
+		state = strings.ToUpper(meta.MarketState)
+	}
+	if state == "PRE" && meta.PreMarketPrice > 0 {
+		hero.ExtendedLabel = "PM"
+		hero.ExtendedPrice = meta.PreMarketPrice
+		hero.ExtendedChange = meta.PreMarketChange
+		hero.ExtendedChangePct = meta.PreMarketChangePercent
+	} else if state != "REGULAR" && meta.PostMarketPrice > 0 {
+		hero.ExtendedLabel = "AH"
+		hero.ExtendedPrice = meta.PostMarketPrice
+		hero.ExtendedChange = meta.PostMarketChange
+		hero.ExtendedChangePct = meta.PostMarketChangePercent
 	}
 }
 
@@ -885,13 +1044,49 @@ func writeStocksError(w http.ResponseWriter, status int, message string) {
 	})
 }
 
+type yfQuoteMetaItem struct {
+	Symbol                 string  `json:"symbol"`
+	MarketState            string  `json:"marketState"`
+	MarketCap              float64 `json:"marketCap"`
+	RegularMarketTime      int64   `json:"regularMarketTime"`
+	PreMarketPrice         float64 `json:"preMarketPrice"`
+	PreMarketChange        float64 `json:"preMarketChange"`
+	PreMarketChangePercent float64 `json:"preMarketChangePercent"`
+	PostMarketPrice        float64 `json:"postMarketPrice"`
+	PostMarketChange       float64 `json:"postMarketChange"`
+	PostMarketChangePercent float64 `json:"postMarketChangePercent"`
+}
+
 type yfQuoteEnvelope struct {
 	QuoteResponse struct {
-		Result []struct {
-			Symbol    string  `json:"symbol"`
-			MarketCap float64 `json:"marketCap"`
-		} `json:"result"`
+		Result []yfQuoteMetaItem `json:"result"`
 	} `json:"quoteResponse"`
+}
+
+func lookupCachedQuoteMeta(symbol string) (yfQuoteMetaItem, bool) {
+	yfQuoteCacheMu.Lock()
+	defer yfQuoteCacheMu.Unlock()
+	if yfQuoteCache == nil || time.Now().After(yfQuoteCacheExp) {
+		return yfQuoteMetaItem{}, false
+	}
+	item, ok := yfQuoteCache[strings.ToUpper(symbol)]
+	return item, ok
+}
+
+func isUSExtendedHoursNow(nowUTC time.Time) bool {
+	loc, err := time.LoadLocation("America/New_York")
+	var et time.Time
+	if err == nil {
+		et = nowUTC.In(loc)
+	} else {
+		et = nowUTC.Add(-5 * time.Hour)
+	}
+	wd := et.Weekday()
+	if wd == time.Saturday || wd == time.Sunday {
+		return false
+	}
+	mins := et.Hour()*60 + et.Minute()
+	return mins >= 4*60 && mins <= 20*60+15
 }
 
 func getYahooSession(forceRefresh bool) (http.CookieJar, string, error) {
@@ -952,10 +1147,19 @@ func getYahooSession(forceRefresh bool) (http.CookieJar, string, error) {
 	return jar, crumb, nil
 }
 
-func fetchYahooMarketCaps(symbols []string) map[string]float64 {
+func fetchYahooQuoteMetaCached(symbols []string) map[string]yfQuoteMetaItem {
 	if len(symbols) == 0 {
 		return nil
 	}
+	cacheKey := strings.ToUpper(strings.Join(symbols, ","))
+
+	yfQuoteCacheMu.Lock()
+	if yfQuoteCache != nil && yfQuoteCacheKey == cacheKey && time.Now().Before(yfQuoteCacheExp) {
+		cached := yfQuoteCache
+		yfQuoteCacheMu.Unlock()
+		return cached
+	}
+	yfQuoteCacheMu.Unlock()
 
 	const ua = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
 
@@ -973,7 +1177,7 @@ func fetchYahooMarketCaps(symbols []string) map[string]float64 {
 
 		params := url.Values{}
 		params.Set("symbols", strings.Join(symbols, ","))
-		params.Set("fields", "marketCap")
+		params.Set("fields", "marketCap,marketState,regularMarketTime,preMarketPrice,preMarketChange,preMarketChangePercent,postMarketPrice,postMarketChange,postMarketChangePercent")
 		params.Set("crumb", crumb)
 		qs := params.Encode()
 
@@ -1012,12 +1216,22 @@ func fetchYahooMarketCaps(symbols []string) map[string]float64 {
 			if err := json.Unmarshal(body, &env); err != nil {
 				continue
 			}
-			out := make(map[string]float64, len(env.QuoteResponse.Result))
+			out := make(map[string]yfQuoteMetaItem, len(env.QuoteResponse.Result))
 			for _, item := range env.QuoteResponse.Result {
-				if item.Symbol != "" && item.MarketCap > 0 {
-					out[strings.ToUpper(item.Symbol)] = item.MarketCap
+				if item.Symbol != "" {
+					out[strings.ToUpper(item.Symbol)] = item
 				}
 			}
+
+			ttl := 15 * time.Minute
+			if isUSExtendedHoursNow(time.Now().UTC()) {
+				ttl = 60 * time.Second
+			}
+			yfQuoteCacheMu.Lock()
+			yfQuoteCache = out
+			yfQuoteCacheKey = cacheKey
+			yfQuoteCacheExp = time.Now().Add(ttl)
+			yfQuoteCacheMu.Unlock()
 			return out
 		}
 

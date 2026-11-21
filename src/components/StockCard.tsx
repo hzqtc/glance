@@ -1,15 +1,17 @@
-import type { StockCardMetric, StockQuote } from '../types';
+import type { StockCardMetric, StockQuote, StockRange } from '../types';
 import {
   formatMarketCap,
   formatStockDelta,
   formatStockPct,
   formatStockValue,
+  isBigMover,
 } from '../utils/stocks';
 import { StockLogo } from './StockLogo';
 
 interface StockCardProps {
   quote: StockQuote;
   metric: StockCardMetric;
+  range: StockRange;
   isSelected: boolean;
   onSelect: (symbol: string) => void;
 }
@@ -57,6 +59,7 @@ function MiniSparkline(props: { values: number[]; isPositive: boolean }) {
 export function StockCard(props: StockCardProps) {
   var q = props.quote;
   var isPositive = q.change >= 0;
+  var bigMover = !q.unavailable && isBigMover(q.changePct, props.range);
 
   function handleKeyDown(e: KeyboardEvent) {
     if (e.key === 'Enter' || e.key === ' ') {
@@ -65,11 +68,19 @@ export function StockCard(props: StockCardProps) {
     }
   }
 
+  var cardClass = 'stock-card';
+  if (bigMover) {
+    cardClass += isPositive ? ' stock-card-mover-up' : ' stock-card-mover-down';
+  }
+  if (props.isSelected) {
+    cardClass += ' stock-card-selected';
+  }
+
   return (
     <div
       role="button"
       tabIndex={0}
-      class={props.isSelected ? 'stock-card stock-card-selected' : 'stock-card'}
+      class={cardClass}
       onClick={function () {
         props.onSelect(q.symbol);
       }}

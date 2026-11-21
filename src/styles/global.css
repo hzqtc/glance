@@ -1541,6 +1541,15 @@ body,
   box-shadow: 0 0 8px rgba(148, 163, 184, 0.45);
 }
 
+.stocks-updated-tag {
+  margin-left: 7px;
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
 .stocks-exchange-tag {
   display: inline-block;
   margin-left: 8px;
@@ -1691,6 +1700,27 @@ body,
   font-weight: 500;
 }
 
+.stocks-ext-pill {
+  display: inline-block;
+  margin-left: 9px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  vertical-align: middle;
+}
+
+.stocks-ext-up {
+  color: #6ee7b7;
+  background-color: rgba(16, 185, 129, 0.16);
+}
+
+.stocks-ext-down {
+  color: #fda4af;
+  background-color: rgba(244, 63, 94, 0.18);
+}
+
 /* Hero Time-Series Chart Card (balanced with 4 rows of cards) */
 .stocks-chart-card {
   flex: 1;
@@ -1773,6 +1803,30 @@ body,
   margin-right: 6px;
   cursor: crosshair;
   touch-action: none;
+}
+
+.stock-ah-zone {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(148, 163, 184, 0.08);
+  border-top-right-radius: 8px;
+  border-bottom-right-radius: 8px;
+  pointer-events: none;
+}
+
+.stock-ah-badge {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background-color: rgba(11, 18, 33, 0.55);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
 }
 
 .stock-scrub-layer {
@@ -1959,9 +2013,28 @@ body,
   transform: scale(0.985);
 }
 
+/* Subtle atmospheric highlight on standout big movers for the selected timeframe */
+.stock-card-mover-up {
+  background-color: rgba(16, 118, 86, 0.34);
+  box-shadow: inset 0 0 0 1px rgba(52, 211, 153, 0.24), 0 6px 16px var(--card-shadow);
+}
+
+.stock-card-mover-down {
+  background-color: rgba(136, 36, 58, 0.34);
+  box-shadow: inset 0 0 0 1px rgba(251, 113, 133, 0.24), 0 6px 16px var(--card-shadow);
+}
+
 .stock-card-selected {
   background-color: var(--surface-card-active);
-  box-shadow: inset 0 0 0 1px rgba(147, 197, 253, 0.4), 0 8px 20px var(--card-shadow-active);
+  box-shadow: inset 0 0 0 1px rgba(147, 197, 253, 0.48), 0 8px 20px var(--card-shadow-active);
+}
+
+.stock-card-mover-up.stock-card-selected {
+  background-color: rgba(20, 128, 94, 0.48);
+}
+
+.stock-card-mover-down.stock-card-selected {
+  background-color: rgba(152, 42, 66, 0.48);
 }
 
 .stock-card-top {

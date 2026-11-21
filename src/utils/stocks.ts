@@ -249,3 +249,45 @@ export function formatChartTooltipTime(
   }
   return monthDay + ', ' + String(d.getFullYear());
 }
+
+export function formatMarketTimestamp(
+  unixSec?: number,
+  timeFormat: TimeFormat = '12h'
+): string {
+  if (!unixSec || unixSec <= 0) return '';
+  var d = new Date(unixSec * 1000);
+  var now = new Date();
+  var h = d.getHours();
+  var m = d.getMinutes();
+  var timeStr: string;
+  if (timeFormat === '24h') {
+    timeStr = pad2(h) + ':' + pad2(m);
+  } else {
+    var ampm = h >= 12 ? 'PM' : 'AM';
+    var h12 = h % 12;
+    timeStr = String(h12 === 0 ? 12 : h12) + ':' + pad2(m) + ' ' + ampm;
+  }
+
+  var sameDay =
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate();
+  if (sameDay) {
+    return timeStr;
+  }
+  var diffDays = Math.abs(now.getTime() - d.getTime()) / (24 * 60 * 60 * 1000);
+  if (diffDays < 6) {
+    return WEEKDAYS_SHORT[d.getDay()] + ' ' + timeStr;
+  }
+  return MONTHS_SHORT[d.getMonth()] + ' ' + String(d.getDate()) + ', ' + timeStr;
+}
+
+export function isBigMover(changePct: number, range: StockRange): boolean {
+  if (typeof changePct !== 'number' || isNaN(changePct)) return false;
+  var absPct = Math.abs(changePct);
+  if (range === '1d') return absPct >= 3;
+  if (range === '1w') return absPct >= 6;
+  if (range === '1m') return absPct >= 12;
+  if (range === 'ytd' || range === '1y') return absPct >= 30;
+  return absPct >= 80;
+}
