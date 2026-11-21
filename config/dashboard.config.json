@@ -51,9 +51,6 @@
   "stocks": {
     "defaultRange": "1d",
     "symbols": [
-      { "symbol": "^GSPC", "label": "S&P 500", "name": "S&P 500 Index", "format": "points" },
-      { "symbol": "^IXIC", "label": "NASDAQ", "name": "NASDAQ Composite", "format": "points" },
-      { "symbol": "^TNX", "label": "10Y Bond", "name": "US 10Y Treasury Yield", "format": "yield" },
       { "symbol": "NVDA", "label": "NVDA", "name": "NVIDIA", "format": "currency" },
       { "symbol": "AAPL", "label": "AAPL", "name": "Apple", "format": "currency" },
       { "symbol": "MSFT", "label": "MSFT", "name": "Microsoft", "format": "currency" },
@@ -61,16 +58,19 @@
       { "symbol": "AMZN", "label": "AMZN", "name": "Amazon", "format": "currency" },
       { "symbol": "META", "label": "META", "name": "Meta", "format": "currency" },
       { "symbol": "TSLA", "label": "TSLA", "name": "Tesla", "format": "currency" },
-      { "symbol": "ANT", "label": "ANT", "name": "Anthropic", "format": "currency" },
       { "symbol": "TSM", "label": "TSM", "name": "TSMC", "format": "currency" },
       { "symbol": "AMD", "label": "AMD", "name": "AMD", "format": "currency" },
       { "symbol": "NFLX", "label": "NFLX", "name": "Netflix", "format": "currency" },
+      { "symbol": "ANT", "label": "ANT", "name": "Anthropic", "format": "currency" },
+      { "symbol": "SPCX", "label": "SPCX", "name": "SpaceX", "format": "currency" },
+      { "symbol": "^GSPC", "label": "S&P 500", "name": "S&P 500 Index", "format": "points" },
+      { "symbol": "^IXIC", "label": "NASDAQ", "name": "NASDAQ Composite", "format": "points" },
+      { "symbol": "^DJI", "label": "Dow", "name": "Dow Jones", "format": "points" },
+      { "symbol": "^TNX", "label": "10Y Bond", "name": "US 10Y Treasury Yield", "format": "yield" },
       { "symbol": "BTC-USD", "label": "BTC", "name": "Bitcoin", "format": "currency" },
       { "symbol": "GC=F", "label": "Gold", "name": "Gold Futures", "format": "currency" },
-      { "symbol": "CL=F", "label": "Oil", "name": "WTI Crude Oil", "format": "currency" },
       { "symbol": "SI=F", "label": "Silver", "name": "Silver Futures", "format": "currency" },
-      { "symbol": "SPCX", "label": "SPCX", "name": "SpaceX", "format": "currency" },
-      { "symbol": "^DJI", "label": "Dow", "name": "Dow Jones", "format": "points" }
+      { "symbol": "CL=F", "label": "Oil", "name": "WTI Crude Oil", "format": "currency" }
     ]
   },
   "widgets": {

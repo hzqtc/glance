@@ -1,4 +1,4 @@
-import type { TempUnit } from '../types';
+import type { StockCardMetric, TempUnit } from '../types';
 
 interface TopControlsProps {
   animEnabled: boolean;
@@ -6,6 +6,8 @@ interface TopControlsProps {
   isRefreshing: boolean;
   showAnim?: boolean;
   showUnits?: boolean;
+  stockMetric?: StockCardMetric;
+  onSelectStockMetric?: (metric: StockCardMetric) => void;
   onToggleAnim: () => void;
   onToggleUnits: () => void;
   onRefresh: () => void;
@@ -14,8 +16,76 @@ interface TopControlsProps {
 export function TopControls(props: TopControlsProps) {
   var showAnim = props.showAnim !== false;
   var showUnits = props.showUnits !== false;
+  var showStockMetrics = Boolean(props.stockMetric && props.onSelectStockMetric);
   return (
     <div class="top-controls" role="toolbar" aria-label="Dashboard controls">
+      {showStockMetrics ? (
+        <div class="ctrl-mode-group" role="group" aria-label="Card display metric">
+          <button
+            type="button"
+            class={
+              props.stockMetric === 'abs'
+                ? 'ctrl-btn ctrl-btn-mode ctrl-btn-selected'
+                : 'ctrl-btn ctrl-btn-mode'
+            }
+            onClick={function () {
+              if (props.onSelectStockMetric) props.onSelectStockMetric('abs');
+            }}
+            title="Show absolute price change"
+            aria-label="Absolute price change"
+            aria-pressed={props.stockMetric === 'abs'}
+          >
+            $
+          </button>
+          <button
+            type="button"
+            class={
+              props.stockMetric === 'pct'
+                ? 'ctrl-btn ctrl-btn-mode ctrl-btn-selected'
+                : 'ctrl-btn ctrl-btn-mode'
+            }
+            onClick={function () {
+              if (props.onSelectStockMetric) props.onSelectStockMetric('pct');
+            }}
+            title="Show percentage change"
+            aria-label="Percentage change"
+            aria-pressed={props.stockMetric === 'pct'}
+          >
+            %
+          </button>
+          <button
+            type="button"
+            class={
+              props.stockMetric === 'mcap'
+                ? 'ctrl-btn ctrl-btn-mode ctrl-btn-icon ctrl-btn-selected'
+                : 'ctrl-btn ctrl-btn-mode ctrl-btn-icon'
+            }
+            onClick={function () {
+              if (props.onSelectStockMetric) props.onSelectStockMetric('mcap');
+            }}
+            title="Show total market cap"
+            aria-label="Total market cap"
+            aria-pressed={props.stockMetric === 'mcap'}
+          >
+            <svg
+              width="13"
+              height="13"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.1"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="ctrl-svg"
+              aria-hidden="true"
+            >
+              <path d="M21.21 15.89A10 10 0 1 1 8 2.83" />
+              <path d="M22 12A10 10 0 0 0 12 2v10z" />
+            </svg>
+          </button>
+        </div>
+      ) : null}
+
       {showAnim ? (
         <button
           type="button"
@@ -82,7 +152,7 @@ export function TopControls(props: TopControlsProps) {
         </button>
       ) : null}
 
-      {showAnim || showUnits ? (
+      {showStockMetrics || showAnim || showUnits ? (
         <span class="ctrl-sep" aria-hidden="true" />
       ) : null}
 

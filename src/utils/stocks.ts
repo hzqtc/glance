@@ -88,6 +88,25 @@ export function formatStockPct(pct: number): string {
   return sign + pct.toFixed(2) + '%';
 }
 
+export function formatMarketCap(cap?: number): string {
+  if (typeof cap !== 'number' || isNaN(cap) || cap <= 0) {
+    return '—';
+  }
+  if (cap >= 1e12) {
+    var t = cap / 1e12;
+    return '$' + (t >= 10 ? t.toFixed(1) : t.toFixed(2)) + 'T';
+  }
+  if (cap >= 1e9) {
+    var b = cap / 1e9;
+    return '$' + (b >= 100 ? b.toFixed(0) : b >= 10 ? b.toFixed(1) : b.toFixed(2)) + 'B';
+  }
+  if (cap >= 1e6) {
+    var m = cap / 1e6;
+    return '$' + (m >= 100 ? m.toFixed(0) : m.toFixed(1)) + 'M';
+  }
+  return '$' + addCommas(cap.toFixed(0));
+}
+
 export function formatMarketState(state: string): { label: string; isOpen: boolean } {
   var upper = (state || '').toUpperCase();
   if (upper === 'REGULAR') {

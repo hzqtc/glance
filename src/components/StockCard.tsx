@@ -1,9 +1,15 @@
-import type { StockQuote } from '../types';
-import { formatStockPct, formatStockValue } from '../utils/stocks';
+import type { StockCardMetric, StockQuote } from '../types';
+import {
+  formatMarketCap,
+  formatStockDelta,
+  formatStockPct,
+  formatStockValue,
+} from '../utils/stocks';
 import { StockLogo } from './StockLogo';
 
 interface StockCardProps {
   quote: StockQuote;
+  metric: StockCardMetric;
   isSelected: boolean;
   onSelect: (symbol: string) => void;
 }
@@ -76,15 +82,23 @@ export function StockCard(props: StockCardProps) {
           <span class="stock-card-label">{q.label}</span>
         </div>
         {!q.unavailable ? (
-          <span
-            class={
-              isPositive
-                ? 'stock-pct-badge stock-pct-up'
-                : 'stock-pct-badge stock-pct-down'
-            }
-          >
-            {formatStockPct(q.changePct)}
-          </span>
+          props.metric === 'mcap' ? (
+            <span class="stock-pct-badge stock-pct-neutral">
+              {formatMarketCap(q.marketCap)}
+            </span>
+          ) : (
+            <span
+              class={
+                isPositive
+                  ? 'stock-pct-badge stock-pct-up'
+                  : 'stock-pct-badge stock-pct-down'
+              }
+            >
+              {props.metric === 'abs'
+                ? formatStockDelta(q.change, q.format)
+                : formatStockPct(q.changePct)}
+            </span>
+          )
         ) : null}
       </div>
 

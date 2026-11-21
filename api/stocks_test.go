@@ -83,6 +83,30 @@ func TestStocksHandlerEndToEndAndChartOnly(t *testing.T) {
 	origClient := stocksHTTPClient
 	stocksHTTPClient = &http.Client{
 		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			u := r.URL.String()
+			if r.URL.Host == "fc.yahoo.com" {
+				return &http.Response{
+					StatusCode: http.StatusNotFound,
+					Header:     http.Header{"Set-Cookie": []string{"A3=testcookie; Path=/"}},
+					Body:       io.NopCloser(bytes.NewBufferString("")),
+				}, nil
+			}
+			if r.URL.Path == "/v1/test/getcrumb" {
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Header:     http.Header{"Content-Type": []string{"text/plain"}},
+					Body:       io.NopCloser(bytes.NewBufferString("testcrumb123")),
+				}, nil
+			}
+			if r.URL.Path == "/v7/finance/quote" {
+				mockQuotes := `{"quoteResponse":{"result":[{"symbol":"NVDA","marketCap":3420000000000},{"symbol":"^GSPC","marketCap":0}]}}`
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Header:     http.Header{"Content-Type": []string{"application/json"}},
+					Body:       io.NopCloser(bytes.NewBufferString(mockQuotes)),
+				}, nil
+			}
+			_ = u
 			return &http.Response{
 				StatusCode: http.StatusOK,
 				Header:     http.Header{"Content-Type": []string{"application/json"}},
@@ -90,7 +114,13 @@ func TestStocksHandlerEndToEndAndChartOnly(t *testing.T) {
 			}, nil
 		}),
 	}
-	defer func() { stocksHTTPClient = origClient }()
+	defer func() {
+		stocksHTTPClient = origClient
+		yfSessionMu.Lock()
+		yfSessionJar = nil
+		yfSessionCrumb = ""
+		yfSessionMu.Unlock()
+	}()
 
 	// Full load (hero + 10 watchlist quotes)
 	req := httptest.NewRequest(http.MethodGet, "/api/stocks?symbol=%5EGSPC&range=1d", nil)
@@ -119,6 +149,9 @@ func TestStocksHandlerEndToEndAndChartOnly(t *testing.T) {
 	}
 	if len(full.Quotes) != 20 {
 		t.Fatalf("expected 20 watchlist quotes, got %d", len(full.Quotes))
+	}
+	if full.Quotes[0].Symbol != "NVDA" || full.Quotes[0].MarketCap != 3420000000000 {
+		t.Fatalf("expected first categorized quote NVDA with marketCap 3.42T, got %+v", full.Quotes[0])
 	}
 
 	// chartOnly=1 for 1y timeframe switching

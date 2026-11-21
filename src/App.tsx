@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
-import type { CityWeather, TempUnit, WeatherKind, WeatherResponse } from './types';
+import type {
+  CityWeather,
+  StockCardMetric,
+  TempUnit,
+  WeatherKind,
+  WeatherResponse,
+} from './types';
 import {
   getCityClock,
   getMoonPhase,
@@ -17,6 +23,7 @@ import { STOCKS_STORAGE_KEY, StocksDashboard } from './components/StocksDashboar
 
 var WEATHER_STORAGE_KEY = 'glance:lastDashboard:v1';
 var ANIM_STORAGE_KEY = 'glance:animEnabled:v1';
+var STOCK_METRIC_STORAGE_KEY = 'glance:stockCardMetric:v1';
 var TOTAL_SLIDES = 2;
 
 interface DemoOverride {
@@ -125,6 +132,26 @@ function writeStoredAnimEnabled(enabled: boolean): void {
   }
 }
 
+function readStoredStockMetric(): StockCardMetric {
+  try {
+    var saved = window.localStorage.getItem(STOCK_METRIC_STORAGE_KEY);
+    if (saved === 'abs' || saved === 'pct' || saved === 'mcap') {
+      return saved;
+    }
+  } catch (_err) {
+    // Ignore storage errors
+  }
+  return 'pct';
+}
+
+function writeStoredStockMetric(metric: StockCardMetric): void {
+  try {
+    window.localStorage.setItem(STOCK_METRIC_STORAGE_KEY, metric);
+  } catch (_err) {
+    // Ignore storage errors
+  }
+}
+
 /** Safari 12-safe ancestor class check so touches inside horizontally scrollable strips don't trigger carousel swipes. */
 function isInsideClass(target: EventTarget | null, className: string): boolean {
   var node = target as HTMLElement | null;
@@ -167,6 +194,12 @@ export function App() {
   });
   var animEnabled = _animState[0];
   var setAnimEnabled = _animState[1];
+
+  var _stockMetricState = useState<StockCardMetric>(function () {
+    return readStoredStockMetric();
+  });
+  var stockMetric = _stockMetricState[0];
+  var setStockMetric = _stockMetricState[1];
 
   var _refreshState = useState<boolean>(false);
   var isRefreshing = _refreshState[0];
@@ -429,6 +462,11 @@ export function App() {
     writeStoredAnimEnabled(next);
   }
 
+  function handleSelectStockMetric(metric: StockCardMetric) {
+    setStockMetric(metric);
+    writeStoredStockMetric(metric);
+  }
+
   function handleToggleUnits() {
     var nextUnit: TempUnit = units === 'F' ? 'C' : 'F';
     setUnitOverride(nextUnit === configUnits ? null : nextUnit);
@@ -660,6 +698,7 @@ export function App() {
           <StocksDashboard
             isActive={activeSlide === 1}
             timeFormat={timeFormat}
+            cardMetric={stockMetric}
             controls={
               <TopControls
                 animEnabled={animEnabled}
@@ -667,6 +706,8 @@ export function App() {
                 isRefreshing={isRefreshing}
                 showAnim={false}
                 showUnits={false}
+                stockMetric={stockMetric}
+                onSelectStockMetric={handleSelectStockMetric}
                 onToggleAnim={handleToggleAnim}
                 onToggleUnits={handleToggleUnits}
                 onRefresh={handleRefresh}

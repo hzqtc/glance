@@ -3,6 +3,7 @@ export type TimeFormat = '12h' | '24h';
 
 export type StockRange = '1d' | '1w' | '1m' | 'ytd' | '1y' | '2y' | '5y' | '10y' | 'all';
 export type StockFormat = 'currency' | 'points' | 'yield';
+export type StockCardMetric = 'abs' | 'pct' | 'mcap';
 
 export interface HeroConfig {
   lockFirstCity: boolean;
@@ -134,6 +135,7 @@ export interface StockQuote {
   previousClose: number;
   change: number;
   changePct: number;
+  marketCap?: number;
   sparkline: number[];
   unavailable?: boolean;
 }
@@ -152,6 +154,7 @@ export interface StockHero {
   baseline: number;
   change: number;
   changePct: number;
+  marketCap?: number;
   dayHigh: number;
   dayLow: number;
   rangeHigh?: number;

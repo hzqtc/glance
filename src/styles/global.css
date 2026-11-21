@@ -349,6 +349,40 @@ body,
   padding: 0 9px;
 }
 
+.ctrl-mode-group {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+}
+
+.ctrl-btn-mode {
+  min-width: 26px;
+  height: 22px;
+  padding: 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  transition: background-color 0.2s ease, color 0.2s ease, transform 0.15s ease;
+}
+
+.ctrl-btn-mode:not(:last-child) {
+  margin-right: 2px;
+}
+
+.ctrl-btn-selected {
+  background-color: rgba(255, 255, 255, 0.18);
+  color: var(--text-primary);
+}
+
+.stocks-slide .top-controls {
+  opacity: 0.82;
+}
+
+.stocks-slide .top-controls:hover,
+.stocks-slide .top-controls:active {
+  opacity: 1;
+}
+
 .ctrl-btn-on {
   color: var(--text-primary);
 }
@@ -1967,6 +2001,11 @@ body,
 .stock-pct-down {
   color: #fda4af;
   background-color: rgba(244, 63, 94, 0.2);
+}
+
+.stock-pct-neutral {
+  color: var(--text-secondary);
+  background-color: rgba(148, 163, 184, 0.18);
 }
 
 .stock-card-name {

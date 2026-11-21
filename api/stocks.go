@@ -6,6 +6,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"net/http/cookiejar"
 	"net/url"
 	"strings"
 	"sync"
@@ -17,7 +18,18 @@ import (
 var (
 	yahooChartPrimaryURL  = "https://query1.finance.yahoo.com/v8/finance/chart/"
 	yahooChartFallbackURL = "https://query2.finance.yahoo.com/v8/finance/chart/"
+	yahooCookieURL        = "https://fc.yahoo.com"
+	yahooCrumbURL         = "https://query1.finance.yahoo.com/v1/test/getcrumb"
+	yahooQuotePrimaryURL  = "https://query1.finance.yahoo.com/v7/finance/quote"
+	yahooQuoteFallbackURL = "https://query2.finance.yahoo.com/v7/finance/quote"
 	stocksHTTPClient      = &http.Client{Timeout: 8 * time.Second}
+)
+
+var (
+	yfSessionMu      sync.Mutex
+	yfSessionJar     http.CookieJar
+	yfSessionCrumb   string
+	yfSessionExpires time.Time
 )
 
 type StockPoint struct {
@@ -34,6 +46,7 @@ type StockQuote struct {
 	PreviousClose float64   `json:"previousClose"`
 	Change        float64   `json:"change"`
 	ChangePct     float64   `json:"changePct"`
+	MarketCap     float64   `json:"marketCap,omitempty"`
 	Sparkline     []float64 `json:"sparkline"`
 	Unavailable   bool      `json:"unavailable,omitempty"`
 }
@@ -52,6 +65,7 @@ type StockHero struct {
 	Baseline         float64      `json:"baseline"`
 	Change           float64      `json:"change"`
 	ChangePct        float64      `json:"changePct"`
+	MarketCap        float64      `json:"marketCap,omitempty"`
 	DayHigh          float64      `json:"dayHigh"`
 	DayLow           float64      `json:"dayLow"`
 	RangeHigh        float64      `json:"rangeHigh"`
@@ -257,7 +271,28 @@ func StocksHandler(w http.ResponseWriter, r *http.Request) {
 			hero = &h
 		}()
 
+		// Best-effort batched marketCap fetch (single Yahoo v7 quote call with cookie+crumb)
+		var marketCaps map[string]float64
+		allSyms := make([]string, len(symbols))
+		for i, sc := range symbols {
+			allSyms[i] = sc.Symbol
+		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			marketCaps = fetchYahooMarketCaps(allSyms)
+		}()
+
 		wg.Wait()
+
+		// Attach fetched market caps to quotes and hero
+		if len(marketCaps) > 0 {
+			for i := range quotes {
+				if capVal, ok := marketCaps[strings.ToUpper(quotes[i].Symbol)]; ok && capVal > 0 {
+					quotes[i].MarketCap = capVal
+				}
+			}
+		}
 
 		// Fallback: if dedicated hero 1D 5m call failed but watchlist 15m succeeded, reuse it
 		if hero == nil {
@@ -268,6 +303,11 @@ func StocksHandler(w http.ResponseWriter, r *http.Request) {
 					heroErr = nil
 					break
 				}
+			}
+		}
+		if hero != nil && len(marketCaps) > 0 {
+			if capVal, ok := marketCaps[strings.ToUpper(hero.Symbol)]; ok && capVal > 0 {
+				hero.MarketCap = capVal
 			}
 		}
 		if hero == nil && heroErr != nil {
@@ -614,4 +654,147 @@ func writeStocksError(w http.ResponseWriter, status int, message string) {
 	_ = json.NewEncoder(w).Encode(map[string]string{
 		"error": message,
 	})
+}
+
+type yfQuoteEnvelope struct {
+	QuoteResponse struct {
+		Result []struct {
+			Symbol    string  `json:"symbol"`
+			MarketCap float64 `json:"marketCap"`
+		} `json:"result"`
+	} `json:"quoteResponse"`
+}
+
+func getYahooSession(forceRefresh bool) (http.CookieJar, string, error) {
+	yfSessionMu.Lock()
+	defer yfSessionMu.Unlock()
+
+	if !forceRefresh && yfSessionJar != nil && yfSessionCrumb != "" && time.Now().Before(yfSessionExpires) {
+		return yfSessionJar, yfSessionCrumb, nil
+	}
+
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		return nil, "", err
+	}
+	client := &http.Client{
+		Timeout:   6 * time.Second,
+		Jar:       jar,
+		Transport: stocksHTTPClient.Transport,
+	}
+
+	const ua = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
+
+	// 1. Grab Yahoo consent/session cookie
+	cookieReq, err := http.NewRequest(http.MethodGet, yahooCookieURL, nil)
+	if err != nil {
+		return nil, "", err
+	}
+	cookieReq.Header.Set("User-Agent", ua)
+	if resp, err := client.Do(cookieReq); err == nil {
+		_, _ = io.Copy(io.Discard, resp.Body)
+		_ = resp.Body.Close()
+	}
+
+	// 2. Fetch crumb token using session cookie
+	crumbReq, err := http.NewRequest(http.MethodGet, yahooCrumbURL, nil)
+	if err != nil {
+		return nil, "", err
+	}
+	crumbReq.Header.Set("User-Agent", ua)
+	crumbResp, err := client.Do(crumbReq)
+	if err != nil {
+		return nil, "", err
+	}
+	defer crumbResp.Body.Close()
+
+	crumbBytes, err := io.ReadAll(crumbResp.Body)
+	if err != nil {
+		return nil, "", err
+	}
+	crumb := strings.TrimSpace(string(crumbBytes))
+	if crumbResp.StatusCode != http.StatusOK || crumb == "" || strings.HasPrefix(crumb, "{") {
+		return nil, "", fmt.Errorf("failed to get yahoo crumb (status %d)", crumbResp.StatusCode)
+	}
+
+	yfSessionJar = jar
+	yfSessionCrumb = crumb
+	yfSessionExpires = time.Now().Add(30 * time.Minute)
+	return jar, crumb, nil
+}
+
+func fetchYahooMarketCaps(symbols []string) map[string]float64 {
+	if len(symbols) == 0 {
+		return nil
+	}
+
+	const ua = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
+
+	for attempt := 0; attempt < 2; attempt++ {
+		jar, crumb, err := getYahooSession(attempt > 0)
+		if err != nil {
+			continue
+		}
+
+		client := &http.Client{
+			Timeout:   6 * time.Second,
+			Jar:       jar,
+			Transport: stocksHTTPClient.Transport,
+		}
+
+		params := url.Values{}
+		params.Set("symbols", strings.Join(symbols, ","))
+		params.Set("fields", "marketCap")
+		params.Set("crumb", crumb)
+		qs := params.Encode()
+
+		urls := []string{
+			yahooQuotePrimaryURL + "?" + qs,
+			yahooQuoteFallbackURL + "?" + qs,
+		}
+
+		needRefresh := false
+		for _, u := range urls {
+			req, err := http.NewRequest(http.MethodGet, u, nil)
+			if err != nil {
+				continue
+			}
+			req.Header.Set("User-Agent", ua)
+			req.Header.Set("Accept", "application/json")
+
+			resp, err := client.Do(req)
+			if err != nil {
+				continue
+			}
+			body, readErr := io.ReadAll(resp.Body)
+			_ = resp.Body.Close()
+			if readErr != nil {
+				continue
+			}
+			if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+				needRefresh = true
+				break
+			}
+			if resp.StatusCode != http.StatusOK {
+				continue
+			}
+
+			var env yfQuoteEnvelope
+			if err := json.Unmarshal(body, &env); err != nil {
+				continue
+			}
+			out := make(map[string]float64, len(env.QuoteResponse.Result))
+			for _, item := range env.QuoteResponse.Result {
+				if item.Symbol != "" && item.MarketCap > 0 {
+					out[strings.ToUpper(item.Symbol)] = item.MarketCap
+				}
+			}
+			return out
+		}
+
+		if !needRefresh {
+			break
+		}
+	}
+	return nil
 }

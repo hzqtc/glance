@@ -1,6 +1,7 @@
 import type { ComponentChildren } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type {
+  StockCardMetric,
   StockHero,
   StockPoint,
   StockQuote,
@@ -12,6 +13,7 @@ import {
   STOCK_RANGES,
   formatChartTooltipTime,
   formatExchangeName,
+  formatMarketCap,
   formatMarketState,
   formatStockDelta,
   formatStockPct,
@@ -26,6 +28,7 @@ export var STOCKS_STORAGE_KEY = 'glance:lastStocks:v1';
 interface StocksDashboardProps {
   isActive: boolean;
   timeFormat: TimeFormat;
+  cardMetric: StockCardMetric;
   controls?: ComponentChildren;
 }
 
@@ -68,7 +71,7 @@ export function StocksDashboard(props: StocksDashboardProps) {
 
   var _symbolState = useState<string>(function () {
     var cached = readCachedStocks();
-    return cached && cached.hero ? cached.hero.symbol : '^GSPC';
+    return cached && cached.hero ? cached.hero.symbol : 'NVDA';
   });
   var selectedSymbol = _symbolState[0];
   var setSelectedSymbol = _symbolState[1];
@@ -244,6 +247,17 @@ export function StocksDashboard(props: StocksDashboardProps) {
     quoteRows.push(quotes.slice(r, r + 5));
   }
 
+  // Resolve hero marketCap (either from hero payload or matching cached watchlist quote)
+  var heroMarketCap = hero && hero.marketCap && hero.marketCap > 0 ? hero.marketCap : 0;
+  if (hero && heroMarketCap <= 0 && quotes.length > 0) {
+    for (var m = 0; m < quotes.length; m++) {
+      if (quotes[m].symbol === hero.symbol && quotes[m].marketCap && (quotes[m].marketCap as number) > 0) {
+        heroMarketCap = quotes[m].marketCap as number;
+        break;
+      }
+    }
+  }
+
   return (
     <div
       class={
@@ -331,6 +345,17 @@ export function StocksDashboard(props: StocksDashboardProps) {
                       </span>
                     </span>
                   ) : null}
+                  {heroMarketCap > 0 ? (
+                    <span>
+                      {rangeHigh > 0 && rangeLow > 0 ? (
+                        <span class="hero-meta-sep">·</span>
+                      ) : null}
+                      Cap{' '}
+                      <span class="stocks-meta-val">
+                        {formatMarketCap(heroMarketCap)}
+                      </span>
+                    </span>
+                  ) : null}
                 </div>
               </div>
             </section>
@@ -399,6 +424,7 @@ export function StocksDashboard(props: StocksDashboardProps) {
                       <StockCard
                         key={q.symbol}
                         quote={q}
+                        metric={props.cardMetric}
                         isSelected={q.symbol === selectedSymbol}
                         onSelect={handleSelectSymbol}
                       />
