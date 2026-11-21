@@ -80,9 +80,9 @@ export function formatTempDeltaYesterday(
     return 'Same as yesterday';
   }
   if (delta > 0) {
-    return String(delta) + '° warmer than yesterday';
+    return '+' + String(delta) + '° vs yesterday';
   }
-  return String(Math.abs(delta)) + '° cooler than yesterday';
+  return String(delta) + '° vs yesterday';
 }
 
 /**
