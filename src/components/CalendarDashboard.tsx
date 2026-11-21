@@ -89,8 +89,38 @@ export function CalendarDashboard(props: CalendarDashboardProps) {
   var lastFetchMsRef = useRef<{ [ym: string]: number }>({});
   var viewYearRef = useRef<number>(viewYear);
   var viewMonthRef = useRef<number>(viewMonth);
+  var selectedDateKeyRef = useRef<string>(selectedDateKey);
+  var prevTodayRef = useRef<{ year: number; month: number; dateKey: string }>({
+    year: today.year,
+    month: today.month,
+    dateKey: today.dateKey,
+  });
   viewYearRef.current = viewYear;
   viewMonthRef.current = viewMonth;
+  selectedDateKeyRef.current = selectedDateKey;
+
+  // Automatically advance selected day (and month/year on rollover) at midnight
+  useEffect(
+    function () {
+      var prev = prevTodayRef.current;
+      if (today.dateKey === prev.dateKey) {
+        return;
+      }
+      if (selectedDateKeyRef.current === prev.dateKey) {
+        setSelectedDateKey(today.dateKey);
+        if (viewYearRef.current === prev.year && viewMonthRef.current === prev.month) {
+          setViewYear(today.year);
+          setViewMonth(today.month);
+        }
+      }
+      prevTodayRef.current = {
+        year: today.year,
+        month: today.month,
+        dateKey: today.dateKey,
+      };
+    },
+    [today.dateKey, today.year, today.month]
+  );
 
   function fetchMonth(year: number, month: number, showLoading: boolean) {
     var seq = ++reqSeqRef.current;
