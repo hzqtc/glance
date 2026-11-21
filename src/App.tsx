@@ -518,6 +518,23 @@ export function App() {
     timeFormat
   );
 
+  // Auto-return Weather spotlight to Home city after 5 minutes when viewing another city
+  var homeCityId = homeCity ? homeCity.id : null;
+  useEffect(
+    function () {
+      if (!selectedCityId || !homeCityId || selectedCityId === homeCityId) {
+        return;
+      }
+      var id = window.setTimeout(function () {
+        setSelectedCityId(null);
+      }, 5 * 60 * 1000);
+      return function () {
+        window.clearTimeout(id);
+      };
+    },
+    [selectedCityId, homeCityId]
+  );
+
   var demo = getDemoOverride();
   var isNightQuiet = Boolean(
     !(demo && demo.disableNightQuiet) &&
