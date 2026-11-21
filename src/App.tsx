@@ -259,6 +259,10 @@ export function App() {
   var pauseBump = _pauseBumpState[0];
   var setPauseBump = _pauseBumpState[1];
 
+  var _rotatePausedState = useState<boolean>(false);
+  var isRotatePaused = _rotatePausedState[0];
+  var setIsRotatePaused = _rotatePausedState[1];
+
   var bootTimeRef = useRef<number>(Date.now());
   var pollTimerRef = useRef<number | null>(null);
   var reloadTriggeredRef = useRef<boolean>(false);
@@ -282,7 +286,13 @@ export function App() {
   }, []);
 
   function pauseAutoRotate() {
-    manualPauseUntilRef.current = Date.now() + manualPauseSecRef.current * 1000;
+    if (manualPauseSecRef.current > 0) {
+      manualPauseUntilRef.current = Date.now() + manualPauseSecRef.current * 1000;
+      setIsRotatePaused(true);
+    } else {
+      manualPauseUntilRef.current = 0;
+      setIsRotatePaused(false);
+    }
     setPauseBump(function (n) {
       return n + 1;
     });
@@ -439,6 +449,7 @@ export function App() {
   useEffect(
     function () {
       if (!autoRotate || rotateIntervalSec <= 0) {
+        setIsRotatePaused(false);
         return;
       }
       var timerId: number | null = null;
@@ -446,7 +457,9 @@ export function App() {
       function scheduleNext() {
         var now = Date.now();
         var pauseLeft = manualPauseUntilRef.current - now;
-        var delayMs = pauseLeft > 0 ? pauseLeft : rotateIntervalSec * 1000;
+        var paused = pauseLeft > 0;
+        setIsRotatePaused(paused);
+        var delayMs = paused ? pauseLeft : rotateIntervalSec * 1000;
         timerId = window.setTimeout(function () {
           if (document.hidden) {
             scheduleNext();
@@ -456,6 +469,7 @@ export function App() {
             scheduleNext();
             return;
           }
+          setIsRotatePaused(false);
           setActiveSlide(function (prev) {
             return (prev + 1) % TOTAL_SLIDES;
           });
@@ -842,32 +856,65 @@ export function App() {
         </section>
       </div>
 
-      {/* Subtle carousel pagination dots (tappable on touch & Mac) */}
+      {/* Subtle carousel pagination dots (amber active dot indicates manual auto-rotate pause) */}
       <nav class="carousel-dots" aria-label="Switch dashboard">
         <button
           type="button"
-          class={activeSlide === 0 ? 'carousel-dot carousel-dot-active' : 'carousel-dot'}
+          class={
+            activeSlide === 0
+              ? isRotatePaused
+                ? 'carousel-dot carousel-dot-active carousel-dot-paused'
+                : 'carousel-dot carousel-dot-active'
+              : 'carousel-dot'
+          }
           onClick={function () {
             handleManualSlideSelect(0);
           }}
+          title={
+            activeSlide === 0 && isRotatePaused
+              ? 'Weather (auto-rotate paused)'
+              : 'Weather dashboard'
+          }
           aria-label="Weather dashboard"
           aria-current={activeSlide === 0 ? 'page' : undefined}
         />
         <button
           type="button"
-          class={activeSlide === 1 ? 'carousel-dot carousel-dot-active' : 'carousel-dot'}
+          class={
+            activeSlide === 1
+              ? isRotatePaused
+                ? 'carousel-dot carousel-dot-active carousel-dot-paused'
+                : 'carousel-dot carousel-dot-active'
+              : 'carousel-dot'
+          }
           onClick={function () {
             handleManualSlideSelect(1);
           }}
+          title={
+            activeSlide === 1 && isRotatePaused
+              ? 'Stocks (auto-rotate paused)'
+              : 'Stocks dashboard'
+          }
           aria-label="Stocks dashboard"
           aria-current={activeSlide === 1 ? 'page' : undefined}
         />
         <button
           type="button"
-          class={activeSlide === 2 ? 'carousel-dot carousel-dot-active' : 'carousel-dot'}
+          class={
+            activeSlide === 2
+              ? isRotatePaused
+                ? 'carousel-dot carousel-dot-active carousel-dot-paused'
+                : 'carousel-dot carousel-dot-active'
+              : 'carousel-dot'
+          }
           onClick={function () {
             handleManualSlideSelect(2);
           }}
+          title={
+            activeSlide === 2 && isRotatePaused
+              ? 'Calendar (auto-rotate paused)'
+              : 'Calendar dashboard'
+          }
           aria-label="Calendar dashboard"
           aria-current={activeSlide === 2 ? 'page' : undefined}
         />
