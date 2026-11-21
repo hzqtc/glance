@@ -251,6 +251,10 @@ export function App() {
   var isReady = _readyState[0];
   var setIsReady = _readyState[1];
 
+  var _preloadState = useState<boolean>(false);
+  var preloadReady = _preloadState[0];
+  var setPreloadReady = _preloadState[1];
+
   var _pauseBumpState = useState<number>(0);
   var pauseBump = _pauseBumpState[0];
   var setPauseBump = _pauseBumpState[1];
@@ -263,13 +267,17 @@ export function App() {
   var manualPauseUntilRef = useRef<number>(0);
   var manualPauseSecRef = useRef<number>(300);
 
-  // Entrance transition trigger
+  // Entrance transition trigger & quiet background preload of inactive slides after boot settles
   useEffect(function () {
-    var id = window.setTimeout(function () {
+    var readyId = window.setTimeout(function () {
       setIsReady(true);
     }, 60);
+    var preloadId = window.setTimeout(function () {
+      setPreloadReady(true);
+    }, 3000);
     return function () {
-      window.clearTimeout(id);
+      window.clearTimeout(readyId);
+      window.clearTimeout(preloadId);
     };
   }, []);
 
@@ -802,6 +810,7 @@ export function App() {
         <section class="carousel-slide" aria-hidden={activeSlide !== 1}>
           <StocksDashboard
             isActive={activeSlide === 1}
+            preload={preloadReady}
             timeFormat={timeFormat}
             cardMetric={stockMetric}
             controls={
@@ -824,6 +833,7 @@ export function App() {
         <section class="carousel-slide" aria-hidden={activeSlide !== 2}>
           <CalendarDashboard
             isActive={activeSlide === 2}
+            preload={preloadReady}
             nowMs={nowMs}
             timeFormat={timeFormat}
             isRefreshing={isRefreshing}

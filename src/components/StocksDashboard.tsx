@@ -29,6 +29,7 @@ export var STOCKS_STORAGE_KEY = 'glance:lastStocks:v1';
 
 interface StocksDashboardProps {
   isActive: boolean;
+  preload?: boolean;
   timeFormat: TimeFormat;
   cardMetric: StockCardMetric;
   controls?: ComponentChildren;
@@ -113,6 +114,7 @@ export function StocksDashboard(props: StocksDashboardProps) {
   var rangeQuotesCacheRef = useRef<{ [rng: string]: StockQuote[] }>({});
   var heroCacheRef = useRef<{ [key: string]: { hero: StockHero; ts: number } }>({});
   var marketHoursRef = useRef<boolean>(false);
+  var lastFullFetchMsRef = useRef<number>(0);
   selectedSymbolRef.current = selectedSymbol;
   selectedRangeRef.current = selectedRange;
 
@@ -155,6 +157,7 @@ export function StocksDashboard(props: StocksDashboardProps) {
           setHero(json.hero);
         }
         if (!chartOnly && json.quotes && json.quotes.length > 0) {
+          lastFullFetchMsRef.current = Date.now();
           rangeQuotesCacheRef.current[range] = json.quotes;
           setQuotes(json.quotes);
           writeCachedStocks(json);
@@ -175,7 +178,19 @@ export function StocksDashboard(props: StocksDashboardProps) {
       });
   }
 
-  // Fetch on first visit to Stocks slide and poll while active (2m market hours / 15m off-hours)
+  // Quietly preload Stocks once after boot while inactive so first slide rotation is instant
+  useEffect(
+    function () {
+      if (!props.preload || props.isActive || hasLoadedOnceRef.current) {
+        return;
+      }
+      hasLoadedOnceRef.current = true;
+      fetchStocks(selectedSymbolRef.current, selectedRangeRef.current, false, false);
+    },
+    [props.preload, props.isActive]
+  );
+
+  // Fetch on visit to Stocks slide and poll while active (2m market hours / 15m off-hours)
   useEffect(
     function () {
       if (!props.isActive) {
@@ -211,7 +226,12 @@ export function StocksDashboard(props: StocksDashboardProps) {
         );
       }
 
-      runPoll();
+      // If quietly preloaded within the last 60s, skip immediate duplicate fetch and schedule normal poll
+      if (lastFullFetchMsRef.current > 0 && Date.now() - lastFullFetchMsRef.current < 60 * 1000) {
+        scheduleNext(marketHoursRef.current, false);
+      } else {
+        runPoll();
+      }
 
       return function () {
         cancelled = true;

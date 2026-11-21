@@ -42,6 +42,7 @@ function writeHiddenCalendars(map: { [id: string]: boolean }): void {
 
 interface CalendarDashboardProps {
   isActive: boolean;
+  preload?: boolean;
   nowMs: number;
   timeFormat: TimeFormat;
   isRefreshing: boolean;
@@ -84,6 +85,8 @@ export function CalendarDashboard(props: CalendarDashboardProps) {
   var monthCacheRef = useRef<{ [ym: string]: CalendarResponse }>({});
   var reqSeqRef = useRef<number>(0);
   var pollTimerRef = useRef<number | null>(null);
+  var hasPreloadedRef = useRef<boolean>(false);
+  var lastFetchMsRef = useRef<{ [ym: string]: number }>({});
   var viewYearRef = useRef<number>(viewYear);
   var viewMonthRef = useRef<number>(viewMonth);
   viewYearRef.current = viewYear;
@@ -107,6 +110,7 @@ export function CalendarDashboard(props: CalendarDashboardProps) {
       .then(function (json: CalendarResponse) {
         if (seq !== reqSeqRef.current) return json;
         monthCacheRef.current[ymKey] = json;
+        lastFetchMsRef.current[ymKey] = Date.now();
         setData(json);
         setLoadError(null);
         setIsLoading(false);
@@ -119,6 +123,18 @@ export function CalendarDashboard(props: CalendarDashboardProps) {
         return null;
       });
   }
+
+  // Quietly preload current month once after boot while inactive so first rotation is instant
+  useEffect(
+    function () {
+      if (!props.preload || props.isActive || hasPreloadedRef.current) {
+        return;
+      }
+      hasPreloadedRef.current = true;
+      fetchMonth(viewYearRef.current, viewMonthRef.current, false);
+    },
+    [props.preload, props.isActive]
+  );
 
   // Fetch when Calendar slide becomes active or viewed month/year changes, plus 5m polling
   useEffect(
@@ -134,6 +150,7 @@ export function CalendarDashboard(props: CalendarDashboardProps) {
       var cancelled = false;
       var ymKey = String(viewYear) + '-' + String(viewMonth);
       var cached = monthCacheRef.current[ymKey];
+      var lastFetched = lastFetchMsRef.current[ymKey] || 0;
       if (cached) {
         setData(cached);
       }
@@ -148,7 +165,11 @@ export function CalendarDashboard(props: CalendarDashboardProps) {
         }, 5 * 60 * 1000);
       }
 
-      fetchMonth(viewYear, viewMonth, !cached).then(schedulePoll);
+      if (cached && Date.now() - lastFetched < 60 * 1000) {
+        schedulePoll();
+      } else {
+        fetchMonth(viewYear, viewMonth, !cached).then(schedulePoll);
+      }
 
       return function () {
         cancelled = true;
