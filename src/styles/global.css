@@ -2332,36 +2332,6 @@ body,
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  margin-right: 10px;
-}
-
-.cal-toggle-switch {
-  position: relative;
-  width: 28px;
-  height: 16px;
-  border-radius: 999px;
-  background-color: rgba(255, 255, 255, 0.16);
-  flex-shrink: 0;
-  transition: background-color 0.2s ease;
-}
-
-.cal-toggle-switch-on {
-  background-color: rgba(56, 189, 248, 0.6);
-}
-
-.cal-toggle-knob {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background-color: #ffffff;
-  transition: transform 0.2s ease;
-}
-
-.cal-toggle-switch-on .cal-toggle-knob {
-  transform: translate3d(12px, 0, 0);
 }
 
 .cal-status-pill {

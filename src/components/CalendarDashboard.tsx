@@ -691,16 +691,6 @@ export function CalendarDashboard(props: CalendarDashboardProps) {
                         }
                       />
                       <span class="cal-toggle-name">{cal.name}</span>
-                      <span
-                        class={
-                          isHidden
-                            ? 'cal-toggle-switch'
-                            : 'cal-toggle-switch cal-toggle-switch-on'
-                        }
-                        aria-hidden="true"
-                      >
-                        <span class="cal-toggle-knob" />
-                      </span>
                     </div>
                   );
                 })}
