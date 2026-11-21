@@ -68,20 +68,6 @@ export function formatWind(windKmh: number, units: TempUnit): string {
   return String(Math.round(windKmh * 0.621371)) + ' mph';
 }
 
-/**
- * Returns a directional flow arrow for meteorological wind_direction_10m
- * (0° = wind blowing from North -> South = '↓', 315° = NW -> SE = '↘').
- */
-export function windDirectionArrow(deg: number | undefined): string {
-  if (typeof deg !== 'number' || isNaN(deg)) {
-    return '';
-  }
-  var arrows = ['↓', '↙', '←', '↖', '↑', '↗', '→', '↘'];
-  var norm = ((deg % 360) + 360) % 360;
-  var idx = Math.round(norm / 45) % 8;
-  return arrows[idx];
-}
-
 export function formatTempDeltaYesterday(
   deltaC: number | null | undefined,
   units: TempUnit

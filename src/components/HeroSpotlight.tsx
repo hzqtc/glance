@@ -9,7 +9,6 @@ import {
   formatTemp,
   formatTempDeltaYesterday,
   formatWind,
-  windDirectionArrow,
 } from '../utils/weather';
 import { WeatherIcon } from './WeatherIcon';
 
@@ -72,7 +71,6 @@ export function HeroSpotlight(props: HeroSpotlightProps) {
   var deltaText = weather
     ? formatTempDeltaYesterday(weather.tempDeltaYesterdayC, units)
     : null;
-  var windArrow = weather ? windDirectionArrow(weather.windDirDeg) : '';
   var lowVis = weather ? formatLowVisibility(weather.visibilityM, units) : null;
 
   return (
@@ -150,8 +148,7 @@ export function HeroSpotlight(props: HeroSpotlightProps) {
                   </span>
                 ) : null}
                 <span class="hero-meta-item">
-                  {windArrow ? windArrow + ' ' : 'Wind '}
-                  {formatWind(weather.windKmh, units)}
+                  Wind {formatWind(weather.windKmh, units)}
                 </span>
                 <span class="hero-meta-sep">·</span>
                 <span class="hero-meta-item">
