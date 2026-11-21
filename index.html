@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Glance" />
+    <meta name="format-detection" content="telephone=no" />
+    <meta name="theme-color" content="#0b1221" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/icons/icon-180.png" />
+    <link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152.png" />
+    <link rel="apple-touch-icon" sizes="167x167" href="/icons/icon-167.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-180.png" />
+    <link
+      rel="apple-touch-startup-image"
+      href="/icons/splash-ipad-landscape.png"
+      media="(device-width: 768px) and (device-height: 1024px) and (-webkit-device-pixel-ratio: 2) and (orientation: landscape)"
+    />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+    <title>Glance</title>
+    <script>
+      if (typeof globalThis === 'undefined') { window.globalThis = window; }
+      window.addEventListener('error', function (e) {
+        var root = document.getElementById('app');
+        if (root && !root.firstChild) {
+          root.style.color = '#fff';
+          root.style.padding = '24px';
+          root.style.fontFamily = '-apple-system, sans-serif';
+          root.innerText = 'Glance error: ' + (e && e.message ? e.message : 'Unknown error');
+        }
+      });
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,57 @@
+{
+  "units": "F",
+  "timeFormat": "12h",
+  "hero": {
+    "lockFirstCity": true
+  },
+  "nightMode": {
+    "enabled": true,
+    "startHour": 23,
+    "endHour": 7,
+    "dimOpacity": 0.55
+  },
+  "refresh": {
+    "pollMinutes": 10,
+    "dailyReloadHour": 3
+  },
+  "cities": [
+    {
+      "id": "sunnyvale",
+      "name": "Sunnyvale",
+      "region": "CA",
+      "lat": 37.3688,
+      "lon": -122.0363,
+      "timezone": "America/Los_Angeles"
+    },
+    {
+      "id": "san-francisco",
+      "name": "San Francisco",
+      "region": "CA",
+      "lat": 37.7749,
+      "lon": -122.4194,
+      "timezone": "America/Los_Angeles"
+    },
+    {
+      "id": "shanghai",
+      "name": "Shanghai",
+      "region": "China",
+      "lat": 31.2304,
+      "lon": 121.4737,
+      "timezone": "Asia/Shanghai"
+    },
+    {
+      "id": "tokyo",
+      "name": "Tokyo",
+      "region": "Japan",
+      "lat": 35.6762,
+      "lon": 139.6503,
+      "timezone": "Asia/Tokyo"
+    }
+  ],
+  "widgets": {
+    "trips": [],
+    "calendar": {
+      "enabled": false
+    }
+  }
+}
