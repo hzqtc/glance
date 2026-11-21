@@ -8,7 +8,6 @@ import {
   WEEKDAYS_MON_START,
   buildMonthGridMonday,
   formatEventTimeRange,
-  formatNextEventCountdown,
   formatRelativeDayLabel,
   getChineseLunarDate,
   getTodayParts,
@@ -16,6 +15,30 @@ import {
   parseDateKey,
   toDateKey,
 } from '../utils/calendar';
+
+var HIDDEN_CALS_STORAGE_KEY = 'glance:hiddenCalendars:v1';
+
+function readHiddenCalendars(): { [id: string]: boolean } {
+  try {
+    var raw = window.localStorage.getItem(HIDDEN_CALS_STORAGE_KEY);
+    if (!raw) return {};
+    var parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object') {
+      return parsed as { [id: string]: boolean };
+    }
+  } catch (_err) {
+    // Ignore storage errors
+  }
+  return {};
+}
+
+function writeHiddenCalendars(map: { [id: string]: boolean }): void {
+  try {
+    window.localStorage.setItem(HIDDEN_CALS_STORAGE_KEY, JSON.stringify(map));
+  } catch (_err) {
+    // Ignore storage errors
+  }
+}
 
 interface CalendarDashboardProps {
   isActive: boolean;
@@ -50,6 +73,12 @@ export function CalendarDashboard(props: CalendarDashboardProps) {
   var _errorState = useState<string | null>(null);
   var loadError = _errorState[0];
   var setLoadError = _errorState[1];
+
+  var _hiddenState = useState<{ [id: string]: boolean }>(function () {
+    return readHiddenCalendars();
+  });
+  var hiddenCals = _hiddenState[0];
+  var setHiddenCals = _hiddenState[1];
 
   var monthCacheRef = useRef<{ [ym: string]: CalendarResponse }>({});
   var reqSeqRef = useRef<number>(0);
@@ -170,11 +199,21 @@ export function CalendarDashboard(props: CalendarDashboardProps) {
     }
   }
 
-  function handleJumpToNextEvent(ev: CalendarEvent) {
-    var p = parseDateKey(ev.date);
-    setViewYear(p.year);
-    setViewMonth(p.month);
-    setSelectedDateKey(ev.date);
+  function handleToggleCalendar(calId: string) {
+    var next: { [id: string]: boolean } = {};
+    var keys = Object.keys(hiddenCals);
+    for (var i = 0; i < keys.length; i++) {
+      if (hiddenCals[keys[i]]) {
+        next[keys[i]] = true;
+      }
+    }
+    if (next[calId]) {
+      delete next[calId];
+    } else {
+      next[calId] = true;
+    }
+    setHiddenCals(next);
+    writeHiddenCalendars(next);
   }
 
   // Build 42-day Monday-to-Sunday grid
@@ -229,6 +268,9 @@ export function CalendarDashboard(props: CalendarDashboardProps) {
   var fetchedEvents = data && data.events ? data.events : [];
   for (var e = 0; e < fetchedEvents.length; e++) {
     var ev = fetchedEvents[e];
+    if (hiddenCals[ev.calendarId]) {
+      continue;
+    }
     if (!eventsByDate[ev.date]) {
       eventsByDate[ev.date] = [];
     }
@@ -257,9 +299,9 @@ export function CalendarDashboard(props: CalendarDashboardProps) {
     viewYear === today.year &&
     viewMonth === today.month &&
     selectedDateKey === today.dateKey;
-  var nextEvent = data && data.nextEvent ? data.nextEvent : null;
+  var calendars = data && data.calendars ? data.calendars : [];
   var isConfigured = data ? data.configured : true;
-  var multiCal = Boolean(data && data.calendars && data.calendars.length > 1);
+  var multiCal = calendars.length > 1;
 
   return (
     <div class="cal-slide">
@@ -339,42 +381,53 @@ export function CalendarDashboard(props: CalendarDashboardProps) {
           </div>
 
           <div class="cal-header-right">
-            {nextEvent ? (
-              <div
-                role="button"
-                tabIndex={0}
-                class="cal-next-pill"
-                onClick={function () {
-                  handleJumpToNextEvent(nextEvent as CalendarEvent);
-                }}
-                onKeyDown={function (evKey: KeyboardEvent) {
-                  if (evKey.key === 'Enter' || evKey.key === ' ') {
-                    evKey.preventDefault();
-                    handleJumpToNextEvent(nextEvent as CalendarEvent);
-                  }
-                }}
-              >
-                <span
-                  class="cal-next-dot"
-                  style={{ backgroundColor: nextEvent.color || '#38bdf8' }}
-                />
-                <span class="cal-next-title">{nextEvent.title}</span>
-                <span class="cal-next-time">
-                  {formatNextEventCountdown(
-                    nextEvent,
-                    props.nowMs,
-                    today.dateKey,
-                    props.timeFormat
-                  )}
-                </span>
+            {calendars.length > 0 ? (
+              <div class="cal-filter-bar" role="group" aria-label="Toggle calendars">
+                {calendars.map(function (cal) {
+                  var isHidden = Boolean(hiddenCals[cal.id]);
+                  return (
+                    <button
+                      type="button"
+                      key={cal.id}
+                      class={
+                        isHidden
+                          ? 'cal-filter-pill cal-filter-pill-off'
+                          : 'cal-filter-pill'
+                      }
+                      aria-pressed={!isHidden}
+                      title={
+                        isHidden
+                          ? 'Show ' + cal.name
+                          : 'Hide ' + cal.name
+                      }
+                      onClick={function () {
+                        handleToggleCalendar(cal.id);
+                      }}
+                    >
+                      <span
+                        class="cal-filter-dot"
+                        style={
+                          isHidden
+                            ? {
+                                borderColor: cal.color || '#38bdf8',
+                                backgroundColor: 'transparent',
+                              }
+                            : {
+                                borderColor: cal.color || '#38bdf8',
+                                backgroundColor: cal.color || '#38bdf8',
+                              }
+                        }
+                      />
+                      <span class="cal-filter-name">{cal.name}</span>
+                    </button>
+                  );
+                })}
               </div>
             ) : loadError ? (
               <span class="cal-status-pill cal-status-warn">Offline ({loadError})</span>
             ) : !isConfigured ? (
               <span class="cal-status-pill">Holidays · Local</span>
-            ) : (
-              <span class="cal-status-pill">All clear ahead</span>
-            )}
+            ) : null}
           </div>
         </header>
 

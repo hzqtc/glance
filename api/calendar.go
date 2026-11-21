@@ -30,10 +30,11 @@ type icsCacheEntry struct {
 }
 
 type calendarSource struct {
-	ID    string `json:"id"`
-	Name  string `json:"name"`
-	Color string `json:"color"`
-	URL   string `json:"url"`
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Color    string `json:"color"`
+	URL      string `json:"url"`
+	AutoName bool   `json:"-"`
 }
 
 type CalendarMeta struct {
@@ -156,8 +157,8 @@ func CalendarHandler(w http.ResponseWriter, r *http.Request) {
 			}
 			parsed := parseICSEvents(rawICS, loc)
 			calName := s.Name
-			if calName == "" || calName == "Calendar" {
-				if extracted := extractICSCalendarName(rawICS); extracted != "" {
+			if s.AutoName || calName == "" {
+				if extracted := cleanCalendarDisplayName(extractICSCalendarName(rawICS)); extracted != "" {
 					calName = extracted
 				}
 			}
@@ -246,7 +247,9 @@ func parseCalendarSourcesFromEnv() []calendarSource {
 					continue
 				}
 				name := strings.TrimSpace(item.Name)
+				autoName := false
 				if name == "" {
+					autoName = true
 					if len(parsed) == 1 {
 						name = "Calendar"
 					} else {
@@ -258,18 +261,19 @@ func parseCalendarSourcesFromEnv() []calendarSource {
 					color = defaultCalendarPalette[i%len(defaultCalendarPalette)]
 				}
 				sources = append(sources, calendarSource{
-					ID:    shortHash(u),
-					Name:  name,
-					Color: color,
-					URL:   u,
+					ID:       shortHash(u),
+					Name:     name,
+					Color:    color,
+					URL:      u,
+					AutoName: autoName,
 				})
 			}
 			return sources
 		}
 	}
 
-	// Format 2: Comma- or newline-separated URLs (or single URL)
-	replacer := strings.NewReplacer("\r\n", "\n", ",", "\n")
+	// Format 2: Comma-, space-, or newline-separated URLs (or single URL)
+	replacer := strings.NewReplacer("\r\n", "\n", ",", "\n", " ", "\n")
 	parts := strings.Split(replacer.Replace(raw), "\n")
 	idx := 0
 	for _, p := range parts {
@@ -282,14 +286,27 @@ func parseCalendarSourcesFromEnv() []calendarSource {
 			name = fmt.Sprintf("Calendar %d", idx+1)
 		}
 		sources = append(sources, calendarSource{
-			ID:    shortHash(u),
-			Name:  name,
-			Color: defaultCalendarPalette[idx%len(defaultCalendarPalette)],
-			URL:   u,
+			ID:       shortHash(u),
+			Name:     name,
+			Color:    defaultCalendarPalette[idx%len(defaultCalendarPalette)],
+			URL:      u,
+			AutoName: true,
 		})
 		idx++
 	}
 	return sources
+}
+
+func cleanCalendarDisplayName(raw string) string {
+	name := strings.TrimSpace(raw)
+	if name == "" {
+		return ""
+	}
+	// Shorten raw email calendar names (e.g. "hzqtc1229@gmail.com" -> "hzqtc1229")
+	if at := strings.IndexByte(name, '@'); at > 0 && !strings.Contains(name, " ") {
+		return name[:at]
+	}
+	return name
 }
 
 func normalizeCalendarURL(raw string) string {

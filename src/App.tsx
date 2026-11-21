@@ -551,7 +551,8 @@ export function App() {
     if (!e.touches || e.touches.length !== 1) return;
     var ignore =
       isInsideClass(e.target, 'hourly-ribbon') ||
-      isInsideClass(e.target, 'stock-chart-wrap');
+      isInsideClass(e.target, 'stock-chart-wrap') ||
+      isInsideClass(e.target, 'cal-filter-bar');
     touchStartRef.current = {
       x: e.touches[0].clientX,
       y: e.touches[0].clientY,
