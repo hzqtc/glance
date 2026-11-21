@@ -176,4 +176,23 @@ func TestStocksHandlerEndToEndAndChartOnly(t *testing.T) {
 	if chartResp.Hero.RangeHigh != 5928.0 || chartResp.Hero.RangeLow != 5882.0 {
 		t.Fatalf("expected 1y range 5882..5928, got %v..%v", chartResp.Hero.RangeLow, chartResp.Hero.RangeHigh)
 	}
+
+	// Full load for 1y range should compute all 20 card changes against 1y baseline
+	req3 := httptest.NewRequest(http.MethodGet, "/api/stocks?symbol=NVDA&range=1y", nil)
+	rec3 := httptest.NewRecorder()
+	StocksHandler(rec3, req3)
+
+	if rec3.Code != http.StatusOK {
+		t.Fatalf("expected 200 for full 1y load, got %d", rec3.Code)
+	}
+	var full1Y StocksResponse
+	if err := json.Unmarshal(rec3.Body.Bytes(), &full1Y); err != nil {
+		t.Fatalf("invalid 1y json: %v", err)
+	}
+	if len(full1Y.Quotes) != 20 {
+		t.Fatalf("expected 20 quotes on 1y load, got %d", len(full1Y.Quotes))
+	}
+	if math.Abs(full1Y.Quotes[0].Change-30.5) > 0.01 {
+		t.Fatalf("expected 1y card change 30.5, got %v", full1Y.Quotes[0].Change)
+	}
 }

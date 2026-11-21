@@ -1912,6 +1912,11 @@ body,
   width: 100%;
   margin-top: 8px;
   flex-shrink: 0;
+  transition: opacity 0.2s ease;
+}
+
+.stocks-grid-loading {
+  opacity: 0.65;
 }
 
 .stocks-row {

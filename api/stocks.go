@@ -153,6 +153,13 @@ func mapStockRange(r string) (string, yahooRangeSpec) {
 	}
 }
 
+func mapCardRangeSpec(normRange string, heroSpec yahooRangeSpec) yahooRangeSpec {
+	if normRange == "1d" {
+		return yahooRangeSpec{Range: "1d", Interval: "15m"}
+	}
+	return heroSpec
+}
+
 // StocksHandler serves GET /api/stocks on Vercel (and locally via cmd/devserver).
 func StocksHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
@@ -226,7 +233,17 @@ func StocksHandler(w http.ResponseWriter, r *http.Request) {
 	} else {
 		symbols := cfg.Stocks.Symbols
 		quotes = make([]StockQuote, len(symbols))
-		raw1D := make([]*yfChartResult, len(symbols))
+		rawCards := make([]*yfChartResult, len(symbols))
+		cardSpec := mapCardRangeSpec(normRange, spec)
+
+		heroInWatchlistIdx := -1
+		for i, sc := range symbols {
+			if strings.EqualFold(sc.Symbol, heroCfg.Symbol) {
+				heroInWatchlistIdx = i
+				break
+			}
+		}
+		needDedicatedHero := heroInWatchlistIdx < 0 || cardSpec != spec
 
 		// Limit concurrency cleanly to avoid overwhelming Yahoo Finance
 		sem := make(chan struct{}, 8)
@@ -238,7 +255,7 @@ func StocksHandler(w http.ResponseWriter, r *http.Request) {
 				sem <- struct{}{}
 				defer func() { <-sem }()
 
-				res, err := fetchYahooChart(item.Symbol, yahooRangeSpec{Range: "1d", Interval: "15m"})
+				res, err := fetchYahooChart(item.Symbol, cardSpec)
 				if err != nil {
 					quotes[idx] = StockQuote{
 						Symbol:      item.Symbol,
@@ -250,26 +267,28 @@ func StocksHandler(w http.ResponseWriter, r *http.Request) {
 					}
 					return
 				}
-				raw1D[idx] = res
-				quotes[idx] = buildStockQuote(item, res)
+				rawCards[idx] = res
+				quotes[idx] = buildStockQuote(item, normRange, res)
 			}(i, sc)
 		}
 
-		// Always fetch dedicated hero chart (5m resolution for 1D, or requested multi-day range)
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			sem <- struct{}{}
-			defer func() { <-sem }()
+		// Fetch dedicated hero chart when higher resolution is needed (e.g. 5m on 1D) or ad-hoc symbol
+		if needDedicatedHero {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				sem <- struct{}{}
+				defer func() { <-sem }()
 
-			res, err := fetchYahooChart(heroCfg.Symbol, spec)
-			if err != nil {
-				heroErr = err
-				return
-			}
-			h := buildStockHero(heroCfg, normRange, res)
-			hero = &h
-		}()
+				res, err := fetchYahooChart(heroCfg.Symbol, spec)
+				if err != nil {
+					heroErr = err
+					return
+				}
+				h := buildStockHero(heroCfg, normRange, res)
+				hero = &h
+			}()
+		}
 
 		// Best-effort batched marketCap fetch (single Yahoo v7 quote call with cookie+crumb)
 		var marketCaps map[string]float64
@@ -285,6 +304,13 @@ func StocksHandler(w http.ResponseWriter, r *http.Request) {
 
 		wg.Wait()
 
+		// Reuse watchlist result for hero when specs match (or as fallback if dedicated fetch failed)
+		if hero == nil && heroInWatchlistIdx >= 0 && rawCards[heroInWatchlistIdx] != nil {
+			h := buildStockHero(heroCfg, normRange, rawCards[heroInWatchlistIdx])
+			hero = &h
+			heroErr = nil
+		}
+
 		// Attach fetched market caps to quotes and hero
 		if len(marketCaps) > 0 {
 			for i := range quotes {
@@ -292,24 +318,13 @@ func StocksHandler(w http.ResponseWriter, r *http.Request) {
 					quotes[i].MarketCap = capVal
 				}
 			}
-		}
-
-		// Fallback: if dedicated hero 1D 5m call failed but watchlist 15m succeeded, reuse it
-		if hero == nil {
-			for i, sc := range symbols {
-				if strings.EqualFold(sc.Symbol, heroCfg.Symbol) && raw1D[i] != nil {
-					h := buildStockHero(heroCfg, normRange, raw1D[i])
-					hero = &h
-					heroErr = nil
-					break
+			if hero != nil {
+				if capVal, ok := marketCaps[strings.ToUpper(hero.Symbol)]; ok && capVal > 0 {
+					hero.MarketCap = capVal
 				}
 			}
 		}
-		if hero != nil && len(marketCaps) > 0 {
-			if capVal, ok := marketCaps[strings.ToUpper(hero.Symbol)]; ok && capVal > 0 {
-				hero.MarketCap = capVal
-			}
-		}
+
 		if hero == nil && heroErr != nil {
 			writeStocksError(w, http.StatusBadGateway, fmt.Sprintf("failed to fetch stocks: %v", heroErr))
 			return
@@ -468,14 +483,22 @@ func resolvePrice(meta yfChartMeta, pts []StockPoint) float64 {
 	return 0
 }
 
-func buildStockQuote(cfg config.StockSymbolConfig, res *yfChartResult) StockQuote {
+func buildStockQuote(cfg config.StockSymbolConfig, normRange string, res *yfChartResult) StockQuote {
 	pts := extractValidPoints(res)
 	price := resolvePrice(res.Meta, pts)
 	prevClose := resolvePrevClose(res.Meta, pts)
-	change := price - prevClose
+
+	baseline := prevClose
+	if normRange != "1d" && len(pts) > 0 {
+		baseline = pts[0].V
+	} else if baseline <= 0 && len(pts) > 0 {
+		baseline = pts[0].V
+	}
+
+	change := price - baseline
 	var changePct float64
-	if prevClose > 0 {
-		changePct = (change / prevClose) * 100
+	if baseline > 0 {
+		changePct = (change / baseline) * 100
 	}
 
 	sparkPts := downsamplePoints(pts, 24)

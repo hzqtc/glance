@@ -77,13 +77,20 @@ export function StocksDashboard(props: StocksDashboardProps) {
   var selectedSymbol = _symbolState[0];
   var setSelectedSymbol = _symbolState[1];
 
-  var _rangeState = useState<StockRange>('1d');
+  var _rangeState = useState<StockRange>(function () {
+    var cached = readCachedStocks();
+    return cached && cached.hero && cached.hero.range ? cached.hero.range : '1d';
+  });
   var selectedRange = _rangeState[0];
   var setSelectedRange = _rangeState[1];
 
   var _chartLoadingState = useState<boolean>(false);
   var isChartLoading = _chartLoadingState[0];
   var setIsChartLoading = _chartLoadingState[1];
+
+  var _cardsLoadingState = useState<boolean>(false);
+  var isCardsLoading = _cardsLoadingState[0];
+  var setIsCardsLoading = _cardsLoadingState[1];
 
   var _staleState = useState<boolean>(false);
   var isStale = _staleState[0];
@@ -102,13 +109,22 @@ export function StocksDashboard(props: StocksDashboardProps) {
   var hasLoadedOnceRef = useRef<boolean>(false);
   var selectedSymbolRef = useRef<string>(selectedSymbol);
   var selectedRangeRef = useRef<StockRange>(selectedRange);
+  var rangeQuotesCacheRef = useRef<{ [rng: string]: StockQuote[] }>({});
   selectedSymbolRef.current = selectedSymbol;
   selectedRangeRef.current = selectedRange;
 
-  function fetchStocks(symbol: string, range: StockRange, chartOnly: boolean) {
+  function fetchStocks(
+    symbol: string,
+    range: StockRange,
+    chartOnly: boolean,
+    showLoading?: boolean
+  ) {
     var seq = ++reqSeqRef.current;
-    if (chartOnly) {
+    if (chartOnly || showLoading) {
       setIsChartLoading(true);
+    }
+    if (!chartOnly && showLoading) {
+      setIsCardsLoading(true);
     }
 
     var qs =
@@ -131,12 +147,14 @@ export function StocksDashboard(props: StocksDashboardProps) {
           setHero(json.hero);
         }
         if (!chartOnly && json.quotes && json.quotes.length > 0) {
+          rangeQuotesCacheRef.current[range] = json.quotes;
           setQuotes(json.quotes);
           writeCachedStocks(json);
         }
         setIsStale(false);
         setLoadError(null);
         setIsChartLoading(false);
+        setIsCardsLoading(false);
         return json;
       })
       .catch(function (err) {
@@ -144,6 +162,7 @@ export function StocksDashboard(props: StocksDashboardProps) {
         setIsStale(true);
         setLoadError(err && err.message ? String(err.message) : 'Network error');
         setIsChartLoading(false);
+        setIsCardsLoading(false);
         return null;
       });
   }
@@ -208,7 +227,11 @@ export function StocksDashboard(props: StocksDashboardProps) {
     if (rng === selectedRange) return;
     setScrubPoint(null);
     setSelectedRange(rng);
-    fetchStocks(selectedSymbol, rng, true);
+    var cachedQuotes = rangeQuotesCacheRef.current[rng];
+    if (cachedQuotes && cachedQuotes.length > 0) {
+      setQuotes(cachedQuotes);
+    }
+    fetchStocks(selectedSymbol, rng, false, true);
   }
 
   var displayPrice = hero ? (scrubPoint ? scrubPoint.v : hero.price) : 0;
@@ -420,7 +443,10 @@ export function StocksDashboard(props: StocksDashboardProps) {
         )}
 
         {quoteRows.length > 0 ? (
-          <section class="stocks-grid" aria-label="Stock watchlist">
+          <section
+            class={isCardsLoading ? 'stocks-grid stocks-grid-loading' : 'stocks-grid'}
+            aria-label="Stock watchlist"
+          >
             {quoteRows.map(function (row, rowIdx) {
               return (
                 <div
