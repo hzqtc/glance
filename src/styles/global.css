@@ -650,6 +650,14 @@ body,
   justify-content: center;
 }
 
+.hourly-temp-row {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  justify-content: center;
+  white-space: nowrap;
+}
+
 .hourly-temp {
   font-size: 22px;
   font-weight: 500;
@@ -658,12 +666,11 @@ body,
 }
 
 .hourly-precip {
-  margin-top: 3px;
-  font-size: 14px;
+  margin-left: 5px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--precip-color);
   font-variant-numeric: tabular-nums;
-  min-height: 16px;
 }
 
 /* Row 2: Middle Insights Band (5-Day Forecast + Air & Daylight) */

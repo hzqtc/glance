@@ -136,9 +136,6 @@ export function HeroSpotlight(props: HeroSpotlightProps) {
 
   var desc = weather ? describeWMO(weather.weatherCode) : null;
   var hourly = weather ? weather.hourly.slice(0, 24) : [];
-  var hasHourlyPrecip = hourly.some(function (slot) {
-    return slot.precipProb >= 15;
-  });
 
   var rainHeadsUp = getRainHeadsUp(weather, timeFormat);
   var aqiVal = weather && typeof weather.usAqi === 'number' ? weather.usAqi : null;
@@ -268,12 +265,14 @@ export function HeroSpotlight(props: HeroSpotlightProps) {
                   <div class="hourly-icon-wrap">
                     <WeatherIcon kind={slotDesc.kind} isDay={slot.isDay} size={30} />
                   </div>
-                  <div class="hourly-temp">{formatTemp(slot.tempC, units)}</div>
-                  {hasHourlyPrecip ? (
-                    <div class="hourly-precip">
-                      {slot.precipProb >= 15 ? String(slot.precipProb) + '%' : '\u00A0'}
-                    </div>
-                  ) : null}
+                  <div class="hourly-temp-row">
+                    <span class="hourly-temp">{formatTemp(slot.tempC, units)}</span>
+                    {slot.precipProb >= 15 ? (
+                      <span class="hourly-precip">
+                        {String(slot.precipProb) + '%'}
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
               );
             })}
