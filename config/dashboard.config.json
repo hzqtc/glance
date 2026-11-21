@@ -61,7 +61,7 @@
       { "symbol": "AMZN", "label": "AMZN", "name": "Amazon", "format": "currency" },
       { "symbol": "META", "label": "META", "name": "Meta", "format": "currency" },
       { "symbol": "TSLA", "label": "TSLA", "name": "Tesla", "format": "currency" },
-      { "symbol": "AVGO", "label": "AVGO", "name": "Broadcom", "format": "currency" },
+      { "symbol": "ANT", "label": "ANT", "name": "Anthropic", "format": "currency" },
       { "symbol": "TSM", "label": "TSM", "name": "TSMC", "format": "currency" },
       { "symbol": "AMD", "label": "AMD", "name": "AMD", "format": "currency" },
       { "symbol": "NFLX", "label": "NFLX", "name": "Netflix", "format": "currency" },
@@ -69,7 +69,7 @@
       { "symbol": "GC=F", "label": "Gold", "name": "Gold Futures", "format": "currency" },
       { "symbol": "CL=F", "label": "Oil", "name": "WTI Crude Oil", "format": "currency" },
       { "symbol": "SI=F", "label": "Silver", "name": "Silver Futures", "format": "currency" },
-      { "symbol": "^VIX", "label": "VIX", "name": "CBOE Volatility", "format": "points" },
+      { "symbol": "SPCX", "label": "SPCX", "name": "SpaceX", "format": "currency" },
       { "symbol": "^DJI", "label": "Dow", "name": "Dow Jones", "format": "points" }
     ]
   },

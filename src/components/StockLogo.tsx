@@ -18,6 +18,8 @@ function getLogoBadgeStyle(symbol: string): LogoStyle {
   if (s === 'AMZN') return { bg: 'rgba(255, 153, 0, 0.16)' };
   if (s === 'META') return { bg: 'rgba(0, 129, 251, 0.18)' };
   if (s === 'TSLA') return { bg: 'rgba(227, 25, 55, 0.2)' };
+  if (s === 'ANT') return { bg: 'rgba(217, 119, 87, 0.22)' };
+  if (s === 'SPCX') return { bg: 'rgba(56, 189, 248, 0.16)' };
   if (s === 'AVGO') return { bg: 'rgba(204, 9, 47, 0.2)' };
   if (s === 'TSM') return { bg: 'rgba(239, 68, 68, 0.18)' };
   if (s === 'AMD') return { bg: 'rgba(248, 250, 252, 0.14)' };
@@ -160,6 +162,42 @@ function renderMark(symbol: string, iconPx: number) {
         <path
           d="M4.8 9.1c3.2-1.1 5.7-1.1 7.2.7 1.5-1.8 4-1.8 7.2-.7l-.8 1.4c-1.9-.6-3.6-.5-4.5.3L12 20.6l-1.9-9.8c-.9-.8-2.6-.9-4.5-.3l-.8-1.4z"
           fill="#ef4444"
+        />
+      </svg>
+    );
+  }
+
+  // Anthropic (ANT) — signature A\ mark
+  if (s === 'ANT') {
+    return (
+      <svg width={iconPx} height={iconPx} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path
+          d="M14.1 5.8h2.5l4.2 12.4h-2.5L14.1 5.8z"
+          fill="#d97757"
+        />
+        <path
+          d="M8.6 5.8h2.6l4.2 12.4h-2.5l-.8-2.6H7.6l-.8 2.6H4.3L8.6 5.8zm1.3 3.4l-1.5 4.4h3L9.9 9.2z"
+          fill="#f5e6d8"
+        />
+      </svg>
+    );
+  }
+
+  // SpaceX (SPCX) — iconic sweeping orbital X trajectory
+  if (s === 'SPCX') {
+    return (
+      <svg width={iconPx} height={iconPx} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path
+          d="M5.2 6.8l9.8 11.4"
+          stroke="#e2e8f0"
+          stroke-width="2.2"
+          stroke-linecap="round"
+        />
+        <path
+          d="M4.6 18.2c3.8-4.5 9.1-9.2 15.8-12.5"
+          stroke="#38bdf8"
+          stroke-width="2.2"
+          stroke-linecap="round"
         />
       </svg>
     );
