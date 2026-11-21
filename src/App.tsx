@@ -665,6 +665,7 @@ export function App() {
                 animEnabled={animEnabled}
                 units={units}
                 isRefreshing={isRefreshing}
+                showAnim={false}
                 showUnits={false}
                 onToggleAnim={handleToggleAnim}
                 onToggleUnits={handleToggleUnits}
