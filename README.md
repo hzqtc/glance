@@ -21,7 +21,7 @@ An ambient personal wall dashboard PWA designed for an **iPad mini 2 (iOS 12.5.7
 
 ## Configuration
 
-Edit [`dashboard.config.json`](./dashboard.config.json) to customize units (`"F"` or `"C"`), clock format (`"12h"` or `"24h"`), night dimming hours, cities, and future trip countdowns:
+Edit [`api/dashboard.config.json`](./api/dashboard.config.json) to customize units (`"F"` or `"C"`), clock format (`"12h"` or `"24h"`), night dimming hours, cities, and future trip countdowns:
 
 ```json
 {
@@ -40,8 +40,8 @@ Edit [`dashboard.config.json`](./dashboard.config.json) to customize units (`"F"
 ## Architecture
 
 - **Frontend (`src/`):** Preact + TypeScript + CSS custom properties (Safari 12-safe) + 2D `<canvas>` backdrop & vector SVG Moon.
-- **Serverless API (`api/dashboard.go`):** Stdlib-only Go `func Handler(w http.ResponseWriter, r *http.Request)` automatically exposed at `/api/dashboard` on Vercel. Embeds `dashboard.config.json` via [`embed.go`](./embed.go), batches Open-Meteo Forecast (5-day + hourly) and Air Quality (US AQI + UV) concurrently, and sets Edge cache headers (`s-maxage=600`).
-- **Local Dev Server (`cmd/devserver/main.go`):** Mounts the exact same Go handler on `127.0.0.1:8080` and reads `dashboard.config.json` live from disk on every request.
+- **Serverless API (`api/dashboard.go`):** Stdlib-only Go `func Handler(w http.ResponseWriter, r *http.Request)` automatically exposed at `/api/dashboard` on Vercel. Embeds `api/dashboard.config.json` via `//go:embed`, batches Open-Meteo Forecast (5-day + hourly) and Air Quality (US AQI + UV) concurrently, and sets Edge cache headers (`s-maxage=600`).
+- **Local Dev Server (`cmd/devserver/main.go`):** Mounts the exact same Go handler on `127.0.0.1:8080` and reads `api/dashboard.config.json` live from disk on every request.
 
 ## Local Development
 

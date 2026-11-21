@@ -3,6 +3,7 @@ package handler
 import (
 	"bytes"
 	"crypto/sha256"
+	_ "embed"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -14,9 +15,10 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"glance"
 )
+
+//go:embed dashboard.config.json
+var embeddedConfigJSON []byte
 
 var (
 	openMeteoBaseURL   = "https://api.open-meteo.com/v1/forecast"
@@ -220,7 +222,7 @@ func loadRawConfig() ([]byte, bool, error) {
 		}
 		return data, true, nil
 	}
-	return glance.DashboardConfigJSON, false, nil
+	return embeddedConfigJSON, false, nil
 }
 
 func parseAndNormalizeConfig(raw []byte) (DashboardConfig, error) {

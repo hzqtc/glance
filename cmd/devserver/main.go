@@ -10,7 +10,7 @@ import (
 
 func main() {
 	if os.Getenv("GLANCE_DEV_CONFIG_PATH") == "" {
-		_ = os.Setenv("GLANCE_DEV_CONFIG_PATH", "dashboard.config.json")
+		_ = os.Setenv("GLANCE_DEV_CONFIG_PATH", "api/dashboard.config.json")
 	}
 
 	port := os.Getenv("PORT")
