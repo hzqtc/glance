@@ -133,23 +133,122 @@ function nthWeekdayOfMonth(
   return lastDay - back;
 }
 
-export function getUSHolidaysForYear(year: number): { [dateKey: string]: string } {
-  var map: { [dateKey: string]: string } = {};
-  map[toDateKey(year, 1, 1)] = "New Year's Day";
-  map[toDateKey(year, 1, nthWeekdayOfMonth(year, 1, 1, 3))] = 'MLK Jr. Day';
-  map[toDateKey(year, 2, nthWeekdayOfMonth(year, 2, 1, 3))] = "Presidents' Day";
-  map[toDateKey(year, 5, nthWeekdayOfMonth(year, 5, 1, -1))] = 'Memorial Day';
-  if (year >= 2021) {
-    map[toDateKey(year, 6, 19)] = 'Juneteenth';
+export interface USHolidayInfo {
+  title: string;
+  isDayOff: boolean;
+}
+
+function addObservedFederalHoliday(
+  map: { [dateKey: string]: USHolidayInfo },
+  year: number,
+  month: number,
+  day: number,
+  title: string
+): void {
+  var key = toDateKey(year, month, day);
+  map[key] = { title: title, isDayOff: true };
+  var wd = new Date(year, month - 1, day).getDay();
+  if (wd === 6) {
+    // Saturday -> observed on Friday
+    var fri = new Date(year, month - 1, day - 1);
+    map[toDateKey(fri.getFullYear(), fri.getMonth() + 1, fri.getDate())] = {
+      title: title + ' (Observed)',
+      isDayOff: true,
+    };
+  } else if (wd === 0) {
+    // Sunday -> observed on Monday
+    var mon = new Date(year, month - 1, day + 1);
+    map[toDateKey(mon.getFullYear(), mon.getMonth() + 1, mon.getDate())] = {
+      title: title + ' (Observed)',
+      isDayOff: true,
+    };
   }
-  map[toDateKey(year, 7, 4)] = 'Independence Day';
-  map[toDateKey(year, 9, nthWeekdayOfMonth(year, 9, 1, 1))] = 'Labor Day';
-  map[toDateKey(year, 10, nthWeekdayOfMonth(year, 10, 1, 2))] = 'Indigenous Peoples Day';
-  map[toDateKey(year, 11, 11)] = 'Veterans Day';
-  map[toDateKey(year, 11, nthWeekdayOfMonth(year, 11, 4, 4))] = 'Thanksgiving';
-  map[toDateKey(year, 12, 24)] = 'Christmas Eve';
-  map[toDateKey(year, 12, 25)] = 'Christmas Day';
+}
+
+export function getUSHolidaysForYear(year: number): { [dateKey: string]: USHolidayInfo } {
+  var map: { [dateKey: string]: USHolidayInfo } = {};
+  // Christmas Eve (observance, may be upgraded if Dec 25 falls on Saturday)
+  map[toDateKey(year, 12, 24)] = { title: 'Christmas Eve', isDayOff: false };
+
+  // 11 Official US Federal Holidays (day off)
+  addObservedFederalHoliday(map, year, 1, 1, "New Year's Day");
+  map[toDateKey(year, 1, nthWeekdayOfMonth(year, 1, 1, 3))] = {
+    title: 'MLK Jr. Day',
+    isDayOff: true,
+  };
+  map[toDateKey(year, 2, nthWeekdayOfMonth(year, 2, 1, 3))] = {
+    title: "Presidents' Day",
+    isDayOff: true,
+  };
+  map[toDateKey(year, 5, nthWeekdayOfMonth(year, 5, 1, -1))] = {
+    title: 'Memorial Day',
+    isDayOff: true,
+  };
+  if (year >= 2021) {
+    addObservedFederalHoliday(map, year, 6, 19, 'Juneteenth');
+  }
+  addObservedFederalHoliday(map, year, 7, 4, 'Independence Day');
+  map[toDateKey(year, 9, nthWeekdayOfMonth(year, 9, 1, 1))] = {
+    title: 'Labor Day',
+    isDayOff: true,
+  };
+  map[toDateKey(year, 10, nthWeekdayOfMonth(year, 10, 1, 2))] = {
+    title: 'Indigenous Peoples Day',
+    isDayOff: true,
+  };
+  addObservedFederalHoliday(map, year, 11, 11, 'Veterans Day');
+  map[toDateKey(year, 11, nthWeekdayOfMonth(year, 11, 4, 4))] = {
+    title: 'Thanksgiving',
+    isDayOff: true,
+  };
+  addObservedFederalHoliday(map, year, 12, 25, 'Christmas Day');
+
+  // If next year's Jan 1 is Saturday, Dec 31 of this year is New Year's Day (Observed)
+  if (new Date(year + 1, 0, 1).getDay() === 6) {
+    map[toDateKey(year, 12, 31)] = {
+      title: "New Year's Day (Observed)",
+      isDayOff: true,
+    };
+  }
   return map;
+}
+
+// ============================================================================
+// 24 Chinese Solar Terms (二十四节气, 1900 - 2100)
+// ============================================================================
+
+var SOLAR_TERMS = [
+  '小寒', '大寒', '立春', '雨水', '惊蛰', '春分',
+  '清明', '谷雨', '立夏', '小满', '芒种', '夏至',
+  '小暑', '大暑', '立秋', '处暑', '白露', '秋分',
+  '寒露', '霜降', '立冬', '小雪', '大雪', '冬至',
+];
+
+var SOLAR_TERM_INFO = [
+  0, 21208, 42467, 63836, 85337, 107014,
+  128867, 150921, 173149, 195551, 218072, 240693,
+  263343, 285989, 308563, 331033, 353350, 375494,
+  397447, 419210, 440795, 462224, 483532, 504758,
+];
+
+function getSolarTermDay(year: number, termIdx: number): number {
+  // Base epoch: 1900-01-06 02:05:00 UTC (canonical base for SOLAR_TERM_INFO)
+  var baseUtcMs = Date.UTC(1900, 0, 6, 2, 5, 0);
+  var ms = 31556925974.7 * (year - 1900) + SOLAR_TERM_INFO[termIdx] * 60000 + baseUtcMs;
+  return new Date(ms).getUTCDate();
+}
+
+export function getSolarTerm(year: number, month: number, day: number): string {
+  if (year < 1900 || year > 2100) return '';
+  var idx1 = (month - 1) * 2;
+  var idx2 = idx1 + 1;
+  if (getSolarTermDay(year, idx1) === day) {
+    return SOLAR_TERMS[idx1];
+  }
+  if (getSolarTermDay(year, idx2) === day) {
+    return SOLAR_TERMS[idx2];
+  }
+  return '';
 }
 
 // ============================================================================
@@ -228,7 +327,10 @@ function lunarYearDays(y: number): number {
 export interface LunarDateInfo {
   label: string;
   fullLabel: string;
+  festival: string;
+  solarTerm: string;
   isFestival: boolean;
+  isSolarTerm: boolean;
 }
 
 export function getChineseLunarDate(
@@ -281,27 +383,50 @@ export function getChineseLunarDate(
   var lDay = offset + 1;
   var monthStr = (isLeap ? '闰' : '') + LUNAR_MONTHS[lMonth - 1];
   var dayStr = LUNAR_DAYS[lDay - 1] || '';
+  var solarTerm = getSolarTerm(year, month, day);
 
-  // Check major traditional Chinese festivals
+  // Traditional Chinese festivals (农历传统节日 + 清明节)
   var festival = '';
   if (!isLeap) {
     if (lMonth === 1 && lDay === 1) festival = '春节';
-    else if (lMonth === 1 && lDay === 15) festival = '元宵';
-    else if (lMonth === 5 && lDay === 5) festival = '端午';
+    else if (lMonth === 1 && lDay === 15) festival = '元宵节';
+    else if (lMonth === 2 && lDay === 2) festival = '龙抬头';
+    else if (lMonth === 5 && lDay === 5) festival = '端午节';
     else if (lMonth === 7 && lDay === 7) festival = '七夕';
-    else if (lMonth === 8 && lDay === 15) festival = '中秋';
-    else if (lMonth === 9 && lDay === 9) festival = '重阳';
-    else if (lMonth === 12 && lDay === 8) festival = '腊八';
+    else if (lMonth === 7 && lDay === 15) festival = '中元节';
+    else if (lMonth === 8 && lDay === 15) festival = '中秋节';
+    else if (lMonth === 9 && lDay === 9) festival = '重阳节';
+    else if (lMonth === 12 && lDay === 8) festival = '腊八节';
+    else if (lMonth === 12 && lDay === 23) festival = '小年';
     else if (lMonth === 12 && lDay === lunarMonthDays(lYear, 12)) festival = '除夕';
   }
+  if (!festival && solarTerm === '清明') {
+    festival = '清明节';
+  }
 
-  var label = festival ? festival : lDay === 1 ? monthStr : dayStr;
-  var fullLabel = '农历' + monthStr + dayStr + (festival ? ' · ' + festival : '');
+  var label = festival
+    ? festival
+    : solarTerm
+      ? solarTerm
+      : lDay === 1
+        ? monthStr
+        : dayStr;
+
+  var fullParts = ['农历' + monthStr + dayStr];
+  if (festival) {
+    fullParts.push(festival);
+  }
+  if (solarTerm && solarTerm !== '清明') {
+    fullParts.push(solarTerm);
+  }
 
   return {
     label: label,
-    fullLabel: fullLabel,
+    fullLabel: fullParts.join(' · '),
+    festival: festival,
+    solarTerm: solarTerm,
     isFestival: Boolean(festival),
+    isSolarTerm: Boolean(solarTerm) && !festival,
   };
 }
 

@@ -14,6 +14,7 @@ import {
   parseDateKey,
   toDateKey,
 } from '../utils/calendar';
+import type { USHolidayInfo } from '../utils/calendar';
 
 var HIDDEN_CALS_STORAGE_KEY = 'glance:hiddenCalendars:v1';
 
@@ -228,7 +229,7 @@ export function CalendarDashboard(props: CalendarDashboardProps) {
   ];
 
   // Built-in US holidays across years spanned by the 42-day grid (handles Dec/Jan overlap)
-  var holidaysByDate: { [dateKey: string]: string } = {};
+  var holidaysByDate: { [dateKey: string]: USHolidayInfo } = {};
   var yearsInGrid: { [y: number]: boolean } = {};
   for (var c = 0; c < gridCells.length; c++) {
     yearsInGrid[gridCells[c].year] = true;
@@ -248,14 +249,14 @@ export function CalendarDashboard(props: CalendarDashboardProps) {
   var allHolidayKeys = Object.keys(holidaysByDate);
   for (var hk = 0; hk < allHolidayKeys.length; hk++) {
     var hDate = allHolidayKeys[hk];
-    var hTitle = holidaysByDate[hDate];
+    var hInfo = holidaysByDate[hDate];
     eventsByDate[hDate] = [
       {
         id: 'us-holiday-' + hDate,
         calendarId: 'us-holidays',
-        calendarName: 'US Holiday',
+        calendarName: hInfo.isDayOff ? 'US Holiday' : 'Observance',
         color: '#fbbf24',
-        title: hTitle,
+        title: hInfo.title,
         date: hDate,
         allDay: true,
         startMs: 0,
@@ -444,6 +445,8 @@ export function CalendarDashboard(props: CalendarDashboardProps) {
                     {week.map(function (cell) {
                       var isSel = cell.dateKey === selectedDateKey;
                       var cellEvents = eventsByDate[cell.dateKey] || [];
+                      var holidayInfo = holidaysByDate[cell.dateKey];
+                      var isDayOff = Boolean(holidayInfo && holidayInfo.isDayOff);
                       var lunar = getChineseLunarDate(cell.year, cell.month, cell.day);
                       var visibleChips = cellEvents.slice(0, 2);
                       var extraCount = cellEvents.length - visibleChips.length;
@@ -451,6 +454,7 @@ export function CalendarDashboard(props: CalendarDashboardProps) {
                       var cellClass = 'cal-cell';
                       if (!cell.inCurrentMonth) cellClass += ' cal-cell-muted';
                       if (cell.isWeekend) cellClass += ' cal-cell-weekend';
+                      if (isDayOff) cellClass += ' cal-cell-dayoff';
                       if (cell.isToday) cellClass += ' cal-cell-today';
                       if (isSel) cellClass += ' cal-cell-selected';
 
@@ -486,7 +490,9 @@ export function CalendarDashboard(props: CalendarDashboardProps) {
                                 class={
                                   lunar.isFestival
                                     ? 'cal-lunar-tag cal-lunar-fest'
-                                    : 'cal-lunar-tag'
+                                    : lunar.isSolarTerm
+                                      ? 'cal-lunar-tag cal-lunar-term'
+                                      : 'cal-lunar-tag'
                                 }
                               >
                                 {lunar.label}
@@ -556,7 +562,9 @@ export function CalendarDashboard(props: CalendarDashboardProps) {
                       class={
                         selLunar.isFestival
                           ? 'cal-day-lunar cal-lunar-fest'
-                          : 'cal-day-lunar'
+                          : selLunar.isSolarTerm
+                            ? 'cal-day-lunar cal-lunar-term'
+                            : 'cal-day-lunar'
                       }
                     >
                       {selLunar.fullLabel}
