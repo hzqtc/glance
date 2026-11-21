@@ -2818,6 +2818,53 @@ body,
   color: var(--text-muted);
 }
 
+/* Targeted vertical fit tuning for iPad mini 6 (1133x744 + Home Indicator) without affecting iPad mini 2 (1024x768) */
+@media (max-height: 750px) {
+  .dashboard-content {
+    padding: 20px 26px 20px 26px;
+    padding-top: calc(20px + env(safe-area-inset-top));
+    padding-bottom: calc(20px + env(safe-area-inset-bottom));
+  }
+
+  .hero-top {
+    margin-bottom: 10px;
+  }
+
+  .hero-clock-digits {
+    font-size: 108px;
+  }
+
+  .hero-clock-colon {
+    font-size: 94px;
+  }
+
+  .hero-date {
+    margin-top: 6px;
+    font-size: 23px;
+  }
+
+  .hero-temp {
+    font-size: 96px;
+  }
+
+  .hourly-ribbon {
+    padding: 12px 16px;
+  }
+
+  .insights-band,
+  .cities-row {
+    margin-top: 11px;
+  }
+
+  .insights-card {
+    padding: 12px 18px;
+  }
+
+  .cities-row-compact .city-card {
+    padding: 11px 13px 10px 13px;
+  }
+}
+
 /* Compact adjustments for tighter landscape heights */
 @media (max-height: 700px) {
   .dashboard-content {
