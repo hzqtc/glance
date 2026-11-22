@@ -33,9 +33,33 @@ import { formatTemp, formatWind } from '../utils/weather';
 import { formatStockPct } from '../utils/stocks';
 
 export var WORLD_STORAGE_KEY = 'glance:lastWorld:v1';
+var WORLD_HOME_LON_KEY = 'glance:homeLon:v1';
 
 var MAP_W = 1000;
 var MAP_H = 500;
+
+function readStoredHomeLon(): number {
+  try {
+    var raw = window.localStorage.getItem(WORLD_HOME_LON_KEY);
+    if (raw !== null) {
+      var parsed = parseFloat(raw);
+      if (isFinite(parsed) && parsed >= -180 && parsed <= 180) {
+        return parsed;
+      }
+    }
+  } catch (_err) {
+    // Ignore storage errors
+  }
+  return MAP_CENTER_LON;
+}
+
+function writeStoredHomeLon(lon: number): void {
+  try {
+    window.localStorage.setItem(WORLD_HOME_LON_KEY, String(lon));
+  } catch (_err) {
+    // Ignore storage errors
+  }
+}
 
 interface WorldDashboardProps {
   isActive: boolean;
@@ -443,12 +467,20 @@ export function WorldDashboard(props: WorldDashboardProps) {
     ]
   );
 
-  // Center the map horizontally on the Home city's longitude (defaulting to MAP_CENTER_LON)
+  // Center the map horizontally on the Home city's longitude from the very first frame
   var cities = props.cities || [];
   var homeCity = cities.length > 0 ? cities[0] : null;
   var homeWeather = homeCity ? props.weatherById[homeCity.id] : undefined;
   var homeOffsetSec = homeWeather ? homeWeather.utcOffsetSeconds : 0;
-  var mapCenterLon = homeCity ? homeCity.lon : MAP_CENTER_LON;
+  var fallbackHomeLonRef = useRef<number | null>(null);
+  if (fallbackHomeLonRef.current === null) {
+    fallbackHomeLonRef.current = readStoredHomeLon();
+  }
+  if (homeCity && fallbackHomeLonRef.current !== homeCity.lon) {
+    fallbackHomeLonRef.current = homeCity.lon;
+    writeStoredHomeLon(homeCity.lon);
+  }
+  var mapCenterLon = homeCity ? homeCity.lon : fallbackHomeLonRef.current;
   var mapLeftLon = getMapLeftLon(mapCenterLon);
   var landShiftX =
     ((((MAP_LEFT_LON - mapLeftLon) % 360) + 360) % 360 / 360) * MAP_W;

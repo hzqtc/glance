@@ -7,9 +7,13 @@ var EARTH_RADIUS_KM = 6378.137; // WGS-84 equatorial radius
 var EARTH_E2 = 0.00669437999014; // WGS-84 first eccentricity squared
 var EARTH_J2 = 1.08262668e-3;
 
-/** Pacific-centered projection: 155°E center -> left edge is -25°W (mid-Atlantic), 82°N to 58°S. */
-export var MAP_CENTER_LON = 155;
-export var MAP_LEFT_LON = MAP_CENTER_LON - 180; // -25
+/**
+ * Base pre-projected coordinates of WORLD_LAND_PATH:
+ * left edge = -25°W (25°W mid-Atlantic origin), 82°N to 58°S.
+ * Default initial center longitude matches Home city (Sunnyvale) so cold loads never jump.
+ */
+export var MAP_CENTER_LON = -122.0363;
+export var MAP_LEFT_LON = -25;
 export var MAP_MAX_LAT = 82;
 export var MAP_MIN_LAT = -58;
 export var MAP_LAT_SPAN = MAP_MAX_LAT - MAP_MIN_LAT; // 140
