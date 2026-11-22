@@ -3287,23 +3287,39 @@ body,
   width: 100%;
   height: 100%;
   background-color: #060911;
+  overflow: hidden;
+  transform-origin: center center;
 }
 
 .photos-frame-out {
   z-index: 1;
+  animation: photosZoomFadeOut 0.95s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .photos-frame-in {
   z-index: 2;
-  animation: photosCrossfadeIn 0.85s ease both;
+  animation: photosZoomFadeIn 0.95s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-@keyframes photosCrossfadeIn {
+@keyframes photosZoomFadeIn {
   0% {
     opacity: 0;
+    transform: scale3d(1.04, 1.04, 1);
   }
   100% {
     opacity: 1;
+    transform: scale3d(1, 1, 1);
+  }
+}
+
+@keyframes photosZoomFadeOut {
+  0% {
+    opacity: 1;
+    transform: scale3d(1, 1, 1);
+  }
+  100% {
+    opacity: 0.35;
+    transform: scale3d(1.02, 1.02, 1);
   }
 }
 

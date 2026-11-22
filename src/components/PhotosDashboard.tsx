@@ -5,7 +5,7 @@ import type { CollageFrame } from '../utils/collage';
 
 var DEFAULT_PHOTO_INTERVAL_SEC = 15;
 var PHOTO_REFRESH_MS = 30 * 60 * 1000;
-var CROSSFADE_MS = 850;
+var CROSSFADE_MS = 950;
 
 interface PhotosDashboardProps {
   isActive: boolean;
