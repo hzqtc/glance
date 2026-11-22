@@ -35,7 +35,7 @@ var (
 const (
 	photosCacheTTL      = 15 * time.Minute
 	maxPhotosPerRequest = 500
-	maxAlbumHTMLBytes   = 8 * 1024 * 1024
+	maxAlbumHTMLBytes   = 12 * 1024 * 1024
 )
 
 type photosCacheEntry struct {
@@ -190,9 +190,10 @@ func fetchAlbumPhotosCached(albumURL string, forceRefresh bool) ([]PhotoItem, er
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
-	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
+	// IMPORTANT: Use a non-browser User-Agent so Firebase Dynamic Links (photos.app.goo.gl)
+	// returns a direct HTTP 302 redirect to photos.google.com/share/... instead of an HTML JS stub.
+	req.Header.Set("User-Agent", "Glance/1.0")
+	req.Header.Set("Accept", "text/html,application/xhtml+xml,*/*;q=0.8")
 
 	resp, err := photosHTTPClient.Do(req)
 	if err != nil {
