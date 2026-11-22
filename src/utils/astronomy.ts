@@ -339,6 +339,8 @@ export interface ISSPosition {
   lat: number;
   lon: number;
   altKm: number;
+  speedKmh: number;
+  sunlit: boolean;
 }
 
 export interface ISSTrackResult {
@@ -355,7 +357,11 @@ export interface ISSTrackResult {
  * Propagates the ISS TLE orbital elements to `timeMs` using a J2-perturbed
  * Keplerian model (nodal + apsidal precession, drag term, WGS-84 geodetic lat/alt).
  */
-export function propagateISS(orbit: ISSOrbit, timeMs: number): ISSPosition {
+export function propagateISS(
+  orbit: ISSOrbit,
+  timeMs: number,
+  includeSunlit?: boolean
+): ISSPosition {
   var dtDays = (timeMs - orbit.epochMs) / 86400000;
   var dtSec = dtDays * 86400;
 
@@ -429,10 +435,32 @@ export function propagateISS(orbit: ISSOrbit, timeMs: number): ISSPosition {
       ? rho / cosLat - N
       : Math.abs(zEcef) / Math.abs(Math.sin(latRad)) - N * (1 - EARTH_E2);
 
+  // Orbital velocity via vis-viva equation
+  var speedKmS = Math.sqrt(Math.max(0, EARTH_MU * (2 / r - 1 / a)));
+  var speedKmh = speedKmS * 3600;
+
+  var sunlit = true;
+  if (includeSunlit) {
+    var sun = getSubsolarPoint(timeMs);
+    var sLat = sun.lat * DEG2RAD;
+    var sLon = sun.lon * DEG2RAD;
+    var sx = Math.cos(sLat) * Math.cos(sLon);
+    var sy = Math.cos(sLat) * Math.sin(sLon);
+    var sz = Math.sin(sLat);
+    var dotSun = xEcef * sx + yEcef * sy + zEcef * sz;
+    if (dotSun < 0) {
+      var rSq = xEcef * xEcef + yEcef * yEcef + zEcef * zEcef;
+      var perpSq = rSq - dotSun * dotSun;
+      sunlit = perpSq > EARTH_RADIUS_KM * EARTH_RADIUS_KM;
+    }
+  }
+
   return {
     lat: latRad * RAD2DEG,
     lon: lon,
     altKm: altKm,
+    speedKmh: speedKmh,
+    sunlit: sunlit,
   };
 }
 
@@ -470,7 +498,7 @@ export function buildISSTrack(
   mapH: number,
   centerLon?: number
 ): ISSTrackResult {
-  var current = propagateISS(orbit, nowMs);
+  var current = propagateISS(orbit, nowMs, true);
   var curPt = projectLonLat(current.lon, current.lat, mapW, mapH, centerLon);
 
   // Sample 15s ahead for map-space heading angle

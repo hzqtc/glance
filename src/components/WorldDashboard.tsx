@@ -211,13 +211,17 @@ export function WorldDashboard(props: WorldDashboardProps) {
   var selectedCityId = _selectedCityState[0];
   var setSelectedCityId = _selectedCityState[1];
 
+  var _selectedISSState = useState<boolean>(false);
+  var selectedISS = _selectedISSState[0];
+  var setSelectedISS = _selectedISSState[1];
+
   var _selectedQuakeState = useState<string | null>(null);
   var selectedQuakeId = _selectedQuakeState[0];
   var setSelectedQuakeId = _selectedQuakeState[1];
 
-  var _selectedAuroraState = useState<boolean>(false);
-  var selectedAurora = _selectedAuroraState[0];
-  var setSelectedAurora = _selectedAuroraState[1];
+  var _selectedAuroraState = useState<{ x: number; y: number } | null>(null);
+  var selectedAuroraPt = _selectedAuroraState[0];
+  var setSelectedAuroraPt = _selectedAuroraState[1];
 
   var _selectedStormState = useState<string | null>(null);
   var selectedStormId = _selectedStormState[0];
@@ -408,16 +412,18 @@ export function WorldDashboard(props: WorldDashboardProps) {
     function () {
       if (
         !selectedCityId &&
+        !selectedISS &&
         !selectedQuakeId &&
-        !selectedAurora &&
+        !selectedAuroraPt &&
         !selectedStormId
       ) {
         return;
       }
       var id = window.setTimeout(function () {
         setSelectedCityId(null);
+        setSelectedISS(false);
         setSelectedQuakeId(null);
-        setSelectedAurora(false);
+        setSelectedAuroraPt(null);
         setSelectedStormId(null);
       }, idleResetSec * 1000);
       return function () {
@@ -426,8 +432,9 @@ export function WorldDashboard(props: WorldDashboardProps) {
     },
     [
       selectedCityId,
+      selectedISS,
       selectedQuakeId,
-      selectedAurora,
+      selectedAuroraPt,
       selectedStormId,
       idleResetSec,
       props.activityTick,
@@ -593,6 +600,112 @@ export function WorldDashboard(props: WorldDashboardProps) {
     }
   }
 
+  function clearAllSelections() {
+    setSelectedCityId(null);
+    setSelectedISS(false);
+    setSelectedQuakeId(null);
+    setSelectedAuroraPt(null);
+    setSelectedStormId(null);
+  }
+
+  interface MapPopoverData {
+    x: number;
+    y: number;
+    text: string;
+    stroke: string;
+    textColor: string;
+  }
+
+  var activePopover: MapPopoverData | null = null;
+  if (selectedISS && issTrack) {
+    activePopover = {
+      x: issTrack.x,
+      y: issTrack.y,
+      text:
+        'ISS · ' +
+        String(Math.round(issTrack.current.altKm)) +
+        ' km · ' +
+        Math.round(issTrack.current.speedKmh).toLocaleString() +
+        ' km/h · ' +
+        (issTrack.current.sunlit ? 'Sunlit' : 'Shadow'),
+      stroke: 'rgba(103, 232, 249, 0.62)',
+      textColor: '#cffafe',
+    };
+  } else if (selectedStorm) {
+    var selStormPt = projectLonLat(
+      selectedStorm.lon,
+      selectedStorm.lat,
+      MAP_W,
+      MAP_H,
+      mapCenterLon
+    );
+    activePopover = {
+      x: selStormPt.x,
+      y: selStormPt.y,
+      text:
+        selectedStorm.name +
+        ' · ' +
+        selectedStorm.category +
+        (selectedStorm.windKmh > 0
+          ? ' · ' + formatWind(selectedStorm.windKmh, props.units)
+          : ''),
+      stroke: 'rgba(244, 63, 94, 0.62)',
+      textColor: '#ffe4e6',
+    };
+  } else if (selectedAuroraPt && aurora && showAurora) {
+    activePopover = {
+      x: selectedAuroraPt.x,
+      y: selectedAuroraPt.y,
+      text:
+        'Aurora · Kp ' +
+        aurora.kp.toFixed(1) +
+        ' (' +
+        aurora.scale +
+        ') · 24h peak ' +
+        aurora.maxKp24h.toFixed(1),
+      stroke: 'rgba(52, 211, 153, 0.62)',
+      textColor: '#d1fae5',
+    };
+  } else if (selectedQuake) {
+    var selQuakePt = projectLonLat(
+      selectedQuake.lon,
+      selectedQuake.lat,
+      MAP_W,
+      MAP_H,
+      mapCenterLon
+    );
+    var placeStr = selectedQuake.place || 'Earthquake';
+    if (placeStr.length > 34) {
+      placeStr = placeStr.slice(0, 33) + '…';
+    }
+    activePopover = {
+      x: selQuakePt.x,
+      y: selQuakePt.y,
+      text:
+        'M' +
+        selectedQuake.mag.toFixed(1) +
+        ' · ' +
+        placeStr +
+        ' · ' +
+        String(Math.round(selectedQuake.depthKm)) +
+        ' km · ' +
+        formatTimeAgo(selectedQuake.timeMs, props.nowMs),
+      stroke: 'rgba(251, 146, 60, 0.62)',
+      textColor: '#ffedd5',
+    };
+  } else if (selectedPin && selectedPin.arc && showArcs) {
+    activePopover = {
+      x: selectedPin.arc.midX,
+      y: selectedPin.arc.midY,
+      text:
+        selectedPin.arc.distKm.toLocaleString() +
+        ' km · ' +
+        selectedPin.arc.flightLabel,
+      stroke: 'rgba(253, 230, 138, 0.58)',
+      textColor: '#fef3c7',
+    };
+  }
+
   // Graticule coordinates (82°N to 58°S, true 30° meridians)
   var latLines = [-30, 0, 30, 60];
   var lonSteps = [-180, -150, -120, -90, -60, -30, 0, 30, 60, 90, 120, 150];
@@ -701,6 +814,9 @@ export function WorldDashboard(props: WorldDashboardProps) {
                 }
                 onClick={function () {
                   setShowISS(function (v) {
+                    if (v) {
+                      setSelectedISS(false);
+                    }
                     return !v;
                   });
                 }}
@@ -771,7 +887,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
                 onClick={function () {
                   setShowAurora(function (v) {
                     if (v) {
-                      setSelectedAurora(false);
+                      setSelectedAuroraPt(null);
                     }
                     return !v;
                   });
@@ -866,75 +982,8 @@ export function WorldDashboard(props: WorldDashboardProps) {
           <div class="world-header-right" />
         </header>
 
-        {/* Main Day/Night World Map Card */}
+        {/* Main Day/Night World Map */}
         <section class="world-map-card" aria-label="Live day and night world map">
-          {selectedStorm ? (
-            <button
-              type="button"
-              class="world-map-inspector world-storm-pill"
-              onClick={function () {
-                setSelectedStormId(null);
-              }}
-              title="Tap to dismiss tropical cyclone details"
-            >
-              <span class="world-route-cities">{selectedStorm.name}</span>
-              <span class="world-storm-meta">
-                {selectedStorm.category}
-                {selectedStorm.windKmh > 0
-                  ? ' · Max winds ' + formatWind(selectedStorm.windKmh, props.units)
-                  : ''}
-              </span>
-            </button>
-          ) : selectedAurora && aurora ? (
-            <button
-              type="button"
-              class="world-map-inspector world-aurora-pill"
-              onClick={function () {
-                setSelectedAurora(false);
-              }}
-              title="Tap to dismiss aurora activity"
-            >
-              <span class="world-route-cities">Aurora</span>
-              <span class="world-aurora-meta">
-                Kp {aurora.kp.toFixed(1)} ({aurora.scale}) · 24h peak Kp{' '}
-                {aurora.maxKp24h.toFixed(1)}
-              </span>
-            </button>
-          ) : selectedQuake ? (
-            <button
-              type="button"
-              class="world-map-inspector world-quake-pill"
-              onClick={function () {
-                setSelectedQuakeId(null);
-              }}
-              title="Tap to dismiss earthquake details"
-            >
-              <span class="world-route-cities">
-                M{selectedQuake.mag.toFixed(1)}
-              </span>
-              <span class="world-quake-meta">
-                {selectedQuake.place || 'Earthquake'} · {Math.round(selectedQuake.depthKm)} km depth ·{' '}
-                {formatTimeAgo(selectedQuake.timeMs, props.nowMs)}
-              </span>
-            </button>
-          ) : selectedPin && selectedPin.arc && homeCity ? (
-            <button
-              type="button"
-              class="world-map-inspector world-route-pill-active"
-              onClick={function () {
-                setSelectedCityId(null);
-              }}
-              title="Tap to clear selected route"
-            >
-              <span class="world-route-cities">
-                {homeCity.name} → {selectedPin.city.name}
-              </span>
-              <span class="world-route-meta">
-                {selectedPin.arc.distKm.toLocaleString()} km · {selectedPin.arc.flightLabel}
-              </span>
-            </button>
-          ) : null}
-
           <svg
             class="world-map-svg"
             viewBox={'0 0 ' + String(MAP_W) + ' ' + String(MAP_H)}
@@ -942,10 +991,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
             onClick={function (e) {
               var tgt = e.target as Element | null;
               if (tgt && tgt.tagName && tgt.tagName.toLowerCase() === 'svg') {
-                setSelectedCityId(null);
-                setSelectedQuakeId(null);
-                setSelectedAurora(false);
-                setSelectedStormId(null);
+                clearAllSelections();
               }
             }}
           >
@@ -1108,13 +1154,33 @@ export function WorldDashboard(props: WorldDashboardProps) {
               {auroraOval ? (
                 <g
                   class="world-aurora-layer"
-                  onClick={function () {
-                    setSelectedCityId(null);
-                    setSelectedQuakeId(null);
-                    setSelectedStormId(null);
-                    setSelectedAurora(function (v) {
-                      return !v;
-                    });
+                  onClick={function (e) {
+                    var wasSelected = Boolean(selectedAuroraPt);
+                    clearAllSelections();
+                    if (wasSelected) {
+                      return;
+                    }
+                    var svgEl = (e.currentTarget as SVGElement).ownerSVGElement;
+                    if (svgEl) {
+                      var rect = svgEl.getBoundingClientRect();
+                      if (rect.width > 0 && rect.height > 0) {
+                        var scale = isWideMap
+                          ? Math.max(rect.width / MAP_W, rect.height / MAP_H)
+                          : Math.min(rect.width / MAP_W, rect.height / MAP_H);
+                        var renderedW = MAP_W * scale;
+                        var renderedH = MAP_H * scale;
+                        var offX = rect.left + (rect.width - renderedW) / 2;
+                        var offY = rect.top + (rect.height - renderedH) / 2;
+                        var tapX = (e.clientX - offX) / scale;
+                        var tapY = (e.clientY - offY) / scale;
+                        setSelectedAuroraPt({
+                          x: Math.max(30, Math.min(MAP_W - 30, tapX)),
+                          y: Math.max(24, Math.min(MAP_H - 24, tapY)),
+                        });
+                        return;
+                      }
+                    }
+                    setSelectedAuroraPt({ x: MAP_W / 2, y: 52 });
                   }}
                 >
                   {auroraOval.northOuter ? (
@@ -1201,9 +1267,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
                           'translate(' + sPt.x.toFixed(1) + ',' + sPt.y.toFixed(1) + ')'
                         }
                         onClick={function () {
-                          setSelectedCityId(null);
-                          setSelectedQuakeId(null);
-                          setSelectedAurora(false);
+                          clearAllSelections();
                           setSelectedStormId(isSelS ? null : storm.id);
                         }}
                       >
@@ -1286,9 +1350,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
                           'translate(' + qPt.x.toFixed(1) + ',' + qPt.y.toFixed(1) + ')'
                         }
                         onClick={function () {
-                          setSelectedCityId(null);
-                          setSelectedAurora(false);
-                          setSelectedStormId(null);
+                          clearAllSelections();
                           setSelectedQuakeId(isSelQ ? null : q.id);
                         }}
                       >
@@ -1366,15 +1428,19 @@ export function WorldDashboard(props: WorldDashboardProps) {
                         <path
                           d={seg}
                           fill="none"
-                          stroke="rgba(34, 211, 238, 0.22)"
-                          stroke-width="4"
+                          stroke={
+                            selectedISS
+                              ? 'rgba(34, 211, 238, 0.38)'
+                              : 'rgba(34, 211, 238, 0.22)'
+                          }
+                          stroke-width={selectedISS ? '5.5' : '4'}
                           stroke-linecap="round"
                         />
                         <path
                           d={seg}
                           fill="none"
-                          stroke="#67e8f9"
-                          stroke-width="1.5"
+                          stroke={selectedISS ? '#a5f3fc' : '#67e8f9'}
+                          stroke-width={selectedISS ? '2' : '1.5'}
                           stroke-linecap="round"
                           opacity="0.92"
                         />
@@ -1400,10 +1466,9 @@ export function WorldDashboard(props: WorldDashboardProps) {
                     );
                   })}
 
-                  {/* ISS Marker */}
+                  {/* Interactive ISS Marker */}
                   <g
                     class="world-iss-marker"
-                    aria-hidden="true"
                     transform={
                       'translate(' +
                       issTrack.x.toFixed(1) +
@@ -1411,12 +1476,22 @@ export function WorldDashboard(props: WorldDashboardProps) {
                       issTrack.y.toFixed(1) +
                       ')'
                     }
+                    onClick={function () {
+                      var next = !selectedISS;
+                      clearAllSelections();
+                      setSelectedISS(next);
+                    }}
                   >
+                    <circle cx="0" cy="0" r="20" fill="transparent" />
                     <circle
                       cx="0"
                       cy="0"
-                      r="11"
-                      fill="rgba(103, 232, 249, 0.16)"
+                      r={selectedISS ? '14' : '11'}
+                      fill={
+                        selectedISS
+                          ? 'rgba(103, 232, 249, 0.28)'
+                          : 'rgba(103, 232, 249, 0.16)'
+                      }
                     />
                     {/* Miniature Space Station SVG oriented slightly along track */}
                     <g
@@ -1516,9 +1591,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
                         key={'arc-' + pin.city.id}
                         class="world-arc-group"
                         onClick={function () {
-                          setSelectedQuakeId(null);
-                          setSelectedAurora(false);
-                          setSelectedStormId(null);
+                          clearAllSelections();
                           setSelectedCityId(isSel ? null : pin.city.id);
                         }}
                       >
@@ -1545,41 +1618,6 @@ export function WorldDashboard(props: WorldDashboardProps) {
                             </g>
                           );
                         })}
-
-                        {/* Midpoint flight-time pill when this route is selected */}
-                        {isSel ? (
-                          <g
-                            transform={
-                              'translate(' +
-                              pin.arc.midX.toFixed(1) +
-                              ',' +
-                              Math.max(24, pin.arc.midY - 14).toFixed(1) +
-                              ')'
-                            }
-                          >
-                            <rect
-                              x="-68"
-                              y="-11"
-                              width="136"
-                              height="22"
-                              rx="11"
-                              fill="rgba(11, 18, 35, 0.88)"
-                              stroke="rgba(253, 230, 138, 0.55)"
-                              stroke-width="1"
-                            />
-                            <text
-                              x="0"
-                              y="3.5"
-                              text-anchor="middle"
-                              fill="#fef3c7"
-                              font-size="10.5"
-                              font-weight="600"
-                              font-family="-apple-system, BlinkMacSystemFont, Helvetica Neue, sans-serif"
-                            >
-                              {pin.arc.distKm.toLocaleString()} km · {pin.arc.flightLabel}
-                            </text>
-                          </g>
-                        ) : null}
                       </g>
                     );
                   })}
@@ -1618,12 +1656,8 @@ export function WorldDashboard(props: WorldDashboardProps) {
                       class="world-city-pin"
                       transform={'translate(' + pin.x.toFixed(1) + ',' + pin.y.toFixed(1) + ')'}
                       onClick={function () {
-                        setSelectedQuakeId(null);
-                        setSelectedAurora(false);
-                        setSelectedStormId(null);
-                        if (pin.isHome) {
-                          setSelectedCityId(null);
-                        } else {
+                        clearAllSelections();
+                        if (!pin.isHome) {
                           setSelectedCityId(isSel ? null : pin.city.id);
                         }
                       }}
@@ -1666,6 +1700,53 @@ export function WorldDashboard(props: WorldDashboardProps) {
                   );
                 })}
               </g>
+              {/* Contextual inline pillbox anchored next to whichever element was tapped */}
+              {activePopover
+                ? (function () {
+                    var pillW = Math.max(
+                      120,
+                      Math.min(370, Math.round(activePopover.text.length * 6.0 + 24))
+                    );
+                    var halfW = pillW / 2;
+                    var px = Math.max(
+                      halfW + 14,
+                      Math.min(MAP_W - halfW - 14, activePopover.x)
+                    );
+                    var py =
+                      activePopover.y < 42
+                        ? Math.min(MAP_H - 18, activePopover.y + 24)
+                        : Math.max(18, activePopover.y - 22);
+                    return (
+                      <g
+                        class="world-map-popover"
+                        transform={'translate(' + px.toFixed(1) + ',' + py.toFixed(1) + ')'}
+                        onClick={clearAllSelections}
+                      >
+                        <rect
+                          x={(-halfW).toFixed(1)}
+                          y="-11.5"
+                          width={String(pillW)}
+                          height="23"
+                          rx="11.5"
+                          fill="rgba(9, 17, 32, 0.9)"
+                          stroke={activePopover.stroke}
+                          stroke-width="1"
+                        />
+                        <text
+                          x="0"
+                          y="3.5"
+                          text-anchor="middle"
+                          fill={activePopover.textColor}
+                          font-size="10.5"
+                          font-weight="600"
+                          font-family="-apple-system, BlinkMacSystemFont, Helvetica Neue, sans-serif"
+                        >
+                          {activePopover.text}
+                        </text>
+                      </g>
+                    );
+                  })()
+                : null}
             </g>
           </svg>
         </section>

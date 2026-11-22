@@ -3829,91 +3829,6 @@ body,
   min-width: 0;
 }
 
-.world-map-inspector {
-  position: absolute;
-  top: 12px;
-  right: 56px;
-  right: calc(56px + env(safe-area-inset-right));
-  z-index: 5;
-  max-width: calc(100% - 80px);
-  display: inline-flex;
-  flex-direction: row;
-  align-items: center;
-  height: 30px;
-  padding: 0 12px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 999px;
-  background-color: rgba(9, 17, 32, 0.88);
-  color: #fef3c7;
-  font-family: inherit;
-  font-size: 12px;
-  cursor: pointer;
-  outline: none;
-  -webkit-appearance: none;
-  -webkit-tap-highlight-color: transparent;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
-}
-
-.world-route-pill-active {
-  border-color: rgba(251, 191, 36, 0.42);
-}
-
-.world-route-cities {
-  font-weight: 600;
-  margin-right: 8px;
-  flex-shrink: 0;
-}
-
-.world-route-meta {
-  font-weight: 500;
-  color: #fde68a;
-  font-variant-numeric: tabular-nums;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.world-quake-pill {
-  border-color: rgba(251, 146, 60, 0.5);
-  color: #ffedd5;
-}
-
-.world-quake-meta {
-  font-weight: 500;
-  color: #fed7aa;
-  font-variant-numeric: tabular-nums;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.world-aurora-pill {
-  border-color: rgba(52, 211, 153, 0.5);
-  color: #d1fae5;
-}
-
-.world-aurora-meta {
-  font-weight: 500;
-  color: #6ee7b7;
-  font-variant-numeric: tabular-nums;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.world-storm-pill {
-  border-color: rgba(244, 63, 94, 0.52);
-  color: #ffe4e6;
-}
-
-.world-storm-meta {
-  font-weight: 500;
-  color: #fda4af;
-  font-variant-numeric: tabular-nums;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 .world-map-card {
   position: relative;
   flex: 1;
@@ -3937,9 +3852,11 @@ body,
 
 .world-arc-group,
 .world-city-pin,
+.world-iss-marker,
 .world-quake-pin,
 .world-storm-pin,
-.world-aurora-layer {
+.world-aurora-layer,
+.world-map-popover {
   cursor: pointer;
 }
 
