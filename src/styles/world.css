@@ -188,8 +188,10 @@
   align-items: stretch;
   width: 100%;
   margin-top: 12px;
-  padding: 0 56px 0 26px;
-  padding-right: calc(56px + env(safe-area-inset-right));
+  /* Symmetric gutters: the slide rail sits above this row, so the cards can
+     span the full width instead of reserving the rail's 56px right gutter. */
+  padding: 0 26px;
+  padding-right: calc(26px + env(safe-area-inset-right));
   padding-left: calc(26px + env(safe-area-inset-left));
   flex-shrink: 0;
   transition: opacity 0.2s ease;

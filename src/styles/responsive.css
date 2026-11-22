@@ -34,6 +34,7 @@
 
   .world-fx-row {
     margin-top: 10px;
+    padding-right: calc(24px + env(safe-area-inset-right));
   }
 
   .world-fx-card {
