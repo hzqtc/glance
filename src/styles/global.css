@@ -160,7 +160,7 @@ body,
   color: var(--text-primary);
 }
 
-/* Vertical swipe carousel (Weather <-> Stocks <-> Calendar <-> Photos <-> World) */
+/* Vertical swipe carousel (Weather <-> Stocks <-> Calendar <-> World <-> Photos) */
 .carousel-track {
   display: flex;
   flex-direction: column;
@@ -3255,7 +3255,7 @@ body,
 }
 
 /* ==========================================================================
-   Photos Frame Dashboard (Slide 3: Pure Edge-to-Edge Smart Auto-Collage)
+   Photos Frame Dashboard (Slide 4: Pure Edge-to-Edge Smart Auto-Collage)
    ========================================================================== */
 .photos-slide {
   position: relative;
@@ -3495,7 +3495,7 @@ body,
 }
 
 /* ==========================================================================
-   World Day/Night Map & FX Dashboard (Slide 4)
+   World Day/Night Map & FX Dashboard (Slide 3)
    ========================================================================== */
 .world-slide {
   position: relative;

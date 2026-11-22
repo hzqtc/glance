@@ -39,14 +39,14 @@ interface ResolvedRotationStep {
 }
 
 var DEFAULT_ROTATION_SCHEDULE: ResolvedRotationStep[] = [
-  { slide: 3, seconds: 60 }, // photos
+  { slide: 4, seconds: 60 }, // photos
   { slide: 0, seconds: 15 }, // weather
-  { slide: 3, seconds: 60 }, // photos
+  { slide: 4, seconds: 60 }, // photos
   { slide: 1, seconds: 15 }, // stocks
-  { slide: 3, seconds: 60 }, // photos
+  { slide: 4, seconds: 60 }, // photos
   { slide: 2, seconds: 15 }, // calendar
-  { slide: 3, seconds: 60 }, // photos
-  { slide: 4, seconds: 15 }, // world
+  { slide: 4, seconds: 60 }, // photos
+  { slide: 3, seconds: 15 }, // world
 ];
 
 function slideNameToIndex(name: string): number {
@@ -54,8 +54,8 @@ function slideNameToIndex(name: string): number {
   if (lower === 'weather') return 0;
   if (lower === 'stocks' || lower === 'stock') return 1;
   if (lower === 'calendar') return 2;
-  if (lower === 'photos' || lower === 'photo') return 3;
-  if (lower === 'world' || lower === 'map') return 4;
+  if (lower === 'world' || lower === 'map') return 3;
+  if (lower === 'photos' || lower === 'photo') return 4;
   return -1;
 }
 
@@ -973,9 +973,11 @@ function DashboardShell(props: DashboardShellProps) {
         toHex2(currentSky.top[0]) +
         toHex2(currentSky.top[1]) +
         toHex2(currentSky.top[2])
-      : activeSlide === 3
+      : activeSlide === 4
         ? '#060911'
-        : '#0b1322';
+        : activeSlide === 3
+          ? '#091120'
+          : '#0b1322';
   useEffect(
     function () {
       setThemeColorMeta(topThemeColor);
@@ -1268,21 +1270,10 @@ function DashboardShell(props: DashboardShellProps) {
             onUnauthorized={props.onUnauthorized}
           />
         </section>
-        {/* Slide 3: Photos Frame */}
+        {/* Slide 3: World Day/Night Map & FX */}
         <section class="carousel-slide" aria-hidden={activeSlide !== 3}>
-          <PhotosDashboard
-            isActive={activeSlide === 3}
-            preload={preloadReady}
-            slideIntervalSeconds={photoSlideIntervalSec}
-            isRefreshing={isRefreshing}
-            onRefresh={handleRefresh}
-            onUnauthorized={props.onUnauthorized}
-          />
-        </section>
-        {/* Slide 4: World Day/Night Map & FX */}
-        <section class="carousel-slide" aria-hidden={activeSlide !== 4}>
           <WorldDashboard
-            isActive={activeSlide === 4}
+            isActive={activeSlide === 3}
             preload={preloadReady}
             cities={cities}
             weatherById={weatherById}
@@ -1297,6 +1288,17 @@ function DashboardShell(props: DashboardShellProps) {
             onUnauthorized={props.onUnauthorized}
           />
         </section>
+        {/* Slide 4: Photos Frame */}
+        <section class="carousel-slide" aria-hidden={activeSlide !== 4}>
+          <PhotosDashboard
+            isActive={activeSlide === 4}
+            preload={preloadReady}
+            slideIntervalSeconds={photoSlideIntervalSec}
+            isRefreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            onUnauthorized={props.onUnauthorized}
+          />
+        </section>
       </div>
 
       {/* Vertical side rail dashboard switcher + minimalist auto-rotate countdown pill */}
@@ -1305,7 +1307,7 @@ function DashboardShell(props: DashboardShellProps) {
           class={
             isLightRail
               ? 'carousel-rail carousel-rail-light'
-              : activeSlide === 3
+              : activeSlide === 4
                 ? 'carousel-rail carousel-rail-photos'
                 : 'carousel-rail'
           }
@@ -1441,49 +1443,11 @@ function DashboardShell(props: DashboardShellProps) {
           }}
           title={
             activeSlide === 3 && isRotatePaused
-              ? 'Photos (auto-rotate paused)'
-              : 'Photos dashboard'
-          }
-          aria-label="Photos dashboard"
-          aria-current={activeSlide === 3 ? 'page' : undefined}
-        >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            class="ctrl-svg"
-            aria-hidden="true"
-          >
-            <rect x="3" y="4" width="18" height="16" rx="2.5" />
-            <circle cx="8.5" cy="9.5" r="1.5" />
-            <path d="M21 15.5l-5-5L5 20" />
-          </svg>
-        </button>
-
-        <button
-          type="button"
-          class={
-            activeSlide === 4
-              ? isRotatePaused
-                ? 'rail-btn rail-btn-active rail-btn-paused'
-                : 'rail-btn rail-btn-active'
-              : 'rail-btn'
-          }
-          onClick={function () {
-            handleManualSlideSelect(4);
-          }}
-          title={
-            activeSlide === 4 && isRotatePaused
               ? 'World Map (auto-rotate paused)'
               : 'World Map dashboard'
           }
           aria-label="World Map dashboard"
-          aria-current={activeSlide === 4 ? 'page' : undefined}
+          aria-current={activeSlide === 3 ? 'page' : undefined}
         >
           <svg
             width="14"
@@ -1503,13 +1467,51 @@ function DashboardShell(props: DashboardShellProps) {
             <path d="M12 2.5a14 14 0 0 0 0 19" />
           </svg>
         </button>
+
+        <button
+          type="button"
+          class={
+            activeSlide === 4
+              ? isRotatePaused
+                ? 'rail-btn rail-btn-active rail-btn-paused'
+                : 'rail-btn rail-btn-active'
+              : 'rail-btn'
+          }
+          onClick={function () {
+            handleManualSlideSelect(4);
+          }}
+          title={
+            activeSlide === 4 && isRotatePaused
+              ? 'Photos (auto-rotate paused)'
+              : 'Photos dashboard'
+          }
+          aria-label="Photos dashboard"
+          aria-current={activeSlide === 4 ? 'page' : undefined}
+        >
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="ctrl-svg"
+            aria-hidden="true"
+          >
+            <rect x="3" y="4" width="18" height="16" rx="2.5" />
+            <circle cx="8.5" cy="9.5" r="1.5" />
+            <path d="M21 15.5l-5-5L5 20" />
+          </svg>
+        </button>
         </nav>
 
         <RotateCountdown
           targetMs={rotateTargetMs}
           visible={autoRotate && !isRotatePaused}
           light={isLightRail}
-          photos={activeSlide === 3}
+          photos={activeSlide === 4}
         />
       </div>
 
