@@ -41,6 +41,10 @@ type CarouselConfig struct {
 	Schedule           []CarouselScheduleStep `json:"schedule,omitempty"`
 }
 
+type PhotosConfig struct {
+	SlideIntervalSeconds int `json:"slideIntervalSeconds"`
+}
+
 type CityConfig struct {
 	ID       string  `json:"id"`
 	Name     string  `json:"name"`
@@ -85,6 +89,7 @@ type DashboardConfig struct {
 	NightMode  NightModeConfig `json:"nightMode"`
 	Refresh    RefreshConfig   `json:"refresh"`
 	Carousel   CarouselConfig  `json:"carousel"`
+	Photos     PhotosConfig    `json:"photos"`
 	Cities     []CityConfig    `json:"cities"`
 	Stocks     StocksConfig    `json:"stocks"`
 	Widgets    WidgetsConfig   `json:"widgets"`
@@ -129,6 +134,9 @@ func ParseAndNormalizeConfig(raw []byte) (DashboardConfig, error) {
 		cfg.Carousel.ManualPauseSeconds = 300
 	}
 	cfg.Carousel.Schedule = normalizeCarouselSchedule(cfg.Carousel.Schedule, cfg.Carousel.IntervalSeconds)
+	if cfg.Photos.SlideIntervalSeconds < 3 {
+		cfg.Photos.SlideIntervalSeconds = 15
+	}
 	if cfg.NightMode.DimOpacity <= 0 || cfg.NightMode.DimOpacity > 0.9 {
 		cfg.NightMode.DimOpacity = 0.55
 	}
@@ -167,11 +175,11 @@ func normalizeCarouselSchedule(raw []CarouselScheduleStep, fallbackSeconds int) 
 	}
 	if len(normalized) == 0 {
 		return []CarouselScheduleStep{
-			{Slide: "photos", Seconds: 30},
+			{Slide: "photos", Seconds: 60},
 			{Slide: "weather", Seconds: 15},
-			{Slide: "photos", Seconds: 30},
+			{Slide: "photos", Seconds: 60},
 			{Slide: "stocks", Seconds: 15},
-			{Slide: "photos", Seconds: 30},
+			{Slide: "photos", Seconds: 60},
 			{Slide: "calendar", Seconds: 15},
 		}
 	}

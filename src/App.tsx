@@ -37,11 +37,11 @@ interface ResolvedRotationStep {
 }
 
 var DEFAULT_ROTATION_SCHEDULE: ResolvedRotationStep[] = [
-  { slide: 3, seconds: 30 }, // photos
+  { slide: 3, seconds: 60 }, // photos
   { slide: 0, seconds: 15 }, // weather
-  { slide: 3, seconds: 30 }, // photos
+  { slide: 3, seconds: 60 }, // photos
   { slide: 1, seconds: 15 }, // stocks
-  { slide: 3, seconds: 30 }, // photos
+  { slide: 3, seconds: 60 }, // photos
   { slide: 2, seconds: 15 }, // calendar
 ];
 
@@ -687,6 +687,14 @@ function DashboardShell(props: DashboardShellProps) {
       : 300;
   manualPauseSecRef.current = manualPauseSec;
 
+  var photoSlideIntervalSec =
+    data &&
+    data.config &&
+    data.config.photos &&
+    data.config.photos.slideIntervalSeconds >= 3
+      ? data.config.photos.slideIntervalSeconds
+      : 15;
+
   var rotationSchedule = resolveRotationSchedule(
     carouselCfg ? carouselCfg.schedule : undefined,
     rotateIntervalSec
@@ -1182,6 +1190,7 @@ function DashboardShell(props: DashboardShellProps) {
           <PhotosDashboard
             isActive={activeSlide === 3}
             preload={preloadReady}
+            slideIntervalSeconds={photoSlideIntervalSec}
             isRefreshing={isRefreshing}
             onRefresh={handleRefresh}
             onUnauthorized={props.onUnauthorized}

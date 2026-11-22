@@ -3,13 +3,14 @@ import type { PhotoItem, PhotosResponse } from '../types';
 import { buildCollageDeck } from '../utils/collage';
 import type { CollageFrame } from '../utils/collage';
 
-var PHOTO_INTERVAL_MS = 15000;
+var DEFAULT_PHOTO_INTERVAL_SEC = 15;
 var PHOTO_REFRESH_MS = 30 * 60 * 1000;
 var CROSSFADE_MS = 850;
 
 interface PhotosDashboardProps {
   isActive: boolean;
   preload?: boolean;
+  slideIntervalSeconds?: number;
   isRefreshing: boolean;
   onRefresh: () => void;
   onUnauthorized?: () => void;
@@ -444,7 +445,12 @@ export function PhotosDashboard(props: PhotosDashboardProps) {
     [props.isActive]
   );
 
-  // Shuffle & advance to the next collage every 15 seconds while Photos slide is active
+  var photoIntervalMs =
+    typeof props.slideIntervalSeconds === 'number' && props.slideIntervalSeconds >= 3
+      ? props.slideIntervalSeconds * 1000
+      : DEFAULT_PHOTO_INTERVAL_SEC * 1000;
+
+  // Shuffle & advance to the next collage on the configured interval while Photos slide is active
   useEffect(
     function () {
       if (!props.isActive || deck.length <= 1) {
@@ -455,13 +461,13 @@ export function PhotosDashboard(props: PhotosDashboardProps) {
 
       var timerId = window.setTimeout(function () {
         stepFrame(1, false);
-      }, PHOTO_INTERVAL_MS);
+      }, photoIntervalMs);
 
       return function () {
         window.clearTimeout(timerId);
       };
     },
-    [props.isActive, deck, frameIdx, timerResetTick]
+    [props.isActive, deck, frameIdx, timerResetTick, photoIntervalMs]
   );
 
   // Clean up crossfade timer on unmount

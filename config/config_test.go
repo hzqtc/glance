@@ -14,11 +14,11 @@ func TestParseAndNormalizeCarouselSchedule(t *testing.T) {
 	}
 
 	want := []CarouselScheduleStep{
-		{Slide: "photos", Seconds: 30},
+		{Slide: "photos", Seconds: 60},
 		{Slide: "weather", Seconds: 15},
-		{Slide: "photos", Seconds: 30},
+		{Slide: "photos", Seconds: 60},
 		{Slide: "stocks", Seconds: 15},
-		{Slide: "photos", Seconds: 30},
+		{Slide: "photos", Seconds: 60},
 		{Slide: "calendar", Seconds: 15},
 	}
 	if len(cfg.Carousel.Schedule) != len(want) {
@@ -28,6 +28,9 @@ func TestParseAndNormalizeCarouselSchedule(t *testing.T) {
 		if cfg.Carousel.Schedule[i] != want[i] {
 			t.Fatalf("step %d: got %+v, want %+v", i, cfg.Carousel.Schedule[i], want[i])
 		}
+	}
+	if cfg.Photos.SlideIntervalSeconds != 15 {
+		t.Fatalf("expected default photos slideIntervalSeconds 15, got %d", cfg.Photos.SlideIntervalSeconds)
 	}
 
 	// Aliases ("photo", "stock"), custom durations, and invalid slide filtering
@@ -43,6 +46,9 @@ func TestParseAndNormalizeCarouselSchedule(t *testing.T) {
 				{"slide": "unknown", "seconds": 10},
 				{"slide": "weather", "seconds": 2}
 			]
+		},
+		"photos": {
+			"slideIntervalSeconds": 25
 		}
 	}`)
 	customCfg, err := ParseAndNormalizeConfig(customJSON)
@@ -61,5 +67,8 @@ func TestParseAndNormalizeCarouselSchedule(t *testing.T) {
 		if customCfg.Carousel.Schedule[i] != wantCustom[i] {
 			t.Fatalf("custom step %d: got %+v, want %+v", i, customCfg.Carousel.Schedule[i], wantCustom[i])
 		}
+	}
+	if customCfg.Photos.SlideIntervalSeconds != 25 {
+		t.Fatalf("expected custom photos slideIntervalSeconds 25, got %d", customCfg.Photos.SlideIntervalSeconds)
 	}
 }

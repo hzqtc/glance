@@ -35,6 +35,10 @@ export interface CarouselConfig {
   schedule?: CarouselScheduleStep[];
 }
 
+export interface PhotosConfig {
+  slideIntervalSeconds: number;
+}
+
 export interface CityConfig {
   id: string;
   name: string;
@@ -79,6 +83,7 @@ export interface DashboardConfig {
   nightMode: NightModeConfig;
   refresh: RefreshConfig;
   carousel?: CarouselConfig;
+  photos?: PhotosConfig;
   cities: CityConfig[];
   stocks?: StocksConfig;
   widgets: WidgetsConfig;
