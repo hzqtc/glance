@@ -161,19 +161,19 @@ body,
   color: var(--text-primary);
 }
 
-/* Vertical swipe carousel (Weather <-> Stocks <-> Calendar) */
+/* Vertical swipe carousel (Weather <-> Stocks <-> Calendar <-> Photos) */
 .carousel-track {
   display: flex;
   flex-direction: column;
   width: 100%;
-  height: 300%;
+  height: 400%;
   transition: transform 0.38s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .carousel-slide {
   position: relative;
   width: 100%;
-  height: 33.333333%;
+  height: 25%;
   overflow: hidden;
   flex-shrink: 0;
 }
@@ -210,6 +210,17 @@ body,
 .carousel-rail-light {
   background-color: rgba(255, 255, 255, 0.28);
   color: rgba(20, 38, 68, 0.8);
+}
+
+.carousel-rail-photos {
+  background-color: rgba(6, 9, 17, 0.42);
+  color: rgba(255, 255, 255, 0.84);
+  opacity: 0.45;
+}
+
+.carousel-rail-photos:hover,
+.carousel-rail-photos:active {
+  opacity: 0.95;
 }
 
 .rail-btn {
@@ -3205,6 +3216,230 @@ body,
   color: #fde68a;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12px;
+}
+
+/* ==========================================================================
+   Photos Frame Dashboard (Slide 3: Pure Edge-to-Edge Smart Auto-Collage)
+   ========================================================================== */
+.photos-slide {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background-color: #060911;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.photos-stage {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: #060911;
+}
+
+.photos-frame {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: #060911;
+}
+
+.photos-frame-out {
+  z-index: 1;
+}
+
+.photos-frame-in {
+  z-index: 2;
+  animation: photosCrossfadeIn 0.85s ease both;
+}
+
+@keyframes photosCrossfadeIn {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+.collage-single {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.collage-single-portrait {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #060911;
+}
+
+.collage-bg-blur {
+  position: absolute;
+  top: -12%;
+  right: -12%;
+  bottom: -12%;
+  left: -12%;
+  width: 124%;
+  height: 124%;
+  object-fit: cover;
+  filter: blur(28px) brightness(0.45);
+  -webkit-filter: blur(28px) brightness(0.45);
+  transform: scale(1.08);
+  pointer-events: none;
+}
+
+.collage-img-contain {
+  position: relative;
+  z-index: 1;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.collage-row {
+  display: flex;
+  flex-direction: row;
+  width: 100%;
+  height: 100%;
+  background-color: #060911;
+}
+
+.collage-tile {
+  position: relative;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background-color: #0a101d;
+  margin-right: 4px;
+}
+
+.collage-tile-last {
+  margin-right: 0;
+}
+
+.collage-tile-half {
+  flex: 1;
+}
+
+.collage-tile-third {
+  flex: 1;
+}
+
+.collage-bento-hero {
+  flex: 44;
+}
+
+.collage-bento-stack {
+  flex: 56;
+  height: 100%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.collage-bento-stack-left {
+  margin-right: 4px;
+}
+
+.collage-bento-cell {
+  flex: 1;
+  width: 100%;
+  height: auto;
+  margin-right: 0;
+  margin-bottom: 4px;
+}
+
+.collage-bento-cell-last {
+  margin-bottom: 0;
+}
+
+.collage-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.photos-empty-wrap {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 64px 24px 24px;
+  background: radial-gradient(circle at 50% 42%, #132240 0%, #070d1a 72%);
+  cursor: default;
+}
+
+.photos-empty-card {
+  width: 100%;
+  max-width: 440px;
+  padding: 28px 30px;
+  border-radius: 22px;
+  background-color: rgba(20, 34, 62, 0.62);
+  border: 1px solid rgba(196, 220, 255, 0.14);
+  text-align: center;
+  color: var(--text-primary);
+}
+
+.photos-empty-icon {
+  color: #7dd3fc;
+  margin-bottom: 12px;
+}
+
+.photos-empty-title {
+  font-size: 20px;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.photos-empty-sub {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.photos-retry-btn {
+  margin-top: 16px;
+  height: 32px;
+  padding: 0 18px;
+  border: none;
+  border-radius: 999px;
+  background-color: rgba(56, 189, 248, 0.2);
+  color: #bae6fd;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  outline: none;
+  -webkit-appearance: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.photos-retry-btn:active {
+  background-color: rgba(56, 189, 248, 0.32);
 }
 
 /* Targeted vertical fit tuning for iPad mini 6 (1133x744 + Home Indicator) without affecting iPad mini 2 (1024x768) */

@@ -21,13 +21,14 @@ import { InsightsBand } from './components/InsightsBand';
 import { CityCard } from './components/CityCard';
 import { STOCKS_STORAGE_KEY, StocksDashboard } from './components/StocksDashboard';
 import { CalendarDashboard } from './components/CalendarDashboard';
+import { PhotosDashboard } from './components/PhotosDashboard';
 import { PasscodeGate } from './components/PasscodeGate';
 
 var WEATHER_STORAGE_KEY = 'glance:lastDashboard:v1';
 var ANIM_STORAGE_KEY = 'glance:animEnabled:v1';
 var STOCK_METRIC_STORAGE_KEY = 'glance:stockCardMetric:v1';
 var ACTIVE_SLIDE_STORAGE_KEY = 'glance:activeSlide:v1';
-var TOTAL_SLIDES = 3;
+var TOTAL_SLIDES = 4;
 
 interface DemoOverride {
   weatherKind?: WeatherKind;
@@ -753,7 +754,9 @@ function DashboardShell(props: DashboardShellProps) {
         toHex2(currentSky.top[0]) +
         toHex2(currentSky.top[1]) +
         toHex2(currentSky.top[2])
-      : '#0b1322';
+      : activeSlide === 3
+        ? '#060911'
+        : '#0b1322';
   useEffect(
     function () {
       setThemeColorMeta(topThemeColor);
@@ -1039,11 +1042,27 @@ function DashboardShell(props: DashboardShellProps) {
             onUnauthorized={props.onUnauthorized}
           />
         </section>
+        {/* Slide 3: Photos Frame */}
+        <section class="carousel-slide" aria-hidden={activeSlide !== 3}>
+          <PhotosDashboard
+            isActive={activeSlide === 3}
+            preload={preloadReady}
+            isRefreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            onUnauthorized={props.onUnauthorized}
+          />
+        </section>
       </div>
 
       {/* Vertical side rail dashboard switcher (matches top-controls pill aesthetic) */}
       <nav
-        class={isLightRail ? 'carousel-rail carousel-rail-light' : 'carousel-rail'}
+        class={
+          isLightRail
+            ? 'carousel-rail carousel-rail-light'
+            : activeSlide === 3
+              ? 'carousel-rail carousel-rail-photos'
+              : 'carousel-rail'
+        }
         aria-label="Switch dashboard"
       >
         <button
@@ -1163,6 +1182,46 @@ function DashboardShell(props: DashboardShellProps) {
             <line x1="16" y1="2" x2="16" y2="6" />
             <line x1="8" y1="2" x2="8" y2="6" />
             <line x1="3" y1="10" x2="21" y2="10" />
+          </svg>
+        </button>
+
+        <span class="rail-sep" aria-hidden="true" />
+
+        <button
+          type="button"
+          class={
+            activeSlide === 3
+              ? isRotatePaused
+                ? 'rail-btn rail-btn-active rail-btn-paused'
+                : 'rail-btn rail-btn-active'
+              : 'rail-btn'
+          }
+          onClick={function () {
+            handleManualSlideSelect(3);
+          }}
+          title={
+            activeSlide === 3 && isRotatePaused
+              ? 'Photos (auto-rotate paused)'
+              : 'Photos dashboard'
+          }
+          aria-label="Photos dashboard"
+          aria-current={activeSlide === 3 ? 'page' : undefined}
+        >
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="ctrl-svg"
+            aria-hidden="true"
+          >
+            <rect x="3" y="4" width="18" height="16" rx="2.5" />
+            <circle cx="8.5" cy="9.5" r="1.5" />
+            <path d="M21 15.5l-5-5L5 20" />
           </svg>
         </button>
       </nav>

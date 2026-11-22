@@ -239,6 +239,24 @@ export interface CalendarResponse {
   warnings?: string[];
 }
 
+export interface PhotoItem {
+  id: string;
+  fullUrl: string;
+  tileUrl: string;
+  width: number;
+  height: number;
+  aspect: number;
+}
+
+export interface PhotosResponse {
+  fetchedAt: string;
+  configured: boolean;
+  albumCount: number;
+  photoCount: number;
+  photos: PhotoItem[];
+  warnings?: string[];
+}
+
 export type WeatherKind =
   | 'clear'
   | 'partly-cloudy'

@@ -43,6 +43,7 @@ func TestAuthHandlerFlowAndProtectedEndpoints(t *testing.T) {
 		{"/api/weather", WeatherHandler},
 		{"/api/stocks", StocksHandler},
 		{"/api/calendar", CalendarHandler},
+		{"/api/photos", PhotosHandler},
 	} {
 		r := httptest.NewRequest(http.MethodGet, tc.path, nil)
 		w := httptest.NewRecorder()

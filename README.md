@@ -5,8 +5,8 @@ An ambient personal wall dashboard PWA designed for an **iPad mini 2 (iOS 12.5.7
 ## Features
 
 - **One-Time 4-Digit PIN Gate:**
-  - Protected server-side via `GLANCE_PASSCODE` (stored in Vercel Environment Variables; never committed to Git or sent to the client). Issues a 1-year HMAC-SHA256 signed `HttpOnly` cookie on unlock and blocks `/api/weather`, `/api/stocks`, and `/api/calendar` until verified. Local dev allows open access when `GLANCE_PASSCODE` is unset, while Vercel fails closed if unset.
-- **Vertical Auto-Rotating Carousel (Weather ↕ Stocks ↕ Calendar):**
+  - Protected server-side via `GLANCE_PASSCODE` (stored in Vercel Environment Variables; never committed to Git or sent to the client). Issues a 1-year HMAC-SHA256 signed `HttpOnly` cookie on unlock and blocks `/api/weather`, `/api/stocks`, `/api/calendar`, and `/api/photos` until verified. Local dev allows open access when `GLANCE_PASSCODE` is unset, while Vercel fails closed if unset.
+- **Vertical Auto-Rotating Carousel (Weather ↕ Stocks ↕ Calendar ↕ Photos):**
   - Auto-cycles across dashboards every 30s (`carousel.intervalSeconds`), automatically pausing for 5 minutes (`carousel.manualPauseSeconds`) whenever you manually swipe up/down, tap the right-side icon rail, or press `↑`/`↓`.
 - **Weather Dashboard (Slide 1):**
   - **Atmospheric Sky & Real Moon Phase:** Solar-elevation-driven sky canvas (dawn, day, sunset, twilight, night) paired with a crisp Retina vector SVG Moon showing tonight's actual astronomical phase, drifting clouds, twinkling stars, shooting stars, wind ribbons, rain, snow, fog, and storm flashes (celestial bodies hide automatically during overcast/precipitation).
@@ -19,8 +19,10 @@ An ambient personal wall dashboard PWA designed for an **iPad mini 2 (iOS 12.5.7
   - **4×5 Watchlist Grid:** 20 tappable cards (**S&P 500**, **NASDAQ**, **10Y Bond**, **NVDA**, **AAPL** / **MSFT**, **GOOGL**, **AMZN**, **META**, **TSLA** / **ANT**, **TSM**, **AMD**, **NFLX**, **BTC** / **Gold**, **Oil**, **Silver**, **SPCX**, **Dow**) with vector logos, live quotes, percent change pills, and mini intraday sparklines.
   - **Smart Market-Hours Polling:** Refreshes every 2 minutes during US market hours and every 15 minutes after-hours/weekends.
 - **Calendar Dashboard (Slide 3):**
-  - **Side-by-Side Month & Selected Day View:** Monday–Sunday month grid with Chinese lunar dates (1900–2100), built-in US Holidays, month/year navigation (`«`, `‹`, `Today`, `›`, `»`), and a scrollable agenda for the selected day with live `"NOW"` and next-event countdown badges.
+  - **Side-by-Side Month & Selected Day View:** Monday–Sunday month grid (swipe left/right for prev/next month) with Chinese lunar dates (1900–2100), built-in US Holidays, month/year navigation (`«`, `‹`, `Today`, `›`, `»`), next-trip countdown pill, and a scrollable agenda for the selected day with live `"NOW"` badges.
   - **Private `.ics` Sync (Zero Secrets in Git):** Reads `CALENDAR_ICS_URLS` from Vercel Environment Variables (or gitignored `.env.local` locally) — supports single URLs, comma/newline-separated URLs, `webcal://` iCloud URLs, or color-coded JSON arrays (`[{"name":"Personal","color":"#38bdf8","url":"https://..."}]`), served with `Cache-Control: private, no-store`.
+- **Photos Frame (Slide 4):**
+  - **Pure Edge-to-Edge Smart Auto-Collage:** Reads one or more Google Photos link-shared album URLs from `PHOTOS_ALBUM_URL` / `PHOTOS_ALBUM_URLS` (stored in Vercel Environment Variables or gitignored `.env.local`). Automatically composes aspect-ratio-aware full-screen layouts (1 landscape hero, 2–3 side-by-side portraits, or 1 portrait + 2 stacked landscape bento grids), shuffles & crossfades every 15s, and supports tap or left/right swipe to jump between collages.
 - **Minimalist Top-Center Controls:**
   - **Motion / Static icon toggle:** Switch between animated sky and 0-FPS static sky (saved per-device in `localStorage` so older iPad mini 2 hardware stays cool 24/7 while newer devices stay animated).
   - **°F / °C toggle:** Instant temperature & wind unit switching.
