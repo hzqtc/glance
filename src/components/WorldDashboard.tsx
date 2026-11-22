@@ -35,6 +35,51 @@ import { formatStockPct } from '../utils/stocks';
 
 export var WORLD_STORAGE_KEY = 'glance:lastWorld:v1';
 var WORLD_HOME_LON_KEY = 'glance:homeLon:v1';
+var WORLD_LAYERS_KEY = 'glance:worldLayers:v1';
+
+interface WorldLayerPrefs {
+  arcs: boolean;
+  celestial: boolean;
+  iss: boolean;
+  quakes: boolean;
+  aurora: boolean;
+  storms: boolean;
+}
+
+// Map layer toggles saved per device; any missing or invalid field defaults to visible.
+function readStoredWorldLayers(): WorldLayerPrefs {
+  var prefs: WorldLayerPrefs = {
+    arcs: true,
+    celestial: true,
+    iss: true,
+    quakes: true,
+    aurora: true,
+    storms: true,
+  };
+  try {
+    var raw = window.localStorage.getItem(WORLD_LAYERS_KEY);
+    if (raw) {
+      var parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        var keys: (keyof WorldLayerPrefs)[] = ['arcs', 'celestial', 'iss', 'quakes', 'aurora', 'storms'];
+        for (var i = 0; i < keys.length; i++) {
+          if (typeof parsed[keys[i]] === 'boolean') prefs[keys[i]] = parsed[keys[i]];
+        }
+      }
+    }
+  } catch (_err) {
+    // Ignore storage errors
+  }
+  return prefs;
+}
+
+function writeStoredWorldLayers(prefs: WorldLayerPrefs): void {
+  try {
+    window.localStorage.setItem(WORLD_LAYERS_KEY, JSON.stringify(prefs));
+  } catch (_err) {
+    // Ignore storage errors
+  }
+}
 
 var MAP_W = 1000;
 var MAP_H = 500;
@@ -255,29 +300,58 @@ export function WorldDashboard(props: WorldDashboardProps) {
   var selectedStormId = _selectedStormState[0];
   var setSelectedStormId = _selectedStormState[1];
 
-  var _showArcsState = useState<boolean>(true);
+  // Read saved layer toggles once on mount
+  var storedLayers = useState<WorldLayerPrefs>(readStoredWorldLayers)[0];
+
+  var _showArcsState = useState<boolean>(function () {
+    return storedLayers.arcs;
+  });
   var showArcs = _showArcsState[0];
   var setShowArcs = _showArcsState[1];
 
-  var _showCelestialState = useState<boolean>(true);
+  var _showCelestialState = useState<boolean>(function () {
+    return storedLayers.celestial;
+  });
   var showCelestial = _showCelestialState[0];
   var setShowCelestial = _showCelestialState[1];
 
-  var _showISSState = useState<boolean>(true);
+  var _showISSState = useState<boolean>(function () {
+    return storedLayers.iss;
+  });
   var showISS = _showISSState[0];
   var setShowISS = _showISSState[1];
 
-  var _showQuakesState = useState<boolean>(true);
+  var _showQuakesState = useState<boolean>(function () {
+    return storedLayers.quakes;
+  });
   var showQuakes = _showQuakesState[0];
   var setShowQuakes = _showQuakesState[1];
 
-  var _showAuroraState = useState<boolean>(true);
+  var _showAuroraState = useState<boolean>(function () {
+    return storedLayers.aurora;
+  });
   var showAurora = _showAuroraState[0];
   var setShowAurora = _showAuroraState[1];
 
-  var _showStormsState = useState<boolean>(true);
+  var _showStormsState = useState<boolean>(function () {
+    return storedLayers.storms;
+  });
   var showStorms = _showStormsState[0];
   var setShowStorms = _showStormsState[1];
+
+  useEffect(
+    function () {
+      writeStoredWorldLayers({
+        arcs: showArcs,
+        celestial: showCelestial,
+        iss: showISS,
+        quakes: showQuakes,
+        aurora: showAurora,
+        storms: showStorms,
+      });
+    },
+    [showArcs, showCelestial, showISS, showQuakes, showAurora, showStorms]
+  );
 
   var _issNowState = useState<number>(function () {
     return Date.now();

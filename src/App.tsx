@@ -32,6 +32,7 @@ var WEATHER_STORAGE_KEY = 'glance:lastDashboard:v1';
 var ANIM_STORAGE_KEY = 'glance:animEnabled:v1';
 var STOCK_METRIC_STORAGE_KEY = 'glance:stockCardMetric:v1';
 var ACTIVE_SLIDE_STORAGE_KEY = 'glance:activeSlide:v1';
+var UNITS_STORAGE_KEY = 'glance:units:v1';
 var TOTAL_SLIDES = 5;
 
 interface ResolvedRotationStep {
@@ -203,6 +204,24 @@ function readStoredStockMetric(): StockCardMetric {
 function writeStoredStockMetric(metric: StockCardMetric): void {
   try {
     window.localStorage.setItem(STOCK_METRIC_STORAGE_KEY, metric);
+  } catch (_err) {
+    // Ignore storage errors
+  }
+}
+
+function readStoredUnits(): TempUnit | null {
+  try {
+    var saved = window.localStorage.getItem(UNITS_STORAGE_KEY);
+    if (saved === 'F' || saved === 'C') return saved;
+  } catch (_err) {
+    // Ignore storage errors
+  }
+  return null;
+}
+
+function writeStoredUnits(unit: TempUnit): void {
+  try {
+    window.localStorage.setItem(UNITS_STORAGE_KEY, unit);
   } catch (_err) {
     // Ignore storage errors
   }
@@ -419,7 +438,10 @@ function DashboardShell(props: DashboardShellProps) {
   var selectedCityId = _selectedState[0];
   var setSelectedCityId = _selectedState[1];
 
-  var _unitOverrideState = useState<TempUnit | null>(null);
+  // Explicit °F/°C choice saved per device; null follows config.units
+  var _unitOverrideState = useState<TempUnit | null>(function () {
+    return readStoredUnits();
+  });
   var unitOverride = _unitOverrideState[0];
   var setUnitOverride = _unitOverrideState[1];
 
@@ -1007,7 +1029,8 @@ function DashboardShell(props: DashboardShellProps) {
 
   function handleToggleUnits() {
     var nextUnit: TempUnit = units === 'F' ? 'C' : 'F';
-    setUnitOverride(nextUnit === configUnits ? null : nextUnit);
+    setUnitOverride(nextUnit);
+    writeStoredUnits(nextUnit);
   }
 
   function handleRefresh() {
