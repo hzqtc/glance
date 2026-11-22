@@ -6,6 +6,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -41,11 +42,22 @@ type ISSOrbit struct {
 	FetchedAt           string  `json:"fetchedAt"`
 }
 
+type EarthquakeEvent struct {
+	ID      string  `json:"id"`
+	Mag     float64 `json:"mag"`
+	Place   string  `json:"place"`
+	TimeMs  int64   `json:"timeMs"`
+	Lat     float64 `json:"lat"`
+	Lon     float64 `json:"lon"`
+	DepthKm float64 `json:"depthKm"`
+}
+
 type WorldResponse struct {
-	Version   string    `json:"version"`
-	FetchedAt string    `json:"fetchedAt"`
-	FX        []FXQuote `json:"fx"`
-	ISS       *ISSOrbit `json:"iss,omitempty"`
+	Version   string            `json:"version"`
+	FetchedAt string            `json:"fetchedAt"`
+	FX        []FXQuote         `json:"fx"`
+	ISS       *ISSOrbit         `json:"iss,omitempty"`
+	Quakes    []EarthquakeEvent `json:"quakes,omitempty"`
 }
 
 type fxCacheEntry struct {
@@ -59,6 +71,11 @@ type issCacheEntry struct {
 	fetchedAt time.Time
 }
 
+type quakesCacheEntry struct {
+	events    []EarthquakeEvent
+	fetchedAt time.Time
+}
+
 var (
 	fxCacheMu sync.Mutex
 	fxCache   fxCacheEntry
@@ -66,14 +83,20 @@ var (
 	issCacheMu    sync.Mutex
 	issCache      issCacheEntry
 	issHTTPClient = &http.Client{Timeout: 8 * time.Second}
+
+	quakesCacheMu    sync.Mutex
+	quakesCache      quakesCacheEntry
+	quakesHTTPClient = &http.Client{Timeout: 8 * time.Second}
 )
 
 const (
-	fxCacheTTL  = 5 * time.Minute
-	issCacheTTL = 3 * time.Hour
+	fxCacheTTL     = 5 * time.Minute
+	issCacheTTL    = 3 * time.Hour
+	quakesCacheTTL = 10 * time.Minute
 
-	whereTheISSTLEURL = "https://api.wheretheiss.at/v1/satellites/25544/tles"
+	whereTheISSTLEURL  = "https://api.wheretheiss.at/v1/satellites/25544/tles"
 	celestrakISSTLEURL = "https://celestrak.org/NORAD/elements/gp.php?CATNR=25544&FORMAT=TLE"
+	usgsQuakesURL      = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_day.geojson"
 )
 
 // WorldHandler serves GET /api/world on Vercel (and locally via cmd/devserver).
@@ -97,9 +120,10 @@ func WorldHandler(w http.ResponseWriter, r *http.Request) {
 	var (
 		fxQuotes []FXQuote
 		issOrbit *ISSOrbit
+		quakes   []EarthquakeEvent
 		wg       sync.WaitGroup
 	)
-	wg.Add(2)
+	wg.Add(3)
 	go func() {
 		defer wg.Done()
 		fxQuotes = fetchFXQuotesCached(cfg.World.FXPairs, forceRefresh)
@@ -108,6 +132,10 @@ func WorldHandler(w http.ResponseWriter, r *http.Request) {
 		defer wg.Done()
 		issOrbit = fetchISSOrbitCached(forceRefresh)
 	}()
+	go func() {
+		defer wg.Done()
+		quakes = fetchQuakesCached(forceRefresh)
+	}()
 	wg.Wait()
 
 	resp := WorldResponse{
@@ -115,6 +143,7 @@ func WorldHandler(w http.ResponseWriter, r *http.Request) {
 		FetchedAt: time.Now().UTC().Format(time.RFC3339),
 		FX:        fxQuotes,
 		ISS:       issOrbit,
+		Quakes:    quakes,
 	}
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -415,6 +444,122 @@ func parseISSTLE(name, line1, line2 string) (*ISSOrbit, error) {
 		MeanMotionDot:       ndot,
 		FetchedAt:           time.Now().UTC().Format(time.RFC3339),
 	}, nil
+}
+
+type usgsGeoJSON struct {
+	Features []struct {
+		ID         string `json:"id"`
+		Properties struct {
+			Mag   *float64 `json:"mag"`
+			Place string   `json:"place"`
+			Time  int64    `json:"time"`
+		} `json:"properties"`
+		Geometry struct {
+			Coordinates []float64 `json:"coordinates"`
+		} `json:"geometry"`
+	} `json:"features"`
+}
+
+func fetchQuakesCached(forceRefresh bool) []EarthquakeEvent {
+	if !forceRefresh {
+		quakesCacheMu.Lock()
+		if !quakesCache.fetchedAt.IsZero() && time.Since(quakesCache.fetchedAt) < quakesCacheTTL {
+			out := make([]EarthquakeEvent, len(quakesCache.events))
+			copy(out, quakesCache.events)
+			quakesCacheMu.Unlock()
+			return out
+		}
+		quakesCacheMu.Unlock()
+	}
+
+	events, err := fetchUSGSQuakes()
+	if err == nil {
+		quakesCacheMu.Lock()
+		stored := make([]EarthquakeEvent, len(events))
+		copy(stored, events)
+		quakesCache = quakesCacheEntry{
+			events:    stored,
+			fetchedAt: time.Now(),
+		}
+		quakesCacheMu.Unlock()
+		return events
+	}
+
+	quakesCacheMu.Lock()
+	if !quakesCache.fetchedAt.IsZero() {
+		stale := make([]EarthquakeEvent, len(quakesCache.events))
+		copy(stale, quakesCache.events)
+		quakesCacheMu.Unlock()
+		return stale
+	}
+	quakesCacheMu.Unlock()
+	return nil
+}
+
+func fetchUSGSQuakes() ([]EarthquakeEvent, error) {
+	req, err := http.NewRequest(http.MethodGet, usgsQuakesURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", "GlanceDashboard/1.0")
+
+	resp, err := quakesHTTPClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("usgs HTTP %d", resp.StatusCode)
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 512*1024))
+	if err != nil {
+		return nil, err
+	}
+
+	var raw usgsGeoJSON
+	if err := json.Unmarshal(body, &raw); err != nil {
+		return nil, err
+	}
+
+	out := make([]EarthquakeEvent, 0, len(raw.Features))
+	for _, f := range raw.Features {
+		if f.Properties.Mag == nil || len(f.Geometry.Coordinates) < 2 {
+			continue
+		}
+		mag := *f.Properties.Mag
+		if math.IsNaN(mag) || mag < 4.5 {
+			continue
+		}
+		lon := f.Geometry.Coordinates[0]
+		lat := f.Geometry.Coordinates[1]
+		if math.IsNaN(lat) || math.IsNaN(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180 {
+			continue
+		}
+		depthKm := 0.0
+		if len(f.Geometry.Coordinates) >= 3 && !math.IsNaN(f.Geometry.Coordinates[2]) {
+			depthKm = math.Max(0, f.Geometry.Coordinates[2])
+		}
+		out = append(out, EarthquakeEvent{
+			ID:      f.ID,
+			Mag:     math.Round(mag*10) / 10,
+			Place:   strings.TrimSpace(f.Properties.Place),
+			TimeMs:  f.Properties.Time,
+			Lat:     math.Round(lat*1000) / 1000,
+			Lon:     math.Round(lon*1000) / 1000,
+			DepthKm: math.Round(depthKm*10) / 10,
+		})
+	}
+
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Mag != out[j].Mag {
+			return out[i].Mag > out[j].Mag
+		}
+		return out[i].TimeMs > out[j].TimeMs
+	})
+	if len(out) > 40 {
+		out = out[:40]
+	}
+	return out, nil
 }
 
 func writeWorldError(w http.ResponseWriter, status int, message string) {

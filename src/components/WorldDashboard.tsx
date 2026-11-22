@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import type {
   CityConfig,
   CityWeather,
+  EarthquakeEvent,
   FXQuote,
   ISSOrbit,
   TempUnit,
@@ -145,6 +146,18 @@ function currencySymbol(code: string): string {
   return code;
 }
 
+function formatTimeAgo(timeMs: number, nowMs: number): string {
+  var diffMin = Math.max(0, Math.round((nowMs - timeMs) / 60000));
+  if (diffMin < 1) return 'Just now';
+  if (diffMin < 60) return String(diffMin) + 'm ago';
+  var hrs = Math.floor(diffMin / 60);
+  var mins = diffMin % 60;
+  if (hrs < 24) {
+    return mins > 0 ? String(hrs) + 'h ' + String(mins) + 'm ago' : String(hrs) + 'h ago';
+  }
+  return String(Math.floor(hrs / 24)) + 'd ago';
+}
+
 export function WorldDashboard(props: WorldDashboardProps) {
   var _fxState = useState<FXQuote[]>(function () {
     var cached = readCachedWorld();
@@ -159,6 +172,13 @@ export function WorldDashboard(props: WorldDashboardProps) {
   });
   var issOrbit = _issOrbitState[0];
   var setIssOrbit = _issOrbitState[1];
+
+  var _quakesState = useState<EarthquakeEvent[]>(function () {
+    var cached = readCachedWorld();
+    return cached && cached.quakes ? cached.quakes : [];
+  });
+  var quakes = _quakesState[0];
+  var setQuakes = _quakesState[1];
 
   var _loadingState = useState<boolean>(false);
   var isLoading = _loadingState[0];
@@ -176,6 +196,10 @@ export function WorldDashboard(props: WorldDashboardProps) {
   var selectedISS = _selectedISSState[0];
   var setSelectedISS = _selectedISSState[1];
 
+  var _selectedQuakeState = useState<string | null>(null);
+  var selectedQuakeId = _selectedQuakeState[0];
+  var setSelectedQuakeId = _selectedQuakeState[1];
+
   var _showArcsState = useState<boolean>(true);
   var showArcs = _showArcsState[0];
   var setShowArcs = _showArcsState[1];
@@ -187,6 +211,10 @@ export function WorldDashboard(props: WorldDashboardProps) {
   var _showISSState = useState<boolean>(true);
   var showISS = _showISSState[0];
   var setShowISS = _showISSState[1];
+
+  var _showQuakesState = useState<boolean>(true);
+  var showQuakes = _showQuakesState[0];
+  var setShowQuakes = _showQuakesState[1];
 
   var _issNowState = useState<number>(function () {
     return Date.now();
@@ -222,7 +250,10 @@ export function WorldDashboard(props: WorldDashboardProps) {
         if (json.iss) {
           setIssOrbit(json.iss);
         }
-        if ((json.fx && json.fx.length > 0) || json.iss) {
+        if (json.quakes) {
+          setQuakes(json.quakes);
+        }
+        if ((json.fx && json.fx.length > 0) || json.iss || json.quakes) {
           writeCachedWorld(json);
         }
         setLoadError(null);
@@ -304,25 +335,26 @@ export function WorldDashboard(props: WorldDashboardProps) {
     [props.isActive, showISS, issOrbit]
   );
 
-  // Auto-clear selected city route or ISS inspector after configured idle period
+  // Auto-clear selected city route, ISS, or quake inspector after configured idle period
   var idleResetSec =
     typeof props.idleResetSeconds === 'number' && props.idleResetSeconds >= 5
       ? props.idleResetSeconds
       : 60;
   useEffect(
     function () {
-      if (!selectedCityId && !selectedISS) {
+      if (!selectedCityId && !selectedISS && !selectedQuakeId) {
         return;
       }
       var id = window.setTimeout(function () {
         setSelectedCityId(null);
         setSelectedISS(false);
+        setSelectedQuakeId(null);
       }, idleResetSec * 1000);
       return function () {
         window.clearTimeout(id);
       };
     },
-    [selectedCityId, selectedISS, idleResetSec, props.activityTick]
+    [selectedCityId, selectedISS, selectedQuakeId, idleResetSec, props.activityTick]
   );
 
   // Astronomical & ISS orbital calculations
@@ -440,6 +472,16 @@ export function WorldDashboard(props: WorldDashboardProps) {
     }
   }
 
+  var selectedQuake: EarthquakeEvent | null = null;
+  if (selectedQuakeId && showQuakes) {
+    for (var sq = 0; sq < quakes.length; sq++) {
+      if (quakes[sq].id === selectedQuakeId) {
+        selectedQuake = quakes[sq];
+        break;
+      }
+    }
+  }
+
   // Graticule coordinates (82°N to 58°S)
   var latLines = [-30, 0, 30, 60];
   var lonSteps: number[] = [];
@@ -528,6 +570,26 @@ export function WorldDashboard(props: WorldDashboardProps) {
               </button>
               <button
                 type="button"
+                class={
+                  showQuakes
+                    ? 'ctrl-btn ctrl-btn-mode ctrl-btn-selected'
+                    : 'ctrl-btn ctrl-btn-mode'
+                }
+                onClick={function () {
+                  setShowQuakes(function (v) {
+                    if (v) {
+                      setSelectedQuakeId(null);
+                    }
+                    return !v;
+                  });
+                }}
+                aria-pressed={showQuakes}
+                title="Toggle recent M4.5+ earthquakes (24h)"
+              >
+                Quakes
+              </button>
+              <button
+                type="button"
                 class="ctrl-btn ctrl-btn-icon"
                 onClick={props.onRefresh}
                 disabled={props.isRefreshing}
@@ -553,45 +615,62 @@ export function WorldDashboard(props: WorldDashboardProps) {
             </div>
           </div>
 
-          <div class="world-header-right">
-            {selectedISS && issTrack ? (
-              <button
-                type="button"
-                class="world-route-pill world-iss-pill"
-                onClick={function () {
-                  setSelectedISS(false);
-                }}
-                title="Tap to dismiss ISS telemetry"
-              >
-                <span class="world-route-cities">ISS</span>
-                <span class="world-iss-meta">
-                  {Math.round(issTrack.current.altKm)} km ·{' '}
-                  {Math.round(issTrack.current.speedKmh).toLocaleString()} km/h ·{' '}
-                  {issTrack.current.sunlit ? 'Sunlit' : 'Shadow'}
-                </span>
-              </button>
-            ) : selectedPin && selectedPin.arc && homeCity ? (
-              <button
-                type="button"
-                class="world-route-pill world-route-pill-active"
-                onClick={function () {
-                  setSelectedCityId(null);
-                }}
-                title="Tap to clear selected route"
-              >
-                <span class="world-route-cities">
-                  {homeCity.name} → {selectedPin.city.name}
-                </span>
-                <span class="world-route-meta">
-                  {selectedPin.arc.distKm.toLocaleString()} km · {selectedPin.arc.flightLabel}
-                </span>
-              </button>
-            ) : null}
-          </div>
+          <div class="world-header-right" />
         </header>
 
         {/* Main Day/Night World Map Card */}
         <section class="world-map-card" aria-label="Live day and night world map">
+          {selectedISS && issTrack ? (
+            <button
+              type="button"
+              class="world-map-inspector world-iss-pill"
+              onClick={function () {
+                setSelectedISS(false);
+              }}
+              title="Tap to dismiss ISS telemetry"
+            >
+              <span class="world-route-cities">ISS</span>
+              <span class="world-iss-meta">
+                {Math.round(issTrack.current.altKm)} km ·{' '}
+                {Math.round(issTrack.current.speedKmh).toLocaleString()} km/h ·{' '}
+                {issTrack.current.sunlit ? 'Sunlit' : 'Shadow'}
+              </span>
+            </button>
+          ) : selectedQuake ? (
+            <button
+              type="button"
+              class="world-map-inspector world-quake-pill"
+              onClick={function () {
+                setSelectedQuakeId(null);
+              }}
+              title="Tap to dismiss earthquake details"
+            >
+              <span class="world-route-cities">
+                M{selectedQuake.mag.toFixed(1)}
+              </span>
+              <span class="world-quake-meta">
+                {selectedQuake.place || 'Earthquake'} · {Math.round(selectedQuake.depthKm)} km depth ·{' '}
+                {formatTimeAgo(selectedQuake.timeMs, props.nowMs)}
+              </span>
+            </button>
+          ) : selectedPin && selectedPin.arc && homeCity ? (
+            <button
+              type="button"
+              class="world-map-inspector world-route-pill-active"
+              onClick={function () {
+                setSelectedCityId(null);
+              }}
+              title="Tap to clear selected route"
+            >
+              <span class="world-route-cities">
+                {homeCity.name} → {selectedPin.city.name}
+              </span>
+              <span class="world-route-meta">
+                {selectedPin.arc.distKm.toLocaleString()} km · {selectedPin.arc.flightLabel}
+              </span>
+            </button>
+          ) : null}
+
           <svg
             class="world-map-svg"
             viewBox={'0 0 ' + String(MAP_W) + ' ' + String(MAP_H)}
@@ -601,6 +680,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
               if (tgt && tgt.tagName && tgt.tagName.toLowerCase() === 'svg') {
                 setSelectedCityId(null);
                 setSelectedISS(false);
+                setSelectedQuakeId(null);
               }
             }}
           >
@@ -767,6 +847,84 @@ export function WorldDashboard(props: WorldDashboardProps) {
                 </g>
               ) : null}
 
+              {/* Recent USGS Earthquakes (M4.5+ in last 24h) */}
+              {showQuakes && quakes.length > 0 ? (
+                <g class="world-quakes-layer">
+                  {quakes.map(function (q) {
+                    var qPt = projectLonLat(q.lon, q.lat, MAP_W, MAP_H);
+                    var isSelQ = selectedQuakeId === q.id;
+                    var isMajor = q.mag >= 6.5;
+                    var isStrong = q.mag >= 5.5;
+                    var color = isMajor ? '#f43f5e' : isStrong ? '#fb923c' : '#fbbf24';
+                    var ringFill = isMajor
+                      ? 'rgba(244, 63, 94, 0.24)'
+                      : isStrong
+                        ? 'rgba(251, 146, 60, 0.2)'
+                        : 'rgba(251, 191, 36, 0.16)';
+                    var coreR = Math.max(2.6, Math.min(6.8, 2.6 + (q.mag - 4.5) * 1.4));
+                    var outerR = coreR * (isSelQ ? 2.8 : 2.2);
+                    return (
+                      <g
+                        key={'quake-' + q.id}
+                        class="world-quake-pin"
+                        transform={
+                          'translate(' + qPt.x.toFixed(1) + ',' + qPt.y.toFixed(1) + ')'
+                        }
+                        onClick={function () {
+                          setSelectedCityId(null);
+                          setSelectedISS(false);
+                          setSelectedQuakeId(isSelQ ? null : q.id);
+                        }}
+                      >
+                        <circle cx="0" cy="0" r="14" fill="transparent" />
+                        <circle
+                          cx="0"
+                          cy="0"
+                          r={outerR.toFixed(1)}
+                          fill={ringFill}
+                          stroke={color}
+                          stroke-width={isSelQ ? '1.6' : '0.9'}
+                          stroke-opacity={isSelQ ? '0.95' : '0.68'}
+                        />
+                        {isMajor ? (
+                          <circle
+                            cx="0"
+                            cy="0"
+                            r={(outerR + 4.5).toFixed(1)}
+                            fill="none"
+                            stroke="#f43f5e"
+                            stroke-width="0.8"
+                            stroke-opacity="0.48"
+                            stroke-dasharray="2 2"
+                          />
+                        ) : null}
+                        <circle
+                          cx="0"
+                          cy="0"
+                          r={coreR.toFixed(1)}
+                          fill={color}
+                          stroke="#091326"
+                          stroke-width="0.9"
+                        />
+                        {q.mag >= 5.8 || isSelQ ? (
+                          <text
+                            x={qPt.x > MAP_W - 60 ? '-9' : '9'}
+                            y="3.5"
+                            text-anchor={qPt.x > MAP_W - 60 ? 'end' : 'start'}
+                            class="world-pin-sub"
+                            fill={isMajor ? '#fda4af' : '#fed7aa'}
+                            font-size="9.5"
+                            font-weight="700"
+                          >
+                            M{q.mag.toFixed(1)}
+                          </text>
+                        ) : null}
+                      </g>
+                    );
+                  })}
+                </g>
+              ) : null}
+
               {/* Live International Space Station orbital track, footprint, & marker */}
               {issTrack ? (
                 <g class="world-iss-layer">
@@ -842,6 +1000,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
                     }
                     onClick={function () {
                       setSelectedCityId(null);
+                      setSelectedQuakeId(null);
                       setSelectedISS(function (v) {
                         return !v;
                       });
@@ -969,6 +1128,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
                         class="world-arc-group"
                         onClick={function () {
                           setSelectedISS(false);
+                          setSelectedQuakeId(null);
                           setSelectedCityId(isSel ? null : pin.city.id);
                         }}
                       >
@@ -1069,6 +1229,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
                       transform={'translate(' + pin.x.toFixed(1) + ',' + pin.y.toFixed(1) + ')'}
                       onClick={function () {
                         setSelectedISS(false);
+                        setSelectedQuakeId(null);
                         if (pin.isHome) {
                           setSelectedCityId(null);
                         } else {

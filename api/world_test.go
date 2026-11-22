@@ -14,8 +14,55 @@ import (
 func TestWorldHandlerFXRates(t *testing.T) {
 	origClient := stocksHTTPClient
 	origISSClient := issHTTPClient
+	origQuakesClient := quakesHTTPClient
 	sampleLine1 := "1 25544U 98067A   26326.50000000  .00016717  00000-0  29812-3 0  9995"
 	sampleLine2 := "2 25544  51.6416 247.4627 0006703 130.5360 325.0288 15.49815350483021"
+	quakesHTTPClient = &http.Client{
+		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			b, _ := json.Marshal(map[string]any{
+				"features": []map[string]any{
+					{
+						"id": "q1",
+						"properties": map[string]any{
+							"mag":   4.8,
+							"place": "35 km E of Sendai, Japan",
+							"time":  1732200000000,
+						},
+						"geometry": map[string]any{
+							"coordinates": []float64{141.2, 38.3, 42.5},
+						},
+					},
+					{
+						"id": "q2",
+						"properties": map[string]any{
+							"mag":   6.2,
+							"place": "18 km S of Hualien, Taiwan",
+							"time":  1732203600000,
+						},
+						"geometry": map[string]any{
+							"coordinates": []float64{121.6, 23.8, 18.0},
+						},
+					},
+					{
+						"id": "q3",
+						"properties": map[string]any{
+							"mag":   3.9,
+							"place": "Minor filtered quake",
+							"time":  1732205000000,
+						},
+						"geometry": map[string]any{
+							"coordinates": []float64{-122.0, 37.3, 8.0},
+						},
+					},
+				},
+			})
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+				Body:       io.NopCloser(bytes.NewReader(b)),
+			}, nil
+		}),
+	}
 	issHTTPClient = &http.Client{
 		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 			b, _ := json.Marshal(map[string]any{
@@ -69,12 +116,16 @@ func TestWorldHandlerFXRates(t *testing.T) {
 	defer func() {
 		stocksHTTPClient = origClient
 		issHTTPClient = origISSClient
+		quakesHTTPClient = origQuakesClient
 		fxCacheMu.Lock()
 		fxCache = fxCacheEntry{}
 		fxCacheMu.Unlock()
 		issCacheMu.Lock()
 		issCache = issCacheEntry{}
 		issCacheMu.Unlock()
+		quakesCacheMu.Lock()
+		quakesCache = quakesCacheEntry{}
+		quakesCacheMu.Unlock()
 	}()
 
 	req := httptest.NewRequest(http.MethodGet, "/api/world", nil)
@@ -106,6 +157,12 @@ func TestWorldHandlerFXRates(t *testing.T) {
 	}
 	if math.Abs(resp.ISS.InclinationDeg-51.6416) > 0.0001 || math.Abs(resp.ISS.Eccentricity-0.0006703) > 1e-7 {
 		t.Fatalf("unexpected ISS orbit: %+v", resp.ISS)
+	}
+	if len(resp.Quakes) != 2 {
+		t.Fatalf("expected 2 filtered M4.5+ quakes, got %d: %+v", len(resp.Quakes), resp.Quakes)
+	}
+	if resp.Quakes[0].ID != "q2" || math.Abs(resp.Quakes[0].Mag-6.2) > 0.01 {
+		t.Fatalf("expected highest magnitude quake first, got %+v", resp.Quakes[0])
 	}
 }
 

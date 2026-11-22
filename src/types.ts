@@ -292,11 +292,22 @@ export interface ISSOrbit {
   fetchedAt: string;
 }
 
+export interface EarthquakeEvent {
+  id: string;
+  mag: number;
+  place: string;
+  timeMs: number;
+  lat: number;
+  lon: number;
+  depthKm: number;
+}
+
 export interface WorldResponse {
   version: string;
   fetchedAt: string;
   fx: FXQuote[];
   iss?: ISSOrbit;
+  quakes?: EarthquakeEvent[];
 }
 
 export type WeatherKind =
