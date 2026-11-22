@@ -2,6 +2,16 @@
 
 An ambient personal wall dashboard PWA designed for an **iPad mini 2 (iOS 12.5.7, Landscape 1024×768)** — and modern iPads/desktops — hosted serverless on **Vercel** with a stdlib-only **Go** API backend.
 
+## Screenshots
+
+Captured at the iPad mini 2's 1024×768 landscape resolution (Retina 2×).
+
+| Weather | Stocks |
+|---|---|
+| ![Weather dashboard: live clock, current conditions, 24-hour ribbon, 5-day forecast, air quality, and multi-city cards](docs/screenshots/weather.jpg) | ![Stocks dashboard: selected symbol chart with timeframes and a 20-card watchlist](docs/screenshots/stocks.jpg) |
+| **Calendar** | **World** |
+| ![Calendar dashboard: month grid with Chinese lunar dates and US holidays beside the selected-day agenda](docs/screenshots/calendar.jpg) | ![World dashboard: day/night map with city arcs, ISS orbit, earthquakes, and FX currency cards](docs/screenshots/world.jpg) |
+
 ## Features
 
 - **One-Time 4-Digit PIN Gate:**
