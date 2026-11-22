@@ -19,6 +19,15 @@ import type { USHolidayInfo } from '../utils/calendar';
 
 var HIDDEN_CALS_STORAGE_KEY = 'glance:hiddenCalendars:v1';
 
+// Demo mode (?demo=calendar): the API serves generated sample calendars
+function isCalendarDemoMode(): boolean {
+  try {
+    return /[?&]demo=calendar(&|$)/i.test(window.location.search || '');
+  } catch (_err) {
+    return false;
+  }
+}
+
 function readHiddenCalendars(): { [id: string]: boolean } {
   try {
     var raw = window.localStorage.getItem(HIDDEN_CALS_STORAGE_KEY);
@@ -141,7 +150,12 @@ export function CalendarDashboard(props: CalendarDashboardProps) {
       setIsLoading(true);
     }
 
-    var qs = '?year=' + String(year) + '&month=' + String(month);
+    var qs =
+      '?year=' +
+      String(year) +
+      '&month=' +
+      String(month) +
+      (isCalendarDemoMode() ? '&demo=1' : '');
     return fetch('/api/calendar' + qs, { cache: 'no-cache', credentials: 'same-origin' })
       .then(function (resp) {
         if (resp.status === 401) {

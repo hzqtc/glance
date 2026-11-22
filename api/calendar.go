@@ -37,6 +37,7 @@ type calendarSource struct {
 	Color    string `json:"color"`
 	URL      string `json:"url"`
 	AutoName bool   `json:"-"`
+	ICS      string `json:"-"` // inline iCalendar text (demo mode); skips fetching URL
 }
 
 type CalendarMeta struct {
@@ -134,7 +135,13 @@ func CalendarHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	forceRefresh := q.Get("refresh") == "1"
 
-	sources := parseCalendarSourcesFromEnv()
+	// ?demo=1 serves generated demo calendars instead of the private feeds
+	var sources []calendarSource
+	if q.Get("demo") == "1" {
+		sources = demoCalendarSources(nowLocal)
+	} else {
+		sources = parseCalendarSourcesFromEnv()
+	}
 	calendars := make([]CalendarMeta, 0, len(sources))
 	for _, s := range sources {
 		calendars = append(calendars, CalendarMeta{
@@ -163,7 +170,16 @@ func CalendarHandler(w http.ResponseWriter, r *http.Request) {
 		wg.Add(1)
 		go func(s calendarSource) {
 			defer wg.Done()
-			parsed, extractedName, fetchErr := fetchParsedICSCached(s.URL, loc, forceRefresh)
+			var (
+				parsed        []rawICSEvent
+				extractedName string
+				fetchErr      error
+			)
+			if s.ICS != "" {
+				parsed = parseICSEvents(s.ICS, loc)
+			} else {
+				parsed, extractedName, fetchErr = fetchParsedICSCached(s.URL, loc, forceRefresh)
+			}
 			if fetchErr != nil {
 				mu.Lock()
 				warnings = append(warnings, fmt.Sprintf("%s: %v", s.Name, fetchErr))

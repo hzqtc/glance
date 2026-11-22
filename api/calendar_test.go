@@ -220,3 +220,59 @@ func TestExtractUpcomingTrips(t *testing.T) {
 		t.Fatalf("unexpected third trip: %+v", trips[2])
 	}
 }
+
+func TestCalendarHandlerDemoMode(t *testing.T) {
+	origClient := calendarHTTPClient
+	calendarHTTPClient = &http.Client{
+		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			t.Fatalf("demo mode must not fetch any calendar URL, got %s", r.URL)
+			return nil, nil
+		}),
+	}
+	defer func() { calendarHTTPClient = origClient }()
+
+	t.Setenv("GLANCE_PASSCODE", "")
+	t.Setenv("VERCEL", "")
+	t.Setenv("CALENDAR_ICS_URLS", "https://example.com/private.ics")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/calendar?demo=1", nil)
+	rec := httptest.NewRecorder()
+	CalendarHandler(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp CalendarResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid json: %v", err)
+	}
+	if !resp.Configured || len(resp.Calendars) != 3 || resp.Calendars[0].Name != "Work" {
+		t.Fatalf("expected the 3 demo calendars, got %+v", resp.Calendars)
+	}
+	if len(resp.Warnings) != 0 {
+		t.Fatalf("unexpected warnings: %v", resp.Warnings)
+	}
+
+	today := time.Now().In(loadTimezoneSafe(resp.Timezone)).Format("2006-01-02")
+	todayTitles := map[string]bool{}
+	for _, ev := range resp.Events {
+		if ev.Date == today {
+			todayTitles[ev.Title] = true
+		}
+	}
+	for _, want := range []string{"Design review", "Lunch with Sam", "Pick up groceries", "Book club"} {
+		if !todayTitles[want] {
+			t.Fatalf("expected %q today (%s), got %v", want, today, todayTitles)
+		}
+	}
+
+	foundTrip := false
+	for _, trip := range resp.UpcomingTrips {
+		if trip.Title == "Ski trip to Tahoe" && trip.Days == 4 {
+			foundTrip = true
+		}
+	}
+	if !foundTrip {
+		t.Fatalf("expected the demo ski trip in upcomingTrips, got %+v", resp.UpcomingTrips)
+	}
+}

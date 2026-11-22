@@ -9,8 +9,8 @@ Captured at the iPad mini 2's 1024×768 landscape resolution (Retina 2×).
 | Weather | Stocks |
 |---|---|
 | ![Weather dashboard: live clock, current conditions, 24-hour ribbon, 5-day forecast, air quality, and multi-city cards](docs/screenshots/weather.jpg) | ![Stocks dashboard: selected symbol chart with timeframes and a 20-card watchlist](docs/screenshots/stocks.jpg) |
-| **Calendar** | **World** |
-| ![Calendar dashboard: month grid with Chinese lunar dates and US holidays beside the selected-day agenda](docs/screenshots/calendar.jpg) | ![World dashboard: day/night map with city arcs, ISS orbit, earthquakes, and FX currency cards](docs/screenshots/world.jpg) |
+| **Calendar** (demo mode) | **World** |
+| ![Calendar dashboard: month grid of color-coded Work, Personal, and Family events with Chinese lunar dates and US holidays, today's agenda, and a trip countdown](docs/screenshots/calendar.jpg) | ![World dashboard: day/night map with city arcs, ISS orbit, earthquakes, and FX currency cards](docs/screenshots/world.jpg) |
 | **Photos** (demo mode) | |
 | ![Photos frame: auto-collage of one portrait and two landscape stock photos](docs/screenshots/photos.jpg) | |
 
@@ -104,6 +104,8 @@ npm run build && npm run preview
 ### Preview & Demo Modes
 Append `?demo=<mode>` to preview any condition immediately:
 `?demo=night`, `?demo=day`, `?demo=sunset`, `?demo=rain`, `?demo=snow`, `?demo=storm`, `?demo=fog`, `?demo=cloudy`, `?demo=wind`.
+
+`?demo=calendar` shows three sample calendars (Work, Personal, Family) on the Calendar slide instead of your private feeds: recurring events, a busy "today", and an upcoming trip countdown, all generated relative to the current date by [`api/calendar_demo.go`](./api/calendar_demo.go) and parsed by the real `.ics` pipeline.
 
 `?demo=photos` fills the Photos slide with 15 bundled stock photos (from [`public/demo/photos/`](./public/demo/photos/), Unsplash License; see [CREDITS](./public/demo/photos/CREDITS.md)) instead of your Google Photos albums — handy for screenshots or trying the collage layouts without configuring `PHOTOS_ALBUM_URLS`.
 
