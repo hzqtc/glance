@@ -159,14 +159,21 @@ func TestWeatherHandlerEndToEnd(t *testing.T) {
 	origClient := weatherHTTPClient
 	weatherHTTPClient = &http.Client{
 		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
-			payload := mockForecast
+			count := len(strings.Split(r.URL.Query().Get("latitude"), ","))
+			basePayload := mockForecast
 			if strings.Contains(r.URL.String(), "air-quality") {
-				payload = mockAir
+				basePayload = mockAir
 			}
+			var items []json.RawMessage
+			_ = json.Unmarshal([]byte(basePayload), &items)
+			for len(items) < count && len(items) > 0 {
+				items = append(items, items[len(items)-1])
+			}
+			outBytes, _ := json.Marshal(items)
 			return &http.Response{
 				StatusCode: http.StatusOK,
 				Header:     http.Header{"Content-Type": []string{"application/json"}},
-				Body:       io.NopCloser(bytes.NewBufferString(payload)),
+				Body:       io.NopCloser(bytes.NewReader(outBytes)),
 			}, nil
 		}),
 	}
@@ -184,8 +191,8 @@ func TestWeatherHandlerEndToEnd(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &parsed); err != nil {
 		t.Fatalf("invalid json response: %v", err)
 	}
-	if len(parsed.Weather) != 4 {
-		t.Fatalf("expected 4 cities weather, got %d", len(parsed.Weather))
+	if len(parsed.Weather) != 8 {
+		t.Fatalf("expected 8 cities weather, got %d", len(parsed.Weather))
 	}
 
 	sv := parsed.Weather[0]

@@ -22,6 +22,43 @@ interface CityCardProps {
   onSelect: (cityId: string) => void;
 }
 
+var REGION_ABBR_MAP: { [key: string]: string } = {
+  china: 'CN',
+  japan: 'JP',
+  taiwan: 'TW',
+  korea: 'KR',
+  'south korea': 'KR',
+  singapore: 'SG',
+  'hong kong': 'HK',
+  'united kingdom': 'UK',
+  'united states': 'US',
+  usa: 'US',
+  canada: 'CA',
+  australia: 'AU',
+  france: 'FR',
+  germany: 'DE',
+  italy: 'IT',
+  spain: 'ES',
+  switzerland: 'CH',
+  netherlands: 'NL',
+  sweden: 'SE',
+  india: 'IN',
+  california: 'CA',
+  'new york': 'NY',
+  washington: 'WA',
+  texas: 'TX',
+};
+
+function formatRegionAbbr(region: string): string {
+  var trimmed = region ? region.trim() : '';
+  if (!trimmed) return '';
+  if (trimmed.length <= 3) {
+    return trimmed.toUpperCase();
+  }
+  var mapped = REGION_ABBR_MAP[trimmed.toLowerCase()];
+  return mapped || trimmed;
+}
+
 export function CityCard(props: CityCardProps) {
   var city = props.city;
   var weather = props.weather;
@@ -29,6 +66,7 @@ export function CityCard(props: CityCardProps) {
   var units = props.units;
 
   var desc = weather ? describeWMO(weather.weatherCode) : null;
+  var regionAbbr = formatRegionAbbr(city.region);
   var dayDiff = clock.daySerial - props.homeDaySerial;
   var dayBadge =
     dayDiff > 0 ? '+' + String(dayDiff) + 'd' : dayDiff < 0 ? String(dayDiff) + 'd' : '';
@@ -70,8 +108,10 @@ export function CityCard(props: CityCardProps) {
           <div class="city-card-name-row">
             {props.isSelected ? <span class="city-active-dot" /> : null}
             <span class="city-card-name">{city.name}</span>
+            {regionAbbr ? (
+              <span class="city-card-region-abbr">{regionAbbr}</span>
+            ) : null}
           </div>
-          {city.region ? <div class="city-card-region">{city.region}</div> : null}
         </div>
         <div class="city-card-badges">
           {dayBadge ? <span class="badge badge-day">{dayBadge}</span> : null}
@@ -101,17 +141,16 @@ export function CityCard(props: CityCardProps) {
                 <WeatherIcon
                   kind={desc.kind}
                   isDay={weather.isDay}
-                  size={props.compact ? 24 : 28}
+                  size={props.compact ? 22 : 28}
                 />
                 <span class="city-card-temp">{formatTemp(weather.tempC, units)}</span>
               </div>
-              <div class="city-card-cond">{desc.shortLabel}</div>
               <div class="city-card-hl">
                 H {formatTemp(weather.highC, units)} · L {formatTemp(weather.lowC, units)}
               </div>
             </div>
           ) : (
-            <div class="city-card-cond">—</div>
+            <div class="city-card-hl">—</div>
           )}
         </div>
       </div>

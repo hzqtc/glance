@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type {
   CarouselScheduleStep,
+  CityConfig,
   CityWeather,
   StockCardMetric,
   TempUnit,
@@ -1120,6 +1121,11 @@ function DashboardShell(props: DashboardShellProps) {
 
   var trackOffsetPx = -(activeSlide * viewportHeight);
   var isLightRail = activeSlide === 0 && themeMode === 'day';
+  var isMultiCityGrid = cities.length > 4;
+  var cityRows: CityConfig[][] = [];
+  for (var cr = 0; cr < cities.length; cr += 4) {
+    cityRows.push(cities.slice(cr, cr + 4));
+  }
 
   return (
     <div
@@ -1136,7 +1142,11 @@ function DashboardShell(props: DashboardShellProps) {
       >
         {/* Slide 0: Weather Dashboard */}
         <section
-          class={'carousel-slide weather-slide theme-' + themeMode}
+          class={
+            'carousel-slide weather-slide theme-' +
+            themeMode +
+            (isMultiCityGrid ? ' weather-slide-multi' : '')
+          }
           aria-hidden={activeSlide !== 0}
         >
           <AtmosphereCanvas
@@ -1188,37 +1198,53 @@ function DashboardShell(props: DashboardShellProps) {
               </div>
             )}
 
-            {cities.length > 0 ? (
+            {cityRows.length > 0 ? (
               <section
                 class={
-                  cities.length >= 4 ? 'cities-row cities-row-compact' : 'cities-row'
+                  isMultiCityGrid ? 'cities-grid cities-grid-multi' : 'cities-grid'
                 }
                 aria-label="Cities"
               >
-                {cities.map(function (city, idx) {
-                  var cityWeather = weatherById[city.id];
-                  var cityClock = getCityClock(
-                    nowMs,
-                    cityWeather ? cityWeather.utcOffsetSeconds : undefined,
-                    timeFormat
-                  );
-                  var isSelected = Boolean(activeCity && activeCity.id === city.id);
+                {cityRows.map(function (rowCities, rowIdx) {
+                  var rowClass =
+                    cities.length >= 4
+                      ? 'cities-row cities-row-compact'
+                      : 'cities-row';
+                  if (rowIdx > 0) {
+                    rowClass += ' cities-row-next';
+                  }
                   return (
-                    <CityCard
-                      key={city.id}
-                      city={city}
-                      weather={cityWeather}
-                      clock={cityClock}
-                      homeDaySerial={homeClock.daySerial}
-                      homeOffsetSeconds={
-                        homeWeather ? homeWeather.utcOffsetSeconds : 0
-                      }
-                      units={units}
-                      isHome={idx === 0}
-                      isSelected={isSelected}
-                      compact={cities.length >= 4}
-                      onSelect={handleSelectCity}
-                    />
+                    <div class={rowClass} key={'city-row-' + String(rowIdx)}>
+                      {rowCities.map(function (city, colIdx) {
+                        var globalIdx = rowIdx * 4 + colIdx;
+                        var cityWeather = weatherById[city.id];
+                        var cityClock = getCityClock(
+                          nowMs,
+                          cityWeather ? cityWeather.utcOffsetSeconds : undefined,
+                          timeFormat
+                        );
+                        var isSelected = Boolean(
+                          activeCity && activeCity.id === city.id
+                        );
+                        return (
+                          <CityCard
+                            key={city.id}
+                            city={city}
+                            weather={cityWeather}
+                            clock={cityClock}
+                            homeDaySerial={homeClock.daySerial}
+                            homeOffsetSeconds={
+                              homeWeather ? homeWeather.utcOffsetSeconds : 0
+                            }
+                            units={units}
+                            isHome={globalIdx === 0}
+                            isSelected={isSelected}
+                            compact={cities.length >= 4}
+                            onSelect={handleSelectCity}
+                          />
+                        );
+                      })}
+                    </div>
                   );
                 })}
               </section>

@@ -72,6 +72,38 @@
       "lat": 35.6762,
       "lon": 139.6503,
       "timezone": "Asia/Tokyo"
+    },
+    {
+      "id": "new-york",
+      "name": "New York",
+      "region": "NY",
+      "lat": 40.7128,
+      "lon": -74.006,
+      "timezone": "America/New_York"
+    },
+    {
+      "id": "london",
+      "name": "London",
+      "region": "UK",
+      "lat": 51.5072,
+      "lon": -0.1276,
+      "timezone": "Europe/London"
+    },
+    {
+      "id": "singapore",
+      "name": "Singapore",
+      "region": "SG",
+      "lat": 1.3521,
+      "lon": 103.8198,
+      "timezone": "Asia/Singapore"
+    },
+    {
+      "id": "sydney",
+      "name": "Sydney",
+      "region": "Australia",
+      "lat": -33.8688,
+      "lon": 151.2093,
+      "timezone": "Australia/Sydney"
     }
   ],
   "stocks": {
