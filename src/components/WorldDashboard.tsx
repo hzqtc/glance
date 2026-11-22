@@ -628,8 +628,8 @@ export function WorldDashboard(props: WorldDashboardProps) {
         Math.round(issTrack.current.speedKmh).toLocaleString() +
         ' km/h · ' +
         (issTrack.current.sunlit ? 'Sunlit' : 'Shadow'),
-      stroke: 'rgba(103, 232, 249, 0.62)',
-      textColor: '#cffafe',
+      stroke: 'rgba(232, 121, 249, 0.65)',
+      textColor: '#fae8ff',
     };
   } else if (selectedStorm) {
     var selStormPt = projectLonLat(
@@ -1413,7 +1413,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
                         key={'iss-past-' + String(idx)}
                         d={seg}
                         fill="none"
-                        stroke="rgba(165, 243, 252, 0.34)"
+                        stroke="rgba(240, 171, 252, 0.36)"
                         stroke-width="1.35"
                         stroke-dasharray="3 4"
                         stroke-linecap="round"
@@ -1430,8 +1430,8 @@ export function WorldDashboard(props: WorldDashboardProps) {
                           fill="none"
                           stroke={
                             selectedISS
-                              ? 'rgba(34, 211, 238, 0.38)'
-                              : 'rgba(34, 211, 238, 0.22)'
+                              ? 'rgba(232, 121, 249, 0.42)'
+                              : 'rgba(217, 70, 239, 0.24)'
                           }
                           stroke-width={selectedISS ? '5.5' : '4'}
                           stroke-linecap="round"
@@ -1439,10 +1439,10 @@ export function WorldDashboard(props: WorldDashboardProps) {
                         <path
                           d={seg}
                           fill="none"
-                          stroke={selectedISS ? '#a5f3fc' : '#67e8f9'}
+                          stroke={selectedISS ? '#f5d0fe' : '#e879f9'}
                           stroke-width={selectedISS ? '2' : '1.5'}
                           stroke-linecap="round"
-                          opacity="0.92"
+                          opacity="0.94"
                         />
                       </g>
                     );
@@ -1456,10 +1456,10 @@ export function WorldDashboard(props: WorldDashboardProps) {
                         d={seg}
                         fill={
                           issFootprintClosed
-                            ? 'rgba(103, 232, 249, 0.08)'
+                            ? 'rgba(232, 121, 249, 0.09)'
                             : 'none'
                         }
-                        stroke="rgba(103, 232, 249, 0.42)"
+                        stroke="rgba(240, 171, 252, 0.48)"
                         stroke-width="1"
                         stroke-dasharray="3 3"
                       />
@@ -1489,8 +1489,8 @@ export function WorldDashboard(props: WorldDashboardProps) {
                       r={selectedISS ? '14' : '11'}
                       fill={
                         selectedISS
-                          ? 'rgba(103, 232, 249, 0.28)'
-                          : 'rgba(103, 232, 249, 0.16)'
+                          ? 'rgba(232, 121, 249, 0.3)'
+                          : 'rgba(232, 121, 249, 0.18)'
                       }
                     />
                     {/* Miniature Space Station SVG oriented slightly along track */}
@@ -1507,7 +1507,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
                         y1="0"
                         x2="10"
                         y2="0"
-                        stroke="#e0f2fe"
+                        stroke="#fae8ff"
                         stroke-width="1.8"
                         stroke-linecap="round"
                       />
@@ -1518,7 +1518,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
                         width="3"
                         height="12"
                         rx="0.7"
-                        fill="#38bdf8"
+                        fill="#d946ef"
                         stroke="#091326"
                         stroke-width="0.6"
                       />
@@ -1528,7 +1528,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
                         width="2.6"
                         height="11"
                         rx="0.7"
-                        fill="#7dd3fc"
+                        fill="#f0abfc"
                         stroke="#091326"
                         stroke-width="0.6"
                       />
@@ -1538,7 +1538,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
                         width="2.6"
                         height="11"
                         rx="0.7"
-                        fill="#7dd3fc"
+                        fill="#f0abfc"
                         stroke="#091326"
                         stroke-width="0.6"
                       />
@@ -1548,7 +1548,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
                         width="3"
                         height="12"
                         rx="0.7"
-                        fill="#38bdf8"
+                        fill="#d946ef"
                         stroke="#091326"
                         stroke-width="0.6"
                       />
@@ -1569,7 +1569,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
                       y="4"
                       text-anchor={issLabelLeft ? 'end' : 'start'}
                       class="world-pin-name"
-                      fill="#a5f3fc"
+                      fill="#f5d0fe"
                       font-size="11.5"
                       font-weight="700"
                     >
