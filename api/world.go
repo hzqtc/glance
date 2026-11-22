@@ -52,12 +52,20 @@ type EarthquakeEvent struct {
 	DepthKm float64 `json:"depthKm"`
 }
 
+type AuroraStatus struct {
+	Kp         float64 `json:"kp"`
+	MaxKp24h   float64 `json:"maxKp24h"`
+	Scale      string  `json:"scale"`
+	ObservedAt string  `json:"observedAt"`
+}
+
 type WorldResponse struct {
 	Version   string            `json:"version"`
 	FetchedAt string            `json:"fetchedAt"`
 	FX        []FXQuote         `json:"fx"`
 	ISS       *ISSOrbit         `json:"iss,omitempty"`
 	Quakes    []EarthquakeEvent `json:"quakes,omitempty"`
+	Aurora    *AuroraStatus     `json:"aurora,omitempty"`
 }
 
 type fxCacheEntry struct {
@@ -76,6 +84,11 @@ type quakesCacheEntry struct {
 	fetchedAt time.Time
 }
 
+type auroraCacheEntry struct {
+	status    *AuroraStatus
+	fetchedAt time.Time
+}
+
 var (
 	fxCacheMu sync.Mutex
 	fxCache   fxCacheEntry
@@ -87,16 +100,22 @@ var (
 	quakesCacheMu    sync.Mutex
 	quakesCache      quakesCacheEntry
 	quakesHTTPClient = &http.Client{Timeout: 8 * time.Second}
+
+	auroraCacheMu    sync.Mutex
+	auroraCache      auroraCacheEntry
+	auroraHTTPClient = &http.Client{Timeout: 8 * time.Second}
 )
 
 const (
 	fxCacheTTL     = 5 * time.Minute
 	issCacheTTL    = 3 * time.Hour
 	quakesCacheTTL = 10 * time.Minute
+	auroraCacheTTL = 15 * time.Minute
 
 	whereTheISSTLEURL  = "https://api.wheretheiss.at/v1/satellites/25544/tles"
 	celestrakISSTLEURL = "https://celestrak.org/NORAD/elements/gp.php?CATNR=25544&FORMAT=TLE"
 	usgsQuakesURL      = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_day.geojson"
+	noaaSWPCKpURL      = "https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json"
 )
 
 // WorldHandler serves GET /api/world on Vercel (and locally via cmd/devserver).
@@ -121,9 +140,10 @@ func WorldHandler(w http.ResponseWriter, r *http.Request) {
 		fxQuotes []FXQuote
 		issOrbit *ISSOrbit
 		quakes   []EarthquakeEvent
+		aurora   *AuroraStatus
 		wg       sync.WaitGroup
 	)
-	wg.Add(3)
+	wg.Add(4)
 	go func() {
 		defer wg.Done()
 		fxQuotes = fetchFXQuotesCached(cfg.World.FXPairs, forceRefresh)
@@ -136,6 +156,10 @@ func WorldHandler(w http.ResponseWriter, r *http.Request) {
 		defer wg.Done()
 		quakes = fetchQuakesCached(forceRefresh)
 	}()
+	go func() {
+		defer wg.Done()
+		aurora = fetchAuroraCached(forceRefresh)
+	}()
 	wg.Wait()
 
 	resp := WorldResponse{
@@ -144,6 +168,7 @@ func WorldHandler(w http.ResponseWriter, r *http.Request) {
 		FX:        fxQuotes,
 		ISS:       issOrbit,
 		Quakes:    quakes,
+		Aurora:    aurora,
 	}
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -560,6 +585,144 @@ func fetchUSGSQuakes() ([]EarthquakeEvent, error) {
 		out = out[:40]
 	}
 	return out, nil
+}
+
+func fetchAuroraCached(forceRefresh bool) *AuroraStatus {
+	if !forceRefresh {
+		auroraCacheMu.Lock()
+		if auroraCache.status != nil && time.Since(auroraCache.fetchedAt) < auroraCacheTTL {
+			copyStatus := *auroraCache.status
+			auroraCacheMu.Unlock()
+			return &copyStatus
+		}
+		auroraCacheMu.Unlock()
+	}
+
+	status, err := fetchNOAASWPCKp()
+	if err == nil && status != nil {
+		auroraCacheMu.Lock()
+		stored := *status
+		auroraCache = auroraCacheEntry{
+			status:    &stored,
+			fetchedAt: time.Now(),
+		}
+		auroraCacheMu.Unlock()
+		return status
+	}
+
+	auroraCacheMu.Lock()
+	if auroraCache.status != nil {
+		stale := *auroraCache.status
+		auroraCacheMu.Unlock()
+		return &stale
+	}
+	auroraCacheMu.Unlock()
+	return nil
+}
+
+func describeKpScale(kp float64) string {
+	switch {
+	case kp >= 9.0:
+		return "G5 Extreme"
+	case kp >= 8.0:
+		return "G4 Severe"
+	case kp >= 7.0:
+		return "G3 Strong"
+	case kp >= 6.0:
+		return "G2 Moderate"
+	case kp >= 5.0:
+		return "G1 Minor"
+	case kp >= 4.0:
+		return "Active"
+	case kp >= 3.0:
+		return "Unsettled"
+	default:
+		return "Quiet"
+	}
+}
+
+func parseFlexibleFloat(raw json.RawMessage) (float64, bool) {
+	trimmed := strings.TrimSpace(string(raw))
+	if trimmed == "" || trimmed == "null" {
+		return 0, false
+	}
+	trimmed = strings.Trim(trimmed, "\"")
+	v, err := strconv.ParseFloat(trimmed, 64)
+	if err != nil || math.IsNaN(v) || math.IsInf(v, 0) {
+		return 0, false
+	}
+	return v, true
+}
+
+func fetchNOAASWPCKp() (*AuroraStatus, error) {
+	req, err := http.NewRequest(http.MethodGet, noaaSWPCKpURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", "GlanceDashboard/1.0")
+
+	resp, err := auroraHTTPClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("noaa swpc HTTP %d", resp.StatusCode)
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 128*1024))
+	if err != nil {
+		return nil, err
+	}
+
+	var rows [][]json.RawMessage
+	if err := json.Unmarshal(body, &rows); err != nil {
+		return nil, err
+	}
+	if len(rows) < 2 {
+		return nil, fmt.Errorf("empty kp table")
+	}
+
+	type kpEntry struct {
+		observedAt string
+		kp         float64
+	}
+	entries := make([]kpEntry, 0, len(rows)-1)
+	for i := 1; i < len(rows); i++ {
+		if len(rows[i]) < 2 {
+			continue
+		}
+		kp, ok := parseFlexibleFloat(rows[i][1])
+		if !ok || kp < 0 || kp > 9.5 {
+			continue
+		}
+		obs := strings.Trim(strings.TrimSpace(string(rows[i][0])), "\"")
+		entries = append(entries, kpEntry{
+			observedAt: obs,
+			kp:         math.Round(kp*10) / 10,
+		})
+	}
+	if len(entries) == 0 {
+		return nil, fmt.Errorf("no valid kp rows")
+	}
+
+	latest := entries[len(entries)-1]
+	startIdx := len(entries) - 8 // last 24h (8 x 3-hour windows)
+	if startIdx < 0 {
+		startIdx = 0
+	}
+	max24 := latest.kp
+	for i := startIdx; i < len(entries); i++ {
+		if entries[i].kp > max24 {
+			max24 = entries[i].kp
+		}
+	}
+
+	return &AuroraStatus{
+		Kp:         latest.kp,
+		MaxKp24h:   max24,
+		Scale:      describeKpScale(latest.kp),
+		ObservedAt: latest.observedAt,
+	}, nil
 }
 
 func writeWorldError(w http.ResponseWriter, status int, message string) {

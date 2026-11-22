@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type {
+  AuroraStatus,
   CityConfig,
   CityWeather,
   EarthquakeEvent,
@@ -12,6 +13,7 @@ import type {
 import { WORLD_BORDER_PATH, WORLD_LAND_PATH } from '../data/worldLand';
 import {
   MAP_LEFT_LON,
+  buildAuroraOvalPaths,
   buildISSTrack,
   buildTerminatorPaths,
   computeGreatCircleArc,
@@ -180,6 +182,13 @@ export function WorldDashboard(props: WorldDashboardProps) {
   var quakes = _quakesState[0];
   var setQuakes = _quakesState[1];
 
+  var _auroraState = useState<AuroraStatus | null>(function () {
+    var cached = readCachedWorld();
+    return cached && cached.aurora ? cached.aurora : null;
+  });
+  var aurora = _auroraState[0];
+  var setAurora = _auroraState[1];
+
   var _loadingState = useState<boolean>(false);
   var isLoading = _loadingState[0];
   var setIsLoading = _loadingState[1];
@@ -200,6 +209,10 @@ export function WorldDashboard(props: WorldDashboardProps) {
   var selectedQuakeId = _selectedQuakeState[0];
   var setSelectedQuakeId = _selectedQuakeState[1];
 
+  var _selectedAuroraState = useState<boolean>(false);
+  var selectedAurora = _selectedAuroraState[0];
+  var setSelectedAurora = _selectedAuroraState[1];
+
   var _showArcsState = useState<boolean>(true);
   var showArcs = _showArcsState[0];
   var setShowArcs = _showArcsState[1];
@@ -215,6 +228,10 @@ export function WorldDashboard(props: WorldDashboardProps) {
   var _showQuakesState = useState<boolean>(true);
   var showQuakes = _showQuakesState[0];
   var setShowQuakes = _showQuakesState[1];
+
+  var _showAuroraState = useState<boolean>(true);
+  var showAurora = _showAuroraState[0];
+  var setShowAurora = _showAuroraState[1];
 
   var _issNowState = useState<number>(function () {
     return Date.now();
@@ -253,7 +270,10 @@ export function WorldDashboard(props: WorldDashboardProps) {
         if (json.quakes) {
           setQuakes(json.quakes);
         }
-        if ((json.fx && json.fx.length > 0) || json.iss || json.quakes) {
+        if (json.aurora) {
+          setAurora(json.aurora);
+        }
+        if ((json.fx && json.fx.length > 0) || json.iss || json.quakes || json.aurora) {
           writeCachedWorld(json);
         }
         setLoadError(null);
@@ -335,26 +355,27 @@ export function WorldDashboard(props: WorldDashboardProps) {
     [props.isActive, showISS, issOrbit]
   );
 
-  // Auto-clear selected city route, ISS, or quake inspector after configured idle period
+  // Auto-clear selected map inspector after configured idle period
   var idleResetSec =
     typeof props.idleResetSeconds === 'number' && props.idleResetSeconds >= 5
       ? props.idleResetSeconds
       : 60;
   useEffect(
     function () {
-      if (!selectedCityId && !selectedISS && !selectedQuakeId) {
+      if (!selectedCityId && !selectedISS && !selectedQuakeId && !selectedAurora) {
         return;
       }
       var id = window.setTimeout(function () {
         setSelectedCityId(null);
         setSelectedISS(false);
         setSelectedQuakeId(null);
+        setSelectedAurora(false);
       }, idleResetSec * 1000);
       return function () {
         window.clearTimeout(id);
       };
     },
-    [selectedCityId, selectedISS, selectedQuakeId, idleResetSec, props.activityTick]
+    [selectedCityId, selectedISS, selectedQuakeId, selectedAurora, idleResetSec, props.activityTick]
   );
 
   // Astronomical & ISS orbital calculations
@@ -366,6 +387,11 @@ export function WorldDashboard(props: WorldDashboardProps) {
   var isMoonFull = Math.abs(props.moonPhase - 0.5) < 0.02;
   var isMoonNew = props.moonPhase < 0.02 || props.moonPhase > 0.98;
   var moonLitPath = buildSmallMoonLitPath(props.moonPhase, 6.2);
+
+  var auroraOval =
+    showAurora && aurora
+      ? buildAuroraOvalPaths(aurora.kp, sun.lon, MAP_W, MAP_H)
+      : null;
 
   var effectiveIssMs = Math.max(props.nowMs, issNowMs);
   var issTrack =
@@ -590,6 +616,26 @@ export function WorldDashboard(props: WorldDashboardProps) {
               </button>
               <button
                 type="button"
+                class={
+                  showAurora
+                    ? 'ctrl-btn ctrl-btn-mode ctrl-btn-selected'
+                    : 'ctrl-btn ctrl-btn-mode'
+                }
+                onClick={function () {
+                  setShowAurora(function (v) {
+                    if (v) {
+                      setSelectedAurora(false);
+                    }
+                    return !v;
+                  });
+                }}
+                aria-pressed={showAurora}
+                title="Toggle Aurora Oval & geomagnetic Kp activity"
+              >
+                Aurora
+              </button>
+              <button
+                type="button"
                 class="ctrl-btn ctrl-btn-icon"
                 onClick={props.onRefresh}
                 disabled={props.isRefreshing}
@@ -634,6 +680,21 @@ export function WorldDashboard(props: WorldDashboardProps) {
                 {Math.round(issTrack.current.altKm)} km ·{' '}
                 {Math.round(issTrack.current.speedKmh).toLocaleString()} km/h ·{' '}
                 {issTrack.current.sunlit ? 'Sunlit' : 'Shadow'}
+              </span>
+            </button>
+          ) : selectedAurora && aurora ? (
+            <button
+              type="button"
+              class="world-map-inspector world-aurora-pill"
+              onClick={function () {
+                setSelectedAurora(false);
+              }}
+              title="Tap to dismiss aurora activity"
+            >
+              <span class="world-route-cities">Aurora</span>
+              <span class="world-aurora-meta">
+                Kp {aurora.kp.toFixed(1)} ({aurora.scale}) · 24h peak Kp{' '}
+                {aurora.maxKp24h.toFixed(1)}
               </span>
             </button>
           ) : selectedQuake ? (
@@ -681,6 +742,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
                 setSelectedCityId(null);
                 setSelectedISS(false);
                 setSelectedQuakeId(null);
+                setSelectedAurora(false);
               }
             }}
           >
@@ -720,6 +782,16 @@ export function WorldDashboard(props: WorldDashboardProps) {
                 <stop offset="0%" stop-color="#fb923c" stop-opacity="0.24" />
                 <stop offset="50%" stop-color="#f59e0b" stop-opacity="0.3" />
                 <stop offset="100%" stop-color="#818cf8" stop-opacity="0.2" />
+              </linearGradient>
+
+              <linearGradient id="world-aurora-grad" x1="0" y1="0" x2="0" y2="1">
+                <stop
+                  offset="0%"
+                  stop-color={auroraOval && auroraOval.isStorm ? '#c084fc' : '#34d399'}
+                  stop-opacity="0.72"
+                />
+                <stop offset="55%" stop-color="#34d399" stop-opacity="0.88" />
+                <stop offset="100%" stop-color="#10b981" stop-opacity="0.38" />
               </linearGradient>
 
               <clipPath id="world-map-clip">
@@ -820,6 +892,50 @@ export function WorldDashboard(props: WorldDashboardProps) {
                 stroke-linecap="round"
               />
 
+              {/* Live Geomagnetic Aurora Ovals (scaled by NOAA SWPC Kp index) */}
+              {auroraOval ? (
+                <g
+                  class="world-aurora-layer"
+                  onClick={function () {
+                    setSelectedCityId(null);
+                    setSelectedISS(false);
+                    setSelectedQuakeId(null);
+                    setSelectedAurora(function (v) {
+                      return !v;
+                    });
+                  }}
+                >
+                  {auroraOval.northOuter ? (
+                    <path
+                      d={auroraOval.northOuter}
+                      fill={auroraOval.isStorm ? '#a855f7' : '#10b981'}
+                      opacity={(auroraOval.intensity * 0.28).toFixed(2)}
+                    />
+                  ) : null}
+                  {auroraOval.northCore ? (
+                    <path
+                      d={auroraOval.northCore}
+                      fill="url(#world-aurora-grad)"
+                      opacity={(auroraOval.intensity * 0.62).toFixed(2)}
+                    />
+                  ) : null}
+                  {auroraOval.southOuter ? (
+                    <path
+                      d={auroraOval.southOuter}
+                      fill={auroraOval.isStorm ? '#a855f7' : '#10b981'}
+                      opacity={(auroraOval.intensity * 0.28).toFixed(2)}
+                    />
+                  ) : null}
+                  {auroraOval.southCore ? (
+                    <path
+                      d={auroraOval.southCore}
+                      fill="url(#world-aurora-grad)"
+                      opacity={(auroraOval.intensity * 0.62).toFixed(2)}
+                    />
+                  ) : null}
+                </g>
+              ) : null}
+
               {/* Toggleable Subsolar (Sun) & Sublunar (Moon) markers */}
               {showCelestial ? (
                 <g class="world-celestial-layer" aria-hidden="true">
@@ -873,6 +989,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
                         onClick={function () {
                           setSelectedCityId(null);
                           setSelectedISS(false);
+                          setSelectedAurora(false);
                           setSelectedQuakeId(isSelQ ? null : q.id);
                         }}
                       >
@@ -1001,6 +1118,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
                     onClick={function () {
                       setSelectedCityId(null);
                       setSelectedQuakeId(null);
+                      setSelectedAurora(false);
                       setSelectedISS(function (v) {
                         return !v;
                       });
@@ -1129,6 +1247,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
                         onClick={function () {
                           setSelectedISS(false);
                           setSelectedQuakeId(null);
+                          setSelectedAurora(false);
                           setSelectedCityId(isSel ? null : pin.city.id);
                         }}
                       >
@@ -1230,6 +1349,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
                       onClick={function () {
                         setSelectedISS(false);
                         setSelectedQuakeId(null);
+                        setSelectedAurora(false);
                         if (pin.isHome) {
                           setSelectedCityId(null);
                         } else {

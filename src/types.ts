@@ -302,12 +302,20 @@ export interface EarthquakeEvent {
   depthKm: number;
 }
 
+export interface AuroraStatus {
+  kp: number;
+  maxKp24h: number;
+  scale: string;
+  observedAt: string;
+}
+
 export interface WorldResponse {
   version: string;
   fetchedAt: string;
   fx: FXQuote[];
   iss?: ISSOrbit;
   quakes?: EarthquakeEvent[];
+  aurora?: AuroraStatus;
 }
 
 export type WeatherKind =

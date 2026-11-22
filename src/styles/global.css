@@ -3673,6 +3673,19 @@ body,
   text-overflow: ellipsis;
 }
 
+.world-aurora-pill {
+  border-color: rgba(52, 211, 153, 0.5);
+  color: #d1fae5;
+}
+
+.world-aurora-meta {
+  font-weight: 500;
+  color: #6ee7b7;
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .world-map-card {
   position: relative;
   flex: 1;
@@ -3697,7 +3710,8 @@ body,
 .world-arc-group,
 .world-city-pin,
 .world-iss-marker,
-.world-quake-pin {
+.world-quake-pin,
+.world-aurora-layer {
   cursor: pointer;
 }
 

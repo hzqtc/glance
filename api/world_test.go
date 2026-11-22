@@ -15,8 +15,24 @@ func TestWorldHandlerFXRates(t *testing.T) {
 	origClient := stocksHTTPClient
 	origISSClient := issHTTPClient
 	origQuakesClient := quakesHTTPClient
+	origAuroraClient := auroraHTTPClient
 	sampleLine1 := "1 25544U 98067A   26326.50000000  .00016717  00000-0  29812-3 0  9995"
 	sampleLine2 := "2 25544  51.6416 247.4627 0006703 130.5360 325.0288 15.49815350483021"
+	auroraHTTPClient = &http.Client{
+		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			b, _ := json.Marshal([][]any{
+				{"time_tag", "Kp", "a_running", "station_count"},
+				{"2026-11-22 06:00:00.000", "2.67", "12", "8"},
+				{"2026-11-22 09:00:00.000", "5.33", "56", "8"},
+				{"2026-11-22 12:00:00.000", "4.33", "32", "8"},
+			})
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+				Body:       io.NopCloser(bytes.NewReader(b)),
+			}, nil
+		}),
+	}
 	quakesHTTPClient = &http.Client{
 		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 			b, _ := json.Marshal(map[string]any{
@@ -117,6 +133,7 @@ func TestWorldHandlerFXRates(t *testing.T) {
 		stocksHTTPClient = origClient
 		issHTTPClient = origISSClient
 		quakesHTTPClient = origQuakesClient
+		auroraHTTPClient = origAuroraClient
 		fxCacheMu.Lock()
 		fxCache = fxCacheEntry{}
 		fxCacheMu.Unlock()
@@ -126,6 +143,9 @@ func TestWorldHandlerFXRates(t *testing.T) {
 		quakesCacheMu.Lock()
 		quakesCache = quakesCacheEntry{}
 		quakesCacheMu.Unlock()
+		auroraCacheMu.Lock()
+		auroraCache = auroraCacheEntry{}
+		auroraCacheMu.Unlock()
 	}()
 
 	req := httptest.NewRequest(http.MethodGet, "/api/world", nil)
@@ -163,6 +183,12 @@ func TestWorldHandlerFXRates(t *testing.T) {
 	}
 	if resp.Quakes[0].ID != "q2" || math.Abs(resp.Quakes[0].Mag-6.2) > 0.01 {
 		t.Fatalf("expected highest magnitude quake first, got %+v", resp.Quakes[0])
+	}
+	if resp.Aurora == nil {
+		t.Fatalf("expected Aurora Kp status in response")
+	}
+	if math.Abs(resp.Aurora.Kp-4.3) > 0.05 || math.Abs(resp.Aurora.MaxKp24h-5.3) > 0.05 || resp.Aurora.Scale != "Active" {
+		t.Fatalf("unexpected Aurora status: %+v", resp.Aurora)
 	}
 }
 

@@ -546,3 +546,114 @@ export function buildISSTrack(
     footprintSegments: buildWrappedPolylineSegments(footPts, mapW),
   };
 }
+
+export interface AuroraOvalPaths {
+  northOuter: string;
+  northCore: string;
+  southOuter: string;
+  southCore: string;
+  intensity: number; // 0..1 visual intensity from Kp
+  isStorm: boolean;
+}
+
+function solvePolarRingLat(
+  poleLatDeg: number,
+  poleLonDeg: number,
+  colatDeg: number,
+  lonDeg: number
+): number {
+  var pLat = Math.abs(poleLatDeg) * DEG2RAD;
+  var dLon = (lonDeg - poleLonDeg) * DEG2RAD;
+  var A = Math.sin(pLat);
+  var B = Math.cos(pLat) * Math.cos(dLon);
+  var R = Math.sqrt(A * A + B * B);
+  var alpha = Math.atan2(B, A);
+  var ratio = Math.cos(colatDeg * DEG2RAD) / R;
+  if (ratio > 1) ratio = 1;
+  if (ratio < -1) ratio = -1;
+  var northLat = (Math.asin(ratio) - alpha) * RAD2DEG;
+  return poleLatDeg >= 0 ? northLat : -northLat;
+}
+
+function buildAuroraBandPolygon(
+  poleLatDeg: number,
+  poleLonDeg: number,
+  kp: number,
+  sunLon: number,
+  widthScale: number,
+  mapW: number,
+  mapH: number
+): string {
+  var clampedKp = Math.max(0, Math.min(9, kp));
+  var steps = 120;
+  var upperPts: ProjectedPoint[] = [];
+  var lowerPts: ProjectedPoint[] = [];
+  var anyVisible = false;
+
+  for (var i = 0; i <= steps; i++) {
+    var frac = i / steps;
+    var lon = MAP_LEFT_LON + frac * 360;
+    // Nightside expansion factor: 0 at solar noon, 1 at solar midnight
+    var nightFactor = 0.5 * (1 - Math.cos((lon - sunLon) * DEG2RAD));
+    var centerColat = 15.2 + 2.25 * clampedKp + 4.4 * nightFactor;
+    var halfWidth = (2.6 + 0.48 * clampedKp) * widthScale;
+
+    var innerColat = Math.max(9.5, centerColat - halfWidth);
+    var outerColat = Math.min(54, centerColat + halfWidth);
+
+    var innerLat = solvePolarRingLat(poleLatDeg, poleLonDeg, innerColat, lon);
+    var outerLat = solvePolarRingLat(poleLatDeg, poleLonDeg, outerColat, lon);
+
+    if (
+      (innerLat <= MAP_MAX_LAT && innerLat >= MAP_MIN_LAT) ||
+      (outerLat <= MAP_MAX_LAT && outerLat >= MAP_MIN_LAT)
+    ) {
+      anyVisible = true;
+    }
+
+    var x = frac * mapW;
+    upperPts.push({ x: x, y: projectLat(innerLat, mapH) });
+    lowerPts.push({ x: x, y: projectLat(outerLat, mapH) });
+  }
+
+  if (!anyVisible) {
+    return '';
+  }
+
+  var parts: string[] = [];
+  for (var u = 0; u < upperPts.length; u++) {
+    parts.push(
+      (u === 0 ? 'M ' : 'L ') +
+        upperPts[u].x.toFixed(1) +
+        ' ' +
+        upperPts[u].y.toFixed(1)
+    );
+  }
+  for (var l = lowerPts.length - 1; l >= 0; l--) {
+    parts.push('L ' + lowerPts[l].x.toFixed(1) + ' ' + lowerPts[l].y.toFixed(1));
+  }
+  parts.push('Z');
+  return parts.join(' ');
+}
+
+/**
+ * Computes geomagnetic northern and southern aurora ovals (Feldstein-Starkov
+ * dipole model expanded dynamically by live NOAA planetary Kp & solar midnight).
+ */
+export function buildAuroraOvalPaths(
+  kp: number,
+  sunLon: number,
+  mapW: number,
+  mapH: number
+): AuroraOvalPaths {
+  var clampedKp = Math.max(0, Math.min(9, kp));
+  var intensity = Math.max(0.28, Math.min(0.95, 0.28 + (clampedKp / 8) * 0.67));
+  return {
+    northOuter: buildAuroraBandPolygon(80.8, -72.8, clampedKp, sunLon, 1.45, mapW, mapH),
+    northCore: buildAuroraBandPolygon(80.8, -72.8, clampedKp, sunLon, 0.72, mapW, mapH),
+    southOuter: buildAuroraBandPolygon(-80.8, 107.2, clampedKp, sunLon, 1.45, mapW, mapH),
+    southCore: buildAuroraBandPolygon(-80.8, 107.2, clampedKp, sunLon, 0.72, mapW, mapH),
+    intensity: intensity,
+    isStorm: clampedKp >= 5,
+  };
+}
