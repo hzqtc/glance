@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 func TestParseCalendarSourcesFromEnv(t *testing.T) {
@@ -149,5 +150,73 @@ func TestCalendarHandlerICSExpansionAndPrivacyHeader(t *testing.T) {
 	_ = json.Unmarshal(rec2.Body.Bytes(), &emptyResp)
 	if emptyResp.Configured || len(emptyResp.Events) != 0 {
 		t.Fatalf("expected configured=false and 0 events, got %+v", emptyResp)
+	}
+}
+
+func TestExtractUpcomingTrips(t *testing.T) {
+	loc := loadTimezoneSafe("America/Los_Angeles")
+	now := time.Date(2026, 11, 21, 18, 0, 0, 0, loc)
+
+	rawICS := "BEGIN:VCALENDAR\r\n" +
+		"VERSION:2.0\r\n" +
+		// Past stay: should be excluded
+		"BEGIN:VEVENT\r\n" +
+		"UID:past-stay\r\n" +
+		"SUMMARY:Stay at Old Hotel\r\n" +
+		"DTSTART;VALUE=DATE:20261110\r\n" +
+		"DTEND;VALUE=DATE:20261113\r\n" +
+		"END:VEVENT\r\n" +
+		// Short timed dinner at a hotel brand: should be excluded
+		"BEGIN:VEVENT\r\n" +
+		"UID:short-dinner\r\n" +
+		"SUMMARY:Dinner at Marriott\r\n" +
+		"DTSTART;TZID=America/Los_Angeles:20261124T190000\r\n" +
+		"DTEND;TZID=America/Los_Angeles:20261124T210000\r\n" +
+		"END:VEVENT\r\n" +
+		// Multi-day non-trip event: should be excluded
+		"BEGIN:VEVENT\r\n" +
+		"UID:offsite\r\n" +
+		"SUMMARY:Winner Announcement\r\n" +
+		"DTSTART;VALUE=DATE:20261126\r\n" +
+		"DTEND;VALUE=DATE:20261128\r\n" +
+		"END:VEVENT\r\n" +
+		// Upcoming Gmail-style all-day multi-day hotel stay
+		"BEGIN:VEVENT\r\n" +
+		"UID:kyoto-stay\r\n" +
+		"SUMMARY:Stay at Park Hyatt Kyoto\r\n" +
+		"LOCATION:Kyoto\\, Japan\r\n" +
+		"DTSTART;VALUE=DATE:20261205\r\n" +
+		"DTEND;VALUE=DATE:20261209\r\n" +
+		"END:VEVENT\r\n" +
+		// Later multi-day trip
+		"BEGIN:VEVENT\r\n" +
+		"UID:ski-trip\r\n" +
+		"SUMMARY:Tahoe Ski Trip\r\n" +
+		"DTSTART;VALUE=DATE:20270115\r\n" +
+		"DTEND;VALUE=DATE:20270118\r\n" +
+		"END:VEVENT\r\n" +
+		// Timed multi-day hotel check-in/check-out
+		"BEGIN:VEVENT\r\n" +
+		"UID:timed-stay\r\n" +
+		"SUMMARY:Stay at Four Seasons Maui\r\n" +
+		"DTSTART;TZID=America/Los_Angeles:20270210T150000\r\n" +
+		"DTEND;TZID=America/Los_Angeles:20270213T110000\r\n" +
+		"END:VEVENT\r\n" +
+		"END:VCALENDAR\r\n"
+
+	parsed := parseICSEvents(rawICS, loc)
+	trips := normalizeUpcomingTrips(extractUpcomingTrips(parsed, "cal-1", "Personal", "#38bdf8", now, loc))
+
+	if len(trips) != 3 {
+		t.Fatalf("expected 3 upcoming trips, got %d: %+v", len(trips), trips)
+	}
+	if trips[0].DisplayName != "Park Hyatt Kyoto" || trips[0].StartDate != "2026-12-05" || trips[0].EndDate != "2026-12-08" || trips[0].Days != 4 {
+		t.Fatalf("unexpected first trip: %+v", trips[0])
+	}
+	if trips[1].DisplayName != "Tahoe Ski Trip" || trips[1].StartDate != "2027-01-15" || trips[1].Days != 3 {
+		t.Fatalf("unexpected second trip: %+v", trips[1])
+	}
+	if trips[2].DisplayName != "Four Seasons Maui" || trips[2].StartDate != "2027-02-10" || trips[2].EndDate != "2027-02-13" || trips[2].Days != 4 {
+		t.Fatalf("unexpected third trip: %+v", trips[2])
 	}
 }

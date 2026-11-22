@@ -59,17 +59,31 @@ type CalendarEvent struct {
 	EndTime      string `json:"endTime,omitempty"`   // HH:MM (24h) in display timezone
 }
 
+type CalendarTrip struct {
+	ID           string `json:"id"`
+	CalendarID   string `json:"calendarId"`
+	CalendarName string `json:"calendarName"`
+	Color        string `json:"color"`
+	Title        string `json:"title"`
+	DisplayName  string `json:"displayName"`
+	Location     string `json:"location,omitempty"`
+	StartDate    string `json:"startDate"` // YYYY-MM-DD inclusive
+	EndDate      string `json:"endDate"`   // YYYY-MM-DD inclusive last day
+	Days         int    `json:"days"`      // Total inclusive days
+}
+
 type CalendarResponse struct {
-	Version    string          `json:"version"`
-	FetchedAt  string          `json:"fetchedAt"`
-	Timezone   string          `json:"timezone"`
-	Year       int             `json:"year"`
-	Month      int             `json:"month"`
-	Configured bool            `json:"configured"`
-	Calendars  []CalendarMeta  `json:"calendars"`
-	Events     []CalendarEvent `json:"events"`
-	NextEvent  *CalendarEvent  `json:"nextEvent,omitempty"`
-	Warnings   []string        `json:"warnings,omitempty"`
+	Version       string          `json:"version"`
+	FetchedAt     string          `json:"fetchedAt"`
+	Timezone      string          `json:"timezone"`
+	Year          int             `json:"year"`
+	Month         int             `json:"month"`
+	Configured    bool            `json:"configured"`
+	Calendars     []CalendarMeta  `json:"calendars"`
+	Events        []CalendarEvent `json:"events"`
+	NextEvent     *CalendarEvent  `json:"nextEvent,omitempty"`
+	UpcomingTrips []CalendarTrip  `json:"upcomingTrips,omitempty"`
+	Warnings      []string        `json:"warnings,omitempty"`
 }
 
 var defaultCalendarPalette = []string{
@@ -143,6 +157,7 @@ func CalendarHandler(w http.ResponseWriter, r *http.Request) {
 	var (
 		allEvents      []CalendarEvent
 		upcomingEvents []CalendarEvent
+		upcomingTrips  []CalendarTrip
 		warnings       []string
 		mu             sync.Mutex
 		wg             sync.WaitGroup
@@ -169,10 +184,12 @@ func CalendarHandler(w http.ResponseWriter, r *http.Request) {
 
 			winEvs := expandEventsForWindow(parsed, s.ID, calName, s.Color, winStart, winEnd, loc)
 			upEvs := expandEventsForWindow(parsed, s.ID, calName, s.Color, upcomingStart, upcomingEnd, loc)
+			trips := extractUpcomingTrips(parsed, s.ID, calName, s.Color, nowLocal, loc)
 
 			mu.Lock()
 			allEvents = append(allEvents, winEvs...)
 			upcomingEvents = append(upcomingEvents, upEvs...)
+			upcomingTrips = append(upcomingTrips, trips...)
 			if calName != s.Name {
 				for i := range calendars {
 					if calendars[i].ID == s.ID {
@@ -188,6 +205,7 @@ func CalendarHandler(w http.ResponseWriter, r *http.Request) {
 
 	sortCalendarEvents(allEvents)
 	sortCalendarEvents(upcomingEvents)
+	upcomingTrips = normalizeUpcomingTrips(upcomingTrips)
 
 	var nextEv *CalendarEvent
 	nowMs := nowLocal.UnixNano() / int64(time.Millisecond)
@@ -208,16 +226,17 @@ func CalendarHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := CalendarResponse{
-		Version:    config.ComputeVersion(rawConfig),
-		FetchedAt:  time.Now().UTC().Format(time.RFC3339),
-		Timezone:   tzName,
-		Year:       year,
-		Month:      month,
-		Configured: len(sources) > 0,
-		Calendars:  calendars,
-		Events:     allEvents,
-		NextEvent:  nextEv,
-		Warnings:   warnings,
+		Version:       config.ComputeVersion(rawConfig),
+		FetchedAt:     time.Now().UTC().Format(time.RFC3339),
+		Timezone:      tzName,
+		Year:          year,
+		Month:         month,
+		Configured:    len(sources) > 0,
+		Calendars:     calendars,
+		Events:        allEvents,
+		NextEvent:     nextEv,
+		UpcomingTrips: upcomingTrips,
+		Warnings:      warnings,
 	}
 
 	// Private calendar data must NEVER be cached publicly on shared CDN edges
@@ -1160,6 +1179,308 @@ func sortCalendarEvents(events []CalendarEvent) {
 		}
 		return events[i].Title < events[j].Title
 	})
+}
+
+var strongStayPrefixes = []string{
+	"stay at ",
+	"stay in ",
+	"stay - ",
+	"hotel stay",
+	"hotel:",
+}
+
+var lodgingKeywords = []string{
+	"hotel",
+	"resort",
+	"airbnb",
+	"vrbo",
+	"ryokan",
+	"motel",
+	"hostel",
+	"bed and breakfast",
+	"b&b",
+	"lodge",
+	"marriott",
+	"hilton",
+	"hyatt",
+	"westin",
+	"sheraton",
+	"intercontinental",
+	"fairmont",
+	"ritz-carlton",
+	"ritz carlton",
+	"four seasons",
+	"waldorf",
+	"st. regis",
+	"st regis",
+	"conrad",
+	"kimpton",
+	"andaz",
+	"alila",
+	"doubletree",
+	"embassy suites",
+	"courtyard",
+	"hampton inn",
+	"residence inn",
+	"homewood suites",
+	"holiday inn",
+	"crowne plaza",
+	"ac hotel",
+	"moxy",
+	"sofitel",
+	"novotel",
+	"shangri-la",
+	"mandarin oriental",
+	"peninsula",
+	"banyan tree",
+	"hoshinoya",
+	"酒店",
+	"民宿",
+	"入住",
+}
+
+var travelKeywords = []string{
+	"vacation",
+	"getaway",
+	"cruise",
+	"road trip",
+	"ski trip",
+	"度假",
+	"旅游",
+	"旅行",
+}
+
+func isASCIIAlphaNum(b byte) bool {
+	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9')
+}
+
+func containsWholeWord(lower, word string) bool {
+	if word == "" || len(lower) < len(word) {
+		return false
+	}
+	offset := 0
+	for {
+		idx := strings.Index(lower[offset:], word)
+		if idx < 0 {
+			return false
+		}
+		start := offset + idx
+		end := start + len(word)
+		leftOK := start == 0 || !isASCIIAlphaNum(lower[start-1])
+		rightOK := end == len(lower) || !isASCIIAlphaNum(lower[end])
+		if leftOK && rightOK {
+			return true
+		}
+		offset = start + 1
+	}
+}
+
+func isTripEvent(title string, allDay bool, days int, dur time.Duration) bool {
+	lower := strings.ToLower(strings.TrimSpace(title))
+	if lower == "" {
+		return false
+	}
+
+	// Explicit "Stay at ..." / hotel stay events (all-day or multi-day timed check-in/out)
+	for _, pfx := range strongStayPrefixes {
+		if strings.HasPrefix(lower, pfx) || strings.Contains(lower, " "+pfx) {
+			return allDay || dur >= 18*time.Hour
+		}
+	}
+
+	// Hotel / lodging brand or venue keywords
+	hasLodging := false
+	for _, kw := range lodgingKeywords {
+		if strings.Contains(lower, kw) {
+			hasLodging = true
+			break
+		}
+	}
+	if !hasLodging && (containsWholeWord(lower, "inn") || containsWholeWord(lower, "villa") || containsWholeWord(lower, "cabin")) {
+		hasLodging = true
+	}
+	if hasLodging {
+		return allDay || dur >= 18*time.Hour
+	}
+
+	// General travel/trip keywords require multi-day span to avoid 1-day errands/reminders
+	hasTravel := containsWholeWord(lower, "trip")
+	if !hasTravel {
+		for _, kw := range travelKeywords {
+			if strings.Contains(lower, kw) {
+				hasTravel = true
+				break
+			}
+		}
+	}
+	if hasTravel {
+		return (allDay && days >= 2) || (!allDay && dur >= 24*time.Hour)
+	}
+
+	return false
+}
+
+func cleanTripDisplayName(title string) string {
+	trimmed := strings.TrimSpace(title)
+	lower := strings.ToLower(trimmed)
+	for _, pfx := range []string{"stay at ", "stay in ", "stay - ", "hotel: "} {
+		if strings.HasPrefix(lower, pfx) {
+			rest := strings.TrimSpace(trimmed[len(pfx):])
+			if rest != "" {
+				return rest
+			}
+		}
+	}
+	return trimmed
+}
+
+func calendarDaysSpan(startDay, endExclDay time.Time) int {
+	// Use UTC midnight arithmetic so DST transitions never skew day counts
+	sUTC := time.Date(startDay.Year(), startDay.Month(), startDay.Day(), 0, 0, 0, 0, time.UTC)
+	eUTC := time.Date(endExclDay.Year(), endExclDay.Month(), endExclDay.Day(), 0, 0, 0, 0, time.UTC)
+	days := int(eUTC.Sub(sUTC) / (24 * time.Hour))
+	if days < 1 {
+		return 1
+	}
+	return days
+}
+
+// extractUpcomingTrips scans parsed ICS events over the next 365 days for hotel stays & multi-day trips.
+func extractUpcomingTrips(
+	rawEvents []rawICSEvent,
+	calID, calName, color string,
+	nowLocal time.Time,
+	loc *time.Location,
+) []CalendarTrip {
+	todayStart := time.Date(nowLocal.Year(), nowLocal.Month(), nowLocal.Day(), 0, 0, 0, 0, loc)
+	horizonEnd := todayStart.AddDate(1, 0, 0)
+
+	overrides := make(map[string]map[string]bool)
+	for _, ev := range rawEvents {
+		if ev.RecurrenceID != nil && ev.UID != "" {
+			if overrides[ev.UID] == nil {
+				overrides[ev.UID] = make(map[string]bool)
+			}
+			overrides[ev.UID][ev.RecurrenceDK] = true
+			overrides[ev.UID][strconv.FormatInt(ev.RecurrenceID.UTC().Unix(), 10)] = true
+		}
+	}
+
+	var trips []CalendarTrip
+	consider := func(ev rawICSEvent, start, end time.Time) {
+		if !end.After(todayStart) || !start.Before(horizonEnd) {
+			return
+		}
+		dur := end.Sub(start)
+		startLocal := start.In(loc)
+		endLocal := end.In(loc)
+
+		var startDay, endInclDay time.Time
+		var days int
+		if ev.AllDay {
+			startDay = time.Date(startLocal.Year(), startLocal.Month(), startLocal.Day(), 0, 0, 0, 0, loc)
+			endExclDay := time.Date(endLocal.Year(), endLocal.Month(), endLocal.Day(), 0, 0, 0, 0, loc)
+			if !endExclDay.After(startDay) {
+				endExclDay = startDay.AddDate(0, 0, 1)
+			}
+			if !endExclDay.After(todayStart) {
+				return
+			}
+			days = calendarDaysSpan(startDay, endExclDay)
+			endInclDay = endExclDay.AddDate(0, 0, -1)
+		} else {
+			if !end.After(nowLocal) {
+				return
+			}
+			startDay = time.Date(startLocal.Year(), startLocal.Month(), startLocal.Day(), 0, 0, 0, 0, loc)
+			endInclDay = time.Date(endLocal.Year(), endLocal.Month(), endLocal.Day(), 0, 0, 0, 0, loc)
+			if endInclDay.Before(startDay) {
+				endInclDay = startDay
+			}
+			days = calendarDaysSpan(startDay, endInclDay.AddDate(0, 0, 1))
+		}
+
+		if !isTripEvent(ev.Summary, ev.AllDay, days, dur) {
+			return
+		}
+
+		startStr := startDay.Format("2006-01-02")
+		endStr := endInclDay.Format("2006-01-02")
+		trips = append(trips, CalendarTrip{
+			ID:           fmt.Sprintf("%s-%s-%s", calID, ev.UID, startStr),
+			CalendarID:   calID,
+			CalendarName: calName,
+			Color:        color,
+			Title:        ev.Summary,
+			DisplayName:  cleanTripDisplayName(ev.Summary),
+			Location:     ev.Location,
+			StartDate:    startStr,
+			EndDate:      endStr,
+			Days:         days,
+		})
+	}
+
+	for _, ev := range rawEvents {
+		dur := ev.End.Sub(ev.Start)
+		if dur <= 0 {
+			if ev.AllDay {
+				dur = 24 * time.Hour
+			} else {
+				dur = time.Hour
+			}
+		}
+		if ev.RRule == "" {
+			consider(ev, ev.Start, ev.End)
+			continue
+		}
+		starts := expandRRuleStarts(ev, todayStart.Add(-dur), horizonEnd, loc)
+		ov := overrides[ev.UID]
+		for _, st := range starts {
+			if ev.ExDates[st.UTC().Unix()] {
+				continue
+			}
+			dayKey := st.In(loc).Format("2006-01-02")
+			if ev.AllDay && ev.ExDayKeys[dayKey] {
+				continue
+			}
+			if ov != nil && (ov[dayKey] || ov[strconv.FormatInt(st.UTC().Unix(), 10)]) {
+				continue
+			}
+			consider(ev, st, st.Add(dur))
+		}
+	}
+
+	return trips
+}
+
+func normalizeUpcomingTrips(trips []CalendarTrip) []CalendarTrip {
+	if len(trips) == 0 {
+		return nil
+	}
+	sort.Slice(trips, func(i, j int) bool {
+		if trips[i].StartDate != trips[j].StartDate {
+			return trips[i].StartDate < trips[j].StartDate
+		}
+		if trips[i].Days != trips[j].Days {
+			return trips[i].Days > trips[j].Days
+		}
+		return trips[i].Title < trips[j].Title
+	})
+
+	seen := make(map[string]bool, len(trips))
+	out := make([]CalendarTrip, 0, len(trips))
+	for _, t := range trips {
+		key := t.CalendarID + "|" + t.StartDate + "|" + strings.ToLower(t.DisplayName)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, t)
+		if len(out) >= 10 {
+			break
+		}
+	}
+	return out
 }
 
 func writeCalendarError(w http.ResponseWriter, status int, message string) {

@@ -212,6 +212,19 @@ export interface CalendarEvent {
   isHoliday?: boolean;
 }
 
+export interface CalendarTrip {
+  id: string;
+  calendarId: string;
+  calendarName: string;
+  color: string;
+  title: string;
+  displayName: string;
+  location?: string;
+  startDate: string; // YYYY-MM-DD inclusive
+  endDate: string; // YYYY-MM-DD inclusive
+  days: number;
+}
+
 export interface CalendarResponse {
   version: string;
   fetchedAt: string;
@@ -222,6 +235,7 @@ export interface CalendarResponse {
   calendars: CalendarMeta[];
   events: CalendarEvent[];
   nextEvent?: CalendarEvent | null;
+  upcomingTrips?: CalendarTrip[];
   warnings?: string[];
 }
 

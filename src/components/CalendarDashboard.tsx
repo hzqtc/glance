@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
-import type { CalendarEvent, CalendarResponse, TimeFormat } from '../types';
+import type { CalendarEvent, CalendarResponse, CalendarTrip, TimeFormat } from '../types';
 import {
   MONTHS_FULL,
   MONTHS_SHORT,
@@ -8,6 +8,7 @@ import {
   buildMonthGridMonday,
   formatEventTimeRange,
   formatRelativeDayLabel,
+  formatTripCountdown,
   getChineseLunarDate,
   getTodayParts,
   getUSHolidaysForYear,
@@ -248,6 +249,14 @@ export function CalendarDashboard(props: CalendarDashboardProps) {
     setSelectedDateKey(today.dateKey);
   }
 
+  function jumpToTrip(trip: CalendarTrip) {
+    var targetKey = trip.startDate < today.dateKey ? today.dateKey : trip.startDate;
+    var parts = parseDateKey(targetKey);
+    setViewYear(parts.year);
+    setViewMonth(parts.month);
+    setSelectedDateKey(targetKey);
+  }
+
   function handleSelectDay(year: number, month: number, dateKey: string) {
     setSelectedDateKey(dateKey);
     if (year !== viewYear || month !== viewMonth) {
@@ -360,6 +369,22 @@ export function CalendarDashboard(props: CalendarDashboardProps) {
   var isConfigured = data ? data.configured : true;
   var multiCal = calendars.length > 1;
 
+  // Pick the earliest visible upcoming (or ongoing) trip from the 365-day scan
+  var nextTrip: CalendarTrip | null = null;
+  var upcomingTrips = data && data.upcomingTrips ? data.upcomingTrips : [];
+  for (var tIdx = 0; tIdx < upcomingTrips.length; tIdx++) {
+    var cand = upcomingTrips[tIdx];
+    if (hiddenCals[cand.calendarId]) {
+      continue;
+    }
+    if (cand.endDate < today.dateKey) {
+      continue;
+    }
+    nextTrip = cand;
+    break;
+  }
+  var nextTripInfo = nextTrip ? formatTripCountdown(nextTrip, today.dateKey) : null;
+
   return (
     <div class="cal-slide">
       <div class="cal-backdrop" aria-hidden="true" />
@@ -467,6 +492,48 @@ export function CalendarDashboard(props: CalendarDashboardProps) {
               <span class="cal-status-pill cal-status-warn">Offline ({loadError})</span>
             ) : !isConfigured ? (
               <span class="cal-status-pill">Holidays · Local</span>
+            ) : nextTrip && nextTripInfo ? (
+              <button
+                type="button"
+                class={
+                  nextTripInfo.isOngoing
+                    ? 'cal-trip-pill cal-trip-pill-ongoing'
+                    : nextTripInfo.isSoon
+                      ? 'cal-trip-pill cal-trip-pill-soon'
+                      : 'cal-trip-pill'
+                }
+                onClick={function () {
+                  if (nextTrip) jumpToTrip(nextTrip);
+                }}
+                title={
+                  nextTrip.title +
+                  ' (' +
+                  nextTrip.startDate +
+                  (nextTrip.endDate !== nextTrip.startDate ? ' – ' + nextTrip.endDate : '') +
+                  ')'
+                }
+              >
+                <svg
+                  width="13"
+                  height="13"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  class="cal-trip-icon"
+                  aria-hidden="true"
+                >
+                  <path d="M17.8 19.2L16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z" />
+                </svg>
+                <span class="cal-trip-countdown">{nextTripInfo.badge}</span>
+                <span class="cal-trip-sep" aria-hidden="true">·</span>
+                <span class="cal-trip-name">{nextTrip.displayName || nextTrip.title}</span>
+                {nextTripInfo.dateLabel ? (
+                  <span class="cal-trip-date">{nextTripInfo.dateLabel}</span>
+                ) : null}
+              </button>
             ) : null}
           </div>
         </header>

@@ -2412,6 +2412,108 @@ body,
   background-color: rgba(245, 158, 11, 0.2);
 }
 
+.cal-trip-pill {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  max-width: 332px;
+  height: 32px;
+  padding: 0 12px;
+  overflow: hidden;
+  border: none;
+  border-radius: 999px;
+  background-color: rgba(56, 189, 248, 0.15);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  outline: none;
+  -webkit-appearance: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.2s ease, transform 0.15s ease;
+}
+
+.cal-trip-pill:active {
+  transform: scale(0.97);
+  background-color: rgba(56, 189, 248, 0.26);
+}
+
+.cal-trip-pill-soon {
+  background-color: rgba(245, 158, 11, 0.18);
+}
+
+.cal-trip-pill-soon:active {
+  background-color: rgba(245, 158, 11, 0.28);
+}
+
+.cal-trip-pill-ongoing {
+  background-color: rgba(16, 185, 129, 0.2);
+}
+
+.cal-trip-pill-ongoing:active {
+  background-color: rgba(16, 185, 129, 0.3);
+}
+
+.cal-trip-icon {
+  flex-shrink: 0;
+  margin-right: 6px;
+  color: #7dd3fc;
+}
+
+.cal-trip-pill-soon .cal-trip-icon {
+  color: #fbbf24;
+}
+
+.cal-trip-pill-ongoing .cal-trip-icon {
+  color: #34d399;
+}
+
+.cal-trip-countdown {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: #bae6fd;
+  white-space: nowrap;
+}
+
+.cal-trip-pill-soon .cal-trip-countdown {
+  color: #fde68a;
+}
+
+.cal-trip-pill-ongoing .cal-trip-countdown {
+  color: #a7f3d0;
+}
+
+.cal-trip-sep {
+  flex-shrink: 0;
+  margin: 0 5px;
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+
+.cal-trip-name {
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cal-trip-date {
+  flex-shrink: 0;
+  margin-left: 7px;
+  padding-left: 7px;
+  border-left: 1px solid rgba(196, 220, 255, 0.2);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
 /* Split Layout: Month Grid Left (~60%) + Day Agenda Right (~40%) */
 .cal-body {
   flex: 1;

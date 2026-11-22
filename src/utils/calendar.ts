@@ -1,4 +1,4 @@
-import type { CalendarEvent, TimeFormat } from '../types';
+import type { CalendarEvent, CalendarTrip, TimeFormat } from '../types';
 
 export var MONTHS_FULL = [
   'January',
@@ -456,15 +456,75 @@ export function formatEventTimeRange(ev: CalendarEvent, timeFormat: TimeFormat):
   return start + ' – ' + end;
 }
 
-export function formatRelativeDayLabel(selectedKey: string, todayKey: string): string {
-  if (selectedKey === todayKey) return 'Today';
-  var sel = parseDateKey(selectedKey);
-  var tod = parseDateKey(todayKey);
-  var diffDays = Math.round(
-    (Date.UTC(sel.year, sel.month - 1, sel.day) -
-      Date.UTC(tod.year, tod.month - 1, tod.day)) /
+export function diffDateKeys(fromKey: string, toKey: string): number {
+  var a = parseDateKey(fromKey);
+  var b = parseDateKey(toKey);
+  return Math.round(
+    (Date.UTC(b.year, b.month - 1, b.day) - Date.UTC(a.year, a.month - 1, a.day)) /
       86400000
   );
+}
+
+export interface TripCountdownInfo {
+  badge: string;
+  dateLabel: string;
+  daysUntil: number;
+  isOngoing: boolean;
+  isSoon: boolean;
+}
+
+export function formatTripCountdown(
+  trip: CalendarTrip,
+  todayKey: string
+): TripCountdownInfo {
+  var daysUntil = diffDateKeys(todayKey, trip.startDate);
+  var p = parseDateKey(trip.startDate);
+  var dateLabel = MONTHS_SHORT[p.month - 1] + ' ' + String(p.day);
+
+  if (daysUntil < 0) {
+    var dayNum = -daysUntil + 1;
+    var badge =
+      trip.days > 1
+        ? 'Day ' + String(dayNum) + '/' + String(trip.days)
+        : 'Today';
+    return {
+      badge: badge,
+      dateLabel: '',
+      daysUntil: daysUntil,
+      isOngoing: true,
+      isSoon: true,
+    };
+  }
+  if (daysUntil === 0) {
+    return {
+      badge: 'Today',
+      dateLabel: '',
+      daysUntil: 0,
+      isOngoing: true,
+      isSoon: true,
+    };
+  }
+  if (daysUntil === 1) {
+    return {
+      badge: 'Tomorrow',
+      dateLabel: '',
+      daysUntil: 1,
+      isOngoing: false,
+      isSoon: true,
+    };
+  }
+  return {
+    badge: 'In ' + String(daysUntil) + 'd',
+    dateLabel: dateLabel,
+    daysUntil: daysUntil,
+    isOngoing: false,
+    isSoon: daysUntil <= 7,
+  };
+}
+
+export function formatRelativeDayLabel(selectedKey: string, todayKey: string): string {
+  if (selectedKey === todayKey) return 'Today';
+  var diffDays = diffDateKeys(todayKey, selectedKey);
   if (diffDays === 1) return 'Tomorrow';
   if (diffDays === -1) return 'Yesterday';
   if (diffDays > 1 && diffDays <= 30) return 'In ' + String(diffDays) + 'd';
