@@ -6,8 +6,8 @@ An ambient personal wall dashboard PWA designed for an **iPad mini 2 (iOS 12.5.7
 
 - **One-Time 4-Digit PIN Gate:**
   - Protected server-side via `GLANCE_PASSCODE` (stored in Vercel Environment Variables; never committed to Git or sent to the client). Issues a 1-year HMAC-SHA256 signed `HttpOnly` cookie on unlock and blocks `/api/weather`, `/api/stocks`, and `/api/calendar` until verified. Local dev allows open access when `GLANCE_PASSCODE` is unset, while Vercel fails closed if unset.
-- **Swipeable Auto-Rotating Carousel (Weather ↔ Stocks ↔ Calendar):**
-  - Auto-cycles across dashboards every 30s (`carousel.intervalSeconds`), automatically pausing for 5 minutes (`carousel.manualPauseSeconds`) whenever you manually swipe, tap a bottom dot, or press `←`/`→`.
+- **Vertical Auto-Rotating Carousel (Weather ↕ Stocks ↕ Calendar):**
+  - Auto-cycles across dashboards every 30s (`carousel.intervalSeconds`), automatically pausing for 5 minutes (`carousel.manualPauseSeconds`) whenever you manually swipe up/down, tap the right-side icon rail, or press `↑`/`↓`.
 - **Weather Dashboard (Slide 1):**
   - **Atmospheric Sky & Real Moon Phase:** Solar-elevation-driven sky canvas (dawn, day, sunset, twilight, night) paired with a crisp Retina vector SVG Moon showing tonight's actual astronomical phase, drifting clouds, twinkling stars, shooting stars, wind ribbons, rain, snow, fog, and storm flashes (celestial bodies hide automatically during overcast/precipitation).
   - **Adaptive Day / Twilight / Night Themes:** Light frosted-white borderless cards with crisp slate typography during daytime, warm twilight glass at sunrise/sunset, and lifted slate-blue frosted cards at night.

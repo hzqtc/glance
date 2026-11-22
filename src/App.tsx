@@ -377,15 +377,15 @@ function DashboardShell(props: DashboardShellProps) {
   var preloadReady = _preloadState[0];
   var setPreloadReady = _preloadState[1];
 
-  var _vpWidthState = useState<number>(function () {
-    return typeof window !== 'undefined' ? Math.round(window.innerWidth) : 1024;
+  var _vpHeightState = useState<number>(function () {
+    return typeof window !== 'undefined' ? Math.round(window.innerHeight) : 768;
   });
-  var viewportWidth = _vpWidthState[0];
-  var setViewportWidth = _vpWidthState[1];
+  var viewportHeight = _vpHeightState[0];
+  var setViewportHeight = _vpHeightState[1];
 
   useEffect(function () {
     function handleResize() {
-      setViewportWidth(Math.round(window.innerWidth));
+      setViewportHeight(Math.round(window.innerHeight));
     }
     window.addEventListener('resize', handleResize);
     window.addEventListener('orientationchange', handleResize);
@@ -443,15 +443,15 @@ function DashboardShell(props: DashboardShellProps) {
     setActiveSlide(nextSlide);
   }
 
-  // Desktop keyboard left/right arrow navigation between dashboards (pauses auto-rotate)
+  // Desktop keyboard up/down (and left/right) navigation between dashboards (pauses auto-rotate)
   useEffect(function () {
     function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === 'ArrowRight') {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
         pauseAutoRotate();
         setActiveSlide(function (prev) {
           return prev < TOTAL_SLIDES - 1 ? prev + 1 : prev;
         });
-      } else if (e.key === 'ArrowLeft') {
+      } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
         pauseAutoRotate();
         setActiveSlide(function (prev) {
           return prev > 0 ? prev - 1 : prev;
@@ -858,9 +858,8 @@ function DashboardShell(props: DashboardShellProps) {
   function handleTouchStart(e: TouchEvent) {
     if (!e.touches || e.touches.length !== 1) return;
     var ignore =
-      isInsideClass(e.target, 'hourly-ribbon') ||
-      isInsideClass(e.target, 'stock-chart-wrap') ||
-      isInsideClass(e.target, 'cal-filter-bar');
+      isInsideClass(e.target, 'cal-day-list') ||
+      isInsideClass(e.target, 'stock-chart-wrap');
     touchStartRef.current = {
       x: e.touches[0].clientX,
       y: e.touches[0].clientY,
@@ -876,12 +875,12 @@ function DashboardShell(props: DashboardShellProps) {
     }
     var dx = e.changedTouches[0].clientX - start.x;
     var dy = e.changedTouches[0].clientY - start.y;
-    if (Math.abs(dx) < 55 || Math.abs(dx) < Math.abs(dy) * 1.3) {
+    if (Math.abs(dy) < 55 || Math.abs(dy) < Math.abs(dx) * 1.3) {
       return;
     }
-    if (dx < 0 && activeSlide < TOTAL_SLIDES - 1) {
+    if (dy < 0 && activeSlide < TOTAL_SLIDES - 1) {
       handleManualSlideSelect(activeSlide + 1);
-    } else if (dx > 0 && activeSlide > 0) {
+    } else if (dy > 0 && activeSlide > 0) {
       handleManualSlideSelect(activeSlide - 1);
     }
   }
@@ -894,7 +893,8 @@ function DashboardShell(props: DashboardShellProps) {
     rootClass += ' anim-paused';
   }
 
-  var trackOffsetPx = -(activeSlide * viewportWidth);
+  var trackOffsetPx = -(activeSlide * viewportHeight);
+  var isLightRail = activeSlide === 0 && themeMode === 'day';
 
   return (
     <div
@@ -905,7 +905,7 @@ function DashboardShell(props: DashboardShellProps) {
       <div
         class="carousel-track"
         style={{
-          transform: 'translate3d(' + String(trackOffsetPx) + 'px, 0, 0)',
+          transform: 'translate3d(0, ' + String(trackOffsetPx) + 'px, 0)',
         }}
       >
         {/* Slide 0: Weather Dashboard */}
@@ -1041,16 +1041,19 @@ function DashboardShell(props: DashboardShellProps) {
         </section>
       </div>
 
-      {/* Subtle carousel pagination dots (amber active dot indicates manual auto-rotate pause) */}
-      <nav class="carousel-dots" aria-label="Switch dashboard">
+      {/* Vertical side rail dashboard switcher (matches top-controls pill aesthetic) */}
+      <nav
+        class={isLightRail ? 'carousel-rail carousel-rail-light' : 'carousel-rail'}
+        aria-label="Switch dashboard"
+      >
         <button
           type="button"
           class={
             activeSlide === 0
               ? isRotatePaused
-                ? 'carousel-dot carousel-dot-active carousel-dot-paused'
-                : 'carousel-dot carousel-dot-active'
-              : 'carousel-dot'
+                ? 'rail-btn rail-btn-active rail-btn-paused'
+                : 'rail-btn rail-btn-active'
+              : 'rail-btn'
           }
           onClick={function () {
             handleManualSlideSelect(0);
@@ -1062,15 +1065,37 @@ function DashboardShell(props: DashboardShellProps) {
           }
           aria-label="Weather dashboard"
           aria-current={activeSlide === 0 ? 'page' : undefined}
-        />
+        >
+          <svg
+            width="15"
+            height="15"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="ctrl-svg"
+            aria-hidden="true"
+          >
+            <path d="M12 3v2" />
+            <path d="M5.6 5.6l1.4 1.4" />
+            <path d="M18.4 5.6l-1.4 1.4" />
+            <path d="M8.5 11.5a4 4 0 0 1 7.4-1.5" />
+            <path d="M6.5 19h11a3.5 3.5 0 0 0 .5-6.96A5 5 0 0 0 8.2 11a3.5 3.5 0 0 0-1.7 8z" />
+          </svg>
+        </button>
+
+        <span class="rail-sep" aria-hidden="true" />
+
         <button
           type="button"
           class={
             activeSlide === 1
               ? isRotatePaused
-                ? 'carousel-dot carousel-dot-active carousel-dot-paused'
-                : 'carousel-dot carousel-dot-active'
-              : 'carousel-dot'
+                ? 'rail-btn rail-btn-active rail-btn-paused'
+                : 'rail-btn rail-btn-active'
+              : 'rail-btn'
           }
           onClick={function () {
             handleManualSlideSelect(1);
@@ -1082,15 +1107,34 @@ function DashboardShell(props: DashboardShellProps) {
           }
           aria-label="Stocks dashboard"
           aria-current={activeSlide === 1 ? 'page' : undefined}
-        />
+        >
+          <svg
+            width="15"
+            height="15"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.1"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="ctrl-svg"
+            aria-hidden="true"
+          >
+            <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
+            <polyline points="16 7 22 7 22 13" />
+          </svg>
+        </button>
+
+        <span class="rail-sep" aria-hidden="true" />
+
         <button
           type="button"
           class={
             activeSlide === 2
               ? isRotatePaused
-                ? 'carousel-dot carousel-dot-active carousel-dot-paused'
-                : 'carousel-dot carousel-dot-active'
-              : 'carousel-dot'
+                ? 'rail-btn rail-btn-active rail-btn-paused'
+                : 'rail-btn rail-btn-active'
+              : 'rail-btn'
           }
           onClick={function () {
             handleManualSlideSelect(2);
@@ -1102,7 +1146,25 @@ function DashboardShell(props: DashboardShellProps) {
           }
           aria-label="Calendar dashboard"
           aria-current={activeSlide === 2 ? 'page' : undefined}
-        />
+        >
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="ctrl-svg"
+            aria-hidden="true"
+          >
+            <rect x="3" y="4" width="18" height="18" rx="3" />
+            <line x1="16" y1="2" x2="16" y2="6" />
+            <line x1="8" y1="2" x2="8" y2="6" />
+            <line x1="3" y1="10" x2="21" y2="10" />
+          </svg>
+        </button>
       </nav>
 
       <div
