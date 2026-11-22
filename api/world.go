@@ -59,6 +59,17 @@ type AuroraStatus struct {
 	ObservedAt string  `json:"observedAt"`
 }
 
+type TropicalStorm struct {
+	ID         string  `json:"id"`
+	Name       string  `json:"name"`
+	Category   string  `json:"category"`
+	WindKmh    float64 `json:"windKmh"`
+	Lat        float64 `json:"lat"`
+	Lon        float64 `json:"lon"`
+	AlertLevel string  `json:"alertLevel"`
+	UpdatedAt  string  `json:"updatedAt"`
+}
+
 type WorldResponse struct {
 	Version   string            `json:"version"`
 	FetchedAt string            `json:"fetchedAt"`
@@ -66,6 +77,7 @@ type WorldResponse struct {
 	ISS       *ISSOrbit         `json:"iss,omitempty"`
 	Quakes    []EarthquakeEvent `json:"quakes,omitempty"`
 	Aurora    *AuroraStatus     `json:"aurora,omitempty"`
+	Storms    []TropicalStorm   `json:"storms,omitempty"`
 }
 
 type fxCacheEntry struct {
@@ -89,6 +101,11 @@ type auroraCacheEntry struct {
 	fetchedAt time.Time
 }
 
+type stormsCacheEntry struct {
+	storms    []TropicalStorm
+	fetchedAt time.Time
+}
+
 var (
 	fxCacheMu sync.Mutex
 	fxCache   fxCacheEntry
@@ -104,6 +121,10 @@ var (
 	auroraCacheMu    sync.Mutex
 	auroraCache      auroraCacheEntry
 	auroraHTTPClient = &http.Client{Timeout: 8 * time.Second}
+
+	stormsCacheMu    sync.Mutex
+	stormsCache      stormsCacheEntry
+	stormsHTTPClient = &http.Client{Timeout: 8 * time.Second}
 )
 
 const (
@@ -111,11 +132,14 @@ const (
 	issCacheTTL    = 3 * time.Hour
 	quakesCacheTTL = 10 * time.Minute
 	auroraCacheTTL = 15 * time.Minute
+	stormsCacheTTL = 15 * time.Minute
 
 	whereTheISSTLEURL  = "https://api.wheretheiss.at/v1/satellites/25544/tles"
 	celestrakISSTLEURL = "https://celestrak.org/NORAD/elements/gp.php?CATNR=25544&FORMAT=TLE"
 	usgsQuakesURL      = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_day.geojson"
 	noaaSWPCKpURL      = "https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json"
+	nhcCurrentStorms   = "https://www.nhc.noaa.gov/CurrentStorms.json"
+	gdacsMapFeedURL    = "https://www.gdacs.org/gdacsapi/api/events/geteventlist/MAP"
 )
 
 // WorldHandler serves GET /api/world on Vercel (and locally via cmd/devserver).
@@ -141,9 +165,10 @@ func WorldHandler(w http.ResponseWriter, r *http.Request) {
 		issOrbit *ISSOrbit
 		quakes   []EarthquakeEvent
 		aurora   *AuroraStatus
+		storms   []TropicalStorm
 		wg       sync.WaitGroup
 	)
-	wg.Add(4)
+	wg.Add(5)
 	go func() {
 		defer wg.Done()
 		fxQuotes = fetchFXQuotesCached(cfg.World.FXPairs, forceRefresh)
@@ -160,6 +185,10 @@ func WorldHandler(w http.ResponseWriter, r *http.Request) {
 		defer wg.Done()
 		aurora = fetchAuroraCached(forceRefresh)
 	}()
+	go func() {
+		defer wg.Done()
+		storms = fetchStormsCached(forceRefresh)
+	}()
 	wg.Wait()
 
 	resp := WorldResponse{
@@ -169,6 +198,7 @@ func WorldHandler(w http.ResponseWriter, r *http.Request) {
 		ISS:       issOrbit,
 		Quakes:    quakes,
 		Aurora:    aurora,
+		Storms:    storms,
 	}
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -723,6 +753,335 @@ func fetchNOAASWPCKp() (*AuroraStatus, error) {
 		Scale:      describeKpScale(latest.kp),
 		ObservedAt: latest.observedAt,
 	}, nil
+}
+
+func fetchStormsCached(forceRefresh bool) []TropicalStorm {
+	if !forceRefresh {
+		stormsCacheMu.Lock()
+		if !stormsCache.fetchedAt.IsZero() && time.Since(stormsCache.fetchedAt) < stormsCacheTTL {
+			out := make([]TropicalStorm, len(stormsCache.storms))
+			copy(out, stormsCache.storms)
+			stormsCacheMu.Unlock()
+			return out
+		}
+		stormsCacheMu.Unlock()
+	}
+
+	var (
+		nhcStorms   []TropicalStorm
+		gdacsStorms []TropicalStorm
+		nhcErr      error
+		gdacsErr    error
+		wg          sync.WaitGroup
+	)
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		nhcStorms, nhcErr = fetchNHCStorms()
+	}()
+	go func() {
+		defer wg.Done()
+		gdacsStorms, gdacsErr = fetchGDACSStorms()
+	}()
+	wg.Wait()
+
+	if nhcErr == nil || gdacsErr == nil {
+		merged := mergeTropicalStorms(nhcStorms, gdacsStorms)
+		stormsCacheMu.Lock()
+		stored := make([]TropicalStorm, len(merged))
+		copy(stored, merged)
+		stormsCache = stormsCacheEntry{
+			storms:    stored,
+			fetchedAt: time.Now(),
+		}
+		stormsCacheMu.Unlock()
+		return merged
+	}
+
+	stormsCacheMu.Lock()
+	if !stormsCache.fetchedAt.IsZero() {
+		stale := make([]TropicalStorm, len(stormsCache.storms))
+		copy(stale, stormsCache.storms)
+		stormsCacheMu.Unlock()
+		return stale
+	}
+	stormsCacheMu.Unlock()
+	return nil
+}
+
+func classifyStormWind(windKmh float64) string {
+	switch {
+	case windKmh >= 252:
+		return "Cat 5"
+	case windKmh >= 209:
+		return "Cat 4"
+	case windKmh >= 178:
+		return "Cat 3"
+	case windKmh >= 154:
+		return "Cat 2"
+	case windKmh >= 119:
+		return "Cat 1"
+	case windKmh >= 63:
+		return "Tropical Storm"
+	default:
+		return "Depression"
+	}
+}
+
+func stormAlertFromWind(windKmh float64) string {
+	if windKmh >= 178 {
+		return "Red"
+	}
+	if windKmh >= 119 {
+		return "Orange"
+	}
+	return "Green"
+}
+
+type nhcStormsPayload struct {
+	ActiveStorms []struct {
+		ID               string          `json:"id"`
+		Name             string          `json:"name"`
+		Classification   string          `json:"classification"`
+		Intensity        json.RawMessage `json:"intensity"`
+		LatitudeNumeric  *float64        `json:"latitudeNumeric"`
+		LongitudeNumeric *float64        `json:"longitudeNumeric"`
+		LastUpdate       string          `json:"lastUpdate"`
+	} `json:"activeStorms"`
+}
+
+func fetchNHCStorms() ([]TropicalStorm, error) {
+	req, err := http.NewRequest(http.MethodGet, nhcCurrentStorms, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", "GlanceDashboard/1.0")
+
+	resp, err := stormsHTTPClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("nhc HTTP %d", resp.StatusCode)
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 256*1024))
+	if err != nil {
+		return nil, err
+	}
+
+	var payload nhcStormsPayload
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return nil, err
+	}
+
+	out := make([]TropicalStorm, 0, len(payload.ActiveStorms))
+	for _, s := range payload.ActiveStorms {
+		if s.LatitudeNumeric == nil || s.LongitudeNumeric == nil {
+			continue
+		}
+		lat := *s.LatitudeNumeric
+		lon := *s.LongitudeNumeric
+		if math.IsNaN(lat) || math.IsNaN(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180 {
+			continue
+		}
+		knots, _ := parseFlexibleFloat(s.Intensity)
+		windKmh := math.Round(knots * 1.852)
+		name := strings.TrimSpace(s.Name)
+		if name == "" {
+			name = strings.TrimSpace(s.ID)
+		}
+		if name == "" {
+			continue
+		}
+		out = append(out, TropicalStorm{
+			ID:         "nhc-" + strings.ToLower(strings.TrimSpace(s.ID)),
+			Name:       name,
+			Category:   classifyStormWind(windKmh),
+			WindKmh:    windKmh,
+			Lat:        math.Round(lat*100) / 100,
+			Lon:        math.Round(lon*100) / 100,
+			AlertLevel: stormAlertFromWind(windKmh),
+			UpdatedAt:  strings.TrimSpace(s.LastUpdate),
+		})
+	}
+	return out, nil
+}
+
+type gdacsGeoJSON struct {
+	Features []struct {
+		Properties struct {
+			EventID      json.RawMessage `json:"eventid"`
+			EventType    string          `json:"eventtype"`
+			Name         string          `json:"name"`
+			EventName    string          `json:"eventname"`
+			AlertLevel   string          `json:"alertlevel"`
+			IsCurrent    string          `json:"iscurrent"`
+			ToDate       string          `json:"todate"`
+			SeverityData struct {
+				Severity     float64 `json:"severity"`
+				SeverityUnit string  `json:"severityunit"`
+			} `json:"severitydata"`
+		} `json:"properties"`
+		Geometry struct {
+			Type        string          `json:"type"`
+			Coordinates json.RawMessage `json:"coordinates"`
+		} `json:"geometry"`
+	} `json:"features"`
+}
+
+func cleanGDACSStormName(eventName, fullName string) string {
+	n := strings.TrimSpace(eventName)
+	if n == "" {
+		n = strings.TrimSpace(fullName)
+	}
+	// Strip verbose prefixes like "Tropical Cyclone " or "Hurricane "
+	for _, prefix := range []string{"Tropical Cyclone ", "Tropical Storm ", "Typhoon ", "Hurricane ", "Cyclone "} {
+		if strings.HasPrefix(strings.ToLower(n), strings.ToLower(prefix)) {
+			n = strings.TrimSpace(n[len(prefix):])
+			break
+		}
+	}
+	// Strip trailing "-26" year suffix if present (e.g., "MAN-YI-26")
+	if idx := strings.LastIndex(n, "-"); idx > 0 && len(n)-idx == 3 {
+		if _, err := strconv.Atoi(n[idx+1:]); err == nil {
+			n = strings.TrimSpace(n[:idx])
+		}
+	}
+	if n == "" {
+		return "Cyclone"
+	}
+	// Title-case ALL CAPS names like "MAN-YI" -> "Man-Yi"
+	if n == strings.ToUpper(n) && len(n) > 1 {
+		lower := strings.ToLower(n)
+		var b strings.Builder
+		capNext := true
+		for _, r := range lower {
+			if capNext && r >= 'a' && r <= 'z' {
+				b.WriteRune(r - 'a' + 'A')
+				capNext = false
+			} else {
+				b.WriteRune(r)
+				capNext = r == ' ' || r == '-'
+			}
+		}
+		return b.String()
+	}
+	return n
+}
+
+func fetchGDACSStorms() ([]TropicalStorm, error) {
+	req, err := http.NewRequest(http.MethodGet, gdacsMapFeedURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", "GlanceDashboard/1.0")
+
+	resp, err := stormsHTTPClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("gdacs HTTP %d", resp.StatusCode)
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1024*1024))
+	if err != nil {
+		return nil, err
+	}
+
+	var raw gdacsGeoJSON
+	if err := json.Unmarshal(body, &raw); err != nil {
+		return nil, err
+	}
+
+	out := make([]TropicalStorm, 0)
+	for _, f := range raw.Features {
+		if strings.ToUpper(strings.TrimSpace(f.Properties.EventType)) != "TC" {
+			continue
+		}
+		if strings.ToLower(strings.TrimSpace(f.Properties.IsCurrent)) != "true" {
+			continue
+		}
+		if strings.ToLower(strings.TrimSpace(f.Geometry.Type)) != "point" {
+			continue
+		}
+		var coords []float64
+		if err := json.Unmarshal(f.Geometry.Coordinates, &coords); err != nil || len(coords) < 2 {
+			continue
+		}
+		lon := coords[0]
+		lat := coords[1]
+		if math.IsNaN(lat) || math.IsNaN(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180 {
+			continue
+		}
+
+		windKmh := f.Properties.SeverityData.Severity
+		unit := strings.ToLower(strings.TrimSpace(f.Properties.SeverityData.SeverityUnit))
+		if unit == "kt" || unit == "kts" || unit == "knots" {
+			windKmh = windKmh * 1.852
+		} else if unit == "mph" {
+			windKmh = windKmh * 1.60934
+		}
+		if math.IsNaN(windKmh) || windKmh < 0 {
+			windKmh = 0
+		}
+		windKmh = math.Round(windKmh)
+
+		idStr := strings.Trim(strings.TrimSpace(string(f.Properties.EventID)), "\"")
+		if idStr == "" {
+			idStr = fmt.Sprintf("%.1f-%.1f", lat, lon)
+		}
+		alert := strings.TrimSpace(f.Properties.AlertLevel)
+		if alert == "" {
+			alert = stormAlertFromWind(windKmh)
+		}
+		out = append(out, TropicalStorm{
+			ID:         "gdacs-" + idStr,
+			Name:       cleanGDACSStormName(f.Properties.EventName, f.Properties.Name),
+			Category:   classifyStormWind(windKmh),
+			WindKmh:    windKmh,
+			Lat:        math.Round(lat*100) / 100,
+			Lon:        math.Round(lon*100) / 100,
+			AlertLevel: alert,
+			UpdatedAt:  strings.TrimSpace(f.Properties.ToDate),
+		})
+	}
+	return out, nil
+}
+
+func mergeTropicalStorms(nhc, gdacs []TropicalStorm) []TropicalStorm {
+	merged := make([]TropicalStorm, 0, len(nhc)+len(gdacs))
+	merged = append(merged, nhc...)
+
+	for _, g := range gdacs {
+		gNorm := strings.ToLower(strings.TrimSpace(g.Name))
+		dup := false
+		for _, existing := range merged {
+			if strings.ToLower(strings.TrimSpace(existing.Name)) == gNorm {
+				dup = true
+				break
+			}
+			if math.Abs(existing.Lat-g.Lat) < 4.0 && math.Abs(existing.Lon-g.Lon) < 4.0 {
+				dup = true
+				break
+			}
+		}
+		if !dup {
+			merged = append(merged, g)
+		}
+	}
+
+	sort.Slice(merged, func(i, j int) bool {
+		if merged[i].WindKmh != merged[j].WindKmh {
+			return merged[i].WindKmh > merged[j].WindKmh
+		}
+		return merged[i].Name < merged[j].Name
+	})
+	if len(merged) > 15 {
+		merged = merged[:15]
+	}
+	return merged
 }
 
 func writeWorldError(w http.ResponseWriter, status int, message string) {

@@ -309,6 +309,17 @@ export interface AuroraStatus {
   observedAt: string;
 }
 
+export interface TropicalStorm {
+  id: string;
+  name: string;
+  category: string;
+  windKmh: number;
+  lat: number;
+  lon: number;
+  alertLevel: string;
+  updatedAt: string;
+}
+
 export interface WorldResponse {
   version: string;
   fetchedAt: string;
@@ -316,6 +327,7 @@ export interface WorldResponse {
   iss?: ISSOrbit;
   quakes?: EarthquakeEvent[];
   aurora?: AuroraStatus;
+  storms?: TropicalStorm[];
 }
 
 export type WeatherKind =

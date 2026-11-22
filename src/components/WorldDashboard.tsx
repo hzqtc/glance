@@ -8,6 +8,7 @@ import type {
   ISSOrbit,
   TempUnit,
   TimeFormat,
+  TropicalStorm,
   WorldResponse,
 } from '../types';
 import { WORLD_BORDER_PATH, WORLD_LAND_PATH } from '../data/worldLand';
@@ -26,7 +27,7 @@ import {
   projectLonLat,
 } from '../utils/astronomy';
 import { formatHourOffset, getCityClock } from '../utils/time';
-import { formatTemp } from '../utils/weather';
+import { formatTemp, formatWind } from '../utils/weather';
 import { formatStockPct } from '../utils/stocks';
 
 export var WORLD_STORAGE_KEY = 'glance:lastWorld:v1';
@@ -189,6 +190,13 @@ export function WorldDashboard(props: WorldDashboardProps) {
   var aurora = _auroraState[0];
   var setAurora = _auroraState[1];
 
+  var _stormsState = useState<TropicalStorm[]>(function () {
+    var cached = readCachedWorld();
+    return cached && cached.storms ? cached.storms : [];
+  });
+  var storms = _stormsState[0];
+  var setStorms = _stormsState[1];
+
   var _loadingState = useState<boolean>(false);
   var isLoading = _loadingState[0];
   var setIsLoading = _loadingState[1];
@@ -213,6 +221,10 @@ export function WorldDashboard(props: WorldDashboardProps) {
   var selectedAurora = _selectedAuroraState[0];
   var setSelectedAurora = _selectedAuroraState[1];
 
+  var _selectedStormState = useState<string | null>(null);
+  var selectedStormId = _selectedStormState[0];
+  var setSelectedStormId = _selectedStormState[1];
+
   var _showArcsState = useState<boolean>(true);
   var showArcs = _showArcsState[0];
   var setShowArcs = _showArcsState[1];
@@ -232,6 +244,10 @@ export function WorldDashboard(props: WorldDashboardProps) {
   var _showAuroraState = useState<boolean>(true);
   var showAurora = _showAuroraState[0];
   var setShowAurora = _showAuroraState[1];
+
+  var _showStormsState = useState<boolean>(true);
+  var showStorms = _showStormsState[0];
+  var setShowStorms = _showStormsState[1];
 
   var _issNowState = useState<number>(function () {
     return Date.now();
@@ -273,7 +289,18 @@ export function WorldDashboard(props: WorldDashboardProps) {
         if (json.aurora) {
           setAurora(json.aurora);
         }
-        if ((json.fx && json.fx.length > 0) || json.iss || json.quakes || json.aurora) {
+        if (json.storms) {
+          setStorms(json.storms);
+        } else {
+          setStorms([]);
+        }
+        if (
+          (json.fx && json.fx.length > 0) ||
+          json.iss ||
+          json.quakes ||
+          json.aurora ||
+          json.storms
+        ) {
           writeCachedWorld(json);
         }
         setLoadError(null);
@@ -362,7 +389,13 @@ export function WorldDashboard(props: WorldDashboardProps) {
       : 60;
   useEffect(
     function () {
-      if (!selectedCityId && !selectedISS && !selectedQuakeId && !selectedAurora) {
+      if (
+        !selectedCityId &&
+        !selectedISS &&
+        !selectedQuakeId &&
+        !selectedAurora &&
+        !selectedStormId
+      ) {
         return;
       }
       var id = window.setTimeout(function () {
@@ -370,12 +403,21 @@ export function WorldDashboard(props: WorldDashboardProps) {
         setSelectedISS(false);
         setSelectedQuakeId(null);
         setSelectedAurora(false);
+        setSelectedStormId(null);
       }, idleResetSec * 1000);
       return function () {
         window.clearTimeout(id);
       };
     },
-    [selectedCityId, selectedISS, selectedQuakeId, selectedAurora, idleResetSec, props.activityTick]
+    [
+      selectedCityId,
+      selectedISS,
+      selectedQuakeId,
+      selectedAurora,
+      selectedStormId,
+      idleResetSec,
+      props.activityTick,
+    ]
   );
 
   // Astronomical & ISS orbital calculations
@@ -503,6 +545,16 @@ export function WorldDashboard(props: WorldDashboardProps) {
     for (var sq = 0; sq < quakes.length; sq++) {
       if (quakes[sq].id === selectedQuakeId) {
         selectedQuake = quakes[sq];
+        break;
+      }
+    }
+  }
+
+  var selectedStorm: TropicalStorm | null = null;
+  if (selectedStormId && showStorms) {
+    for (var ss = 0; ss < storms.length; ss++) {
+      if (storms[ss].id === selectedStormId) {
+        selectedStorm = storms[ss];
         break;
       }
     }
@@ -636,6 +688,26 @@ export function WorldDashboard(props: WorldDashboardProps) {
               </button>
               <button
                 type="button"
+                class={
+                  showStorms
+                    ? 'ctrl-btn ctrl-btn-mode ctrl-btn-selected'
+                    : 'ctrl-btn ctrl-btn-mode'
+                }
+                onClick={function () {
+                  setShowStorms(function (v) {
+                    if (v) {
+                      setSelectedStormId(null);
+                    }
+                    return !v;
+                  });
+                }}
+                aria-pressed={showStorms}
+                title="Toggle active tropical cyclones, typhoons, & hurricanes"
+              >
+                Storms
+              </button>
+              <button
+                type="button"
                 class="ctrl-btn ctrl-btn-icon"
                 onClick={props.onRefresh}
                 disabled={props.isRefreshing}
@@ -680,6 +752,23 @@ export function WorldDashboard(props: WorldDashboardProps) {
                 {Math.round(issTrack.current.altKm)} km ·{' '}
                 {Math.round(issTrack.current.speedKmh).toLocaleString()} km/h ·{' '}
                 {issTrack.current.sunlit ? 'Sunlit' : 'Shadow'}
+              </span>
+            </button>
+          ) : selectedStorm ? (
+            <button
+              type="button"
+              class="world-map-inspector world-storm-pill"
+              onClick={function () {
+                setSelectedStormId(null);
+              }}
+              title="Tap to dismiss tropical cyclone details"
+            >
+              <span class="world-route-cities">{selectedStorm.name}</span>
+              <span class="world-storm-meta">
+                {selectedStorm.category}
+                {selectedStorm.windKmh > 0
+                  ? ' · Max winds ' + formatWind(selectedStorm.windKmh, props.units)
+                  : ''}
               </span>
             </button>
           ) : selectedAurora && aurora ? (
@@ -743,6 +832,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
                 setSelectedISS(false);
                 setSelectedQuakeId(null);
                 setSelectedAurora(false);
+                setSelectedStormId(null);
               }
             }}
           >
@@ -900,6 +990,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
                     setSelectedCityId(null);
                     setSelectedISS(false);
                     setSelectedQuakeId(null);
+                    setSelectedStormId(null);
                     setSelectedAurora(function (v) {
                       return !v;
                     });
@@ -963,6 +1054,94 @@ export function WorldDashboard(props: WorldDashboardProps) {
                 </g>
               ) : null}
 
+              {/* Active Tropical Cyclones / Typhoons & Hurricanes (NHC + GDACS) */}
+              {showStorms && storms.length > 0 ? (
+                <g class="world-storms-layer">
+                  {storms.map(function (storm) {
+                    var sPt = projectLonLat(storm.lon, storm.lat, MAP_W, MAP_H);
+                    var isSelS = selectedStormId === storm.id;
+                    var isMajor = storm.windKmh >= 178 || storm.alertLevel === 'Red';
+                    var isHurr = storm.windKmh >= 119 || storm.alertLevel === 'Orange';
+                    var sColor = isMajor ? '#f43f5e' : isHurr ? '#fb923c' : '#38bdf8';
+                    var sHalo = isMajor
+                      ? 'rgba(244, 63, 94, 0.28)'
+                      : isHurr
+                        ? 'rgba(251, 146, 60, 0.24)'
+                        : 'rgba(56, 189, 248, 0.22)';
+                    // Counter-clockwise spiral in Northern Hemisphere, mirrored clockwise in Southern
+                    var spinScale = storm.lat >= 0 ? '1,1' : '-1,1';
+                    var labelLeft = sPt.x > MAP_W - 115;
+
+                    return (
+                      <g
+                        key={'storm-' + storm.id}
+                        class="world-storm-pin"
+                        transform={
+                          'translate(' + sPt.x.toFixed(1) + ',' + sPt.y.toFixed(1) + ')'
+                        }
+                        onClick={function () {
+                          setSelectedCityId(null);
+                          setSelectedISS(false);
+                          setSelectedQuakeId(null);
+                          setSelectedAurora(false);
+                          setSelectedStormId(isSelS ? null : storm.id);
+                        }}
+                      >
+                        <circle cx="0" cy="0" r="18" fill="transparent" />
+                        <circle cx="0" cy="0" r={isSelS ? '13' : '10.5'} fill={sHalo} />
+                        <g transform={'scale(' + spinScale + ')'}>
+                          {/* Spiral cyclone arms + eye */}
+                          <path
+                            d="M 0 -5.5 C 4.5 -5.5 7.5 -2 6.5 2.5 C 5.8 5.4 3 7.5 -0.8 8.2"
+                            fill="none"
+                            stroke={sColor}
+                            stroke-width="2"
+                            stroke-linecap="round"
+                          />
+                          <path
+                            d="M 0 5.5 C -4.5 5.5 -7.5 2 -6.5 -2.5 C -5.8 -5.4 -3 -7.5 0.8 -8.2"
+                            fill="none"
+                            stroke={sColor}
+                            stroke-width="2"
+                            stroke-linecap="round"
+                          />
+                          <circle
+                            cx="0"
+                            cy="0"
+                            r="3"
+                            fill="#091326"
+                            stroke={sColor}
+                            stroke-width="1.6"
+                          />
+                        </g>
+                        <text
+                          x={labelLeft ? '-12' : '12'}
+                          y="-2"
+                          text-anchor={labelLeft ? 'end' : 'start'}
+                          class="world-pin-name"
+                          fill={isMajor ? '#fda4af' : isHurr ? '#fed7aa' : '#bae6fd'}
+                          font-size="11"
+                          font-weight="700"
+                        >
+                          {storm.name}
+                        </text>
+                        <text
+                          x={labelLeft ? '-12' : '12'}
+                          y="10"
+                          text-anchor={labelLeft ? 'end' : 'start'}
+                          class="world-pin-sub"
+                          fill="rgba(226, 238, 255, 0.88)"
+                          font-size="9.5"
+                          font-weight="500"
+                        >
+                          {storm.category}
+                        </text>
+                      </g>
+                    );
+                  })}
+                </g>
+              ) : null}
+
               {/* Recent USGS Earthquakes (M4.5+ in last 24h) */}
               {showQuakes && quakes.length > 0 ? (
                 <g class="world-quakes-layer">
@@ -990,6 +1169,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
                           setSelectedCityId(null);
                           setSelectedISS(false);
                           setSelectedAurora(false);
+                          setSelectedStormId(null);
                           setSelectedQuakeId(isSelQ ? null : q.id);
                         }}
                       >
@@ -1119,6 +1299,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
                       setSelectedCityId(null);
                       setSelectedQuakeId(null);
                       setSelectedAurora(false);
+                      setSelectedStormId(null);
                       setSelectedISS(function (v) {
                         return !v;
                       });
@@ -1248,6 +1429,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
                           setSelectedISS(false);
                           setSelectedQuakeId(null);
                           setSelectedAurora(false);
+                          setSelectedStormId(null);
                           setSelectedCityId(isSel ? null : pin.city.id);
                         }}
                       >
@@ -1350,6 +1532,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
                         setSelectedISS(false);
                         setSelectedQuakeId(null);
                         setSelectedAurora(false);
+                        setSelectedStormId(null);
                         if (pin.isHome) {
                           setSelectedCityId(null);
                         } else {

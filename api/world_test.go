@@ -16,8 +16,90 @@ func TestWorldHandlerFXRates(t *testing.T) {
 	origISSClient := issHTTPClient
 	origQuakesClient := quakesHTTPClient
 	origAuroraClient := auroraHTTPClient
+	origStormsClient := stormsHTTPClient
 	sampleLine1 := "1 25544U 98067A   26326.50000000  .00016717  00000-0  29812-3 0  9995"
 	sampleLine2 := "2 25544  51.6416 247.4627 0006703 130.5360 325.0288 15.49815350483021"
+	stormsHTTPClient = &http.Client{
+		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			if strings.Contains(r.URL.Host, "nhc.noaa.gov") {
+				b, _ := json.Marshal(map[string]any{
+					"activeStorms": []map[string]any{
+						{
+							"id":               "al092026",
+							"name":             "Helena",
+							"classification":   "HU",
+							"intensity":        "90",
+							"latitudeNumeric":  24.2,
+							"longitudeNumeric": -72.5,
+							"lastUpdate":       "2026-11-22T12:00:00Z",
+						},
+					},
+				})
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Header:     http.Header{"Content-Type": []string{"application/json"}},
+					Body:       io.NopCloser(bytes.NewReader(b)),
+				}, nil
+			}
+			b, _ := json.Marshal(map[string]any{
+				"features": []map[string]any{
+					{
+						"properties": map[string]any{
+							"eventid":    1001,
+							"eventtype":  "TC",
+							"eventname":  "MAN-YI-26",
+							"alertlevel": "Red",
+							"iscurrent":  "true",
+							"todate":     "2026-11-22T12:00:00Z",
+							"severitydata": map[string]any{
+								"severity":     195.0,
+								"severityunit": "km/h",
+							},
+						},
+						"geometry": map[string]any{
+							"type":        "Point",
+							"coordinates": []float64{126.4, 15.8},
+						},
+					},
+					{
+						"properties": map[string]any{
+							"eventid":    1002,
+							"eventtype":  "TC",
+							"eventname":  "HELENA",
+							"alertlevel": "Orange",
+							"iscurrent":  "true",
+							"todate":     "2026-11-22T12:00:00Z",
+							"severitydata": map[string]any{
+								"severity":     160.0,
+								"severityunit": "km/h",
+							},
+						},
+						"geometry": map[string]any{
+							"type":        "Point",
+							"coordinates": []float64{-72.3, 24.1},
+						},
+					},
+					{
+						"properties": map[string]any{
+							"eventid":   1003,
+							"eventtype": "TC",
+							"eventname": "OLD-STORM",
+							"iscurrent": "false",
+						},
+						"geometry": map[string]any{
+							"type":        "Point",
+							"coordinates": []float64{130.0, 20.0},
+						},
+					},
+				},
+			})
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+				Body:       io.NopCloser(bytes.NewReader(b)),
+			}, nil
+		}),
+	}
 	auroraHTTPClient = &http.Client{
 		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 			b, _ := json.Marshal([][]any{
@@ -134,6 +216,7 @@ func TestWorldHandlerFXRates(t *testing.T) {
 		issHTTPClient = origISSClient
 		quakesHTTPClient = origQuakesClient
 		auroraHTTPClient = origAuroraClient
+		stormsHTTPClient = origStormsClient
 		fxCacheMu.Lock()
 		fxCache = fxCacheEntry{}
 		fxCacheMu.Unlock()
@@ -146,6 +229,9 @@ func TestWorldHandlerFXRates(t *testing.T) {
 		auroraCacheMu.Lock()
 		auroraCache = auroraCacheEntry{}
 		auroraCacheMu.Unlock()
+		stormsCacheMu.Lock()
+		stormsCache = stormsCacheEntry{}
+		stormsCacheMu.Unlock()
 	}()
 
 	req := httptest.NewRequest(http.MethodGet, "/api/world", nil)
@@ -189,6 +275,15 @@ func TestWorldHandlerFXRates(t *testing.T) {
 	}
 	if math.Abs(resp.Aurora.Kp-4.3) > 0.05 || math.Abs(resp.Aurora.MaxKp24h-5.3) > 0.05 || resp.Aurora.Scale != "Active" {
 		t.Fatalf("unexpected Aurora status: %+v", resp.Aurora)
+	}
+	if len(resp.Storms) != 2 {
+		t.Fatalf("expected 2 active deduplicated tropical storms, got %d: %+v", len(resp.Storms), resp.Storms)
+	}
+	if resp.Storms[0].Name != "Man-Yi" || resp.Storms[0].Category != "Cat 3" {
+		t.Fatalf("expected strongest storm Man-Yi Cat 3 first, got %+v", resp.Storms[0])
+	}
+	if resp.Storms[1].Name != "Helena" || resp.Storms[1].Category != "Cat 2" {
+		t.Fatalf("expected NHC storm Helena Cat 2 second, got %+v", resp.Storms[1])
 	}
 }
 
