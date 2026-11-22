@@ -3973,6 +3973,54 @@ body,
   text-overflow: ellipsis;
 }
 
+/* Compact 6-card FX strip (fits 1024px iPad mini 2 cleanly in a single row) */
+.world-fx-row-compact .world-fx-card {
+  padding: 10px 10px 9px 10px;
+  border-radius: 14px;
+}
+
+.world-fx-row-compact .world-fx-card:not(:last-child) {
+  margin-right: 8px;
+}
+
+.world-fx-row-compact .world-fx-top {
+  margin-bottom: 5px;
+}
+
+.world-fx-row-compact .world-fx-badge {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  font-size: 9.5px;
+  margin-right: 5px;
+}
+
+.world-fx-row-compact .world-fx-pair {
+  font-size: 11px;
+  letter-spacing: 0.01em;
+}
+
+.world-fx-row-compact .stock-pct-badge {
+  padding: 2px 5px;
+  font-size: 10px;
+}
+
+.world-fx-row-compact .world-fx-mid {
+  margin-bottom: 4px;
+}
+
+.world-fx-row-compact .world-fx-rate {
+  font-size: 20px;
+}
+
+.world-fx-row-compact .world-fx-spark {
+  margin-left: 4px;
+}
+
+.world-fx-row-compact .world-fx-sub {
+  font-size: 10.5px;
+}
+
 /* Targeted vertical fit tuning for iPad mini 6 (1133x744 + Home Indicator) without affecting iPad mini 2 (1024x768) */
 @media (max-height: 750px) {
   .dashboard-content {
@@ -4016,6 +4064,14 @@ body,
 
   .world-fx-rate {
     font-size: 24px;
+  }
+
+  .world-fx-row-compact .world-fx-card {
+    padding: 8px 10px 7px 10px;
+  }
+
+  .world-fx-row-compact .world-fx-rate {
+    font-size: 19px;
   }
 
   /* Keep top-center controls below iPadOS's top status-bar blur zone */

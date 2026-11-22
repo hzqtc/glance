@@ -31,7 +31,13 @@ func TestParseAndNormalizeCarouselSchedule(t *testing.T) {
 			t.Fatalf("step %d: got %+v, want %+v", i, cfg.Carousel.Schedule[i], want[i])
 		}
 	}
-	if len(cfg.World.FXPairs) != 3 || cfg.World.FXPairs[0].Symbol != "CNY=X" || cfg.World.FXPairs[1].Symbol != "JPY=X" || cfg.World.FXPairs[2].Symbol != "EUR=X" {
+	if len(cfg.World.FXPairs) != 6 ||
+		cfg.World.FXPairs[0].Symbol != "CNY=X" ||
+		cfg.World.FXPairs[1].Symbol != "JPY=X" ||
+		cfg.World.FXPairs[2].Symbol != "EUR=X" ||
+		cfg.World.FXPairs[3].Symbol != "GBP=X" ||
+		cfg.World.FXPairs[4].Symbol != "AUD=X" ||
+		cfg.World.FXPairs[5].Symbol != "SGD=X" {
 		t.Fatalf("unexpected default world FX pairs: %+v", cfg.World.FXPairs)
 	}
 	if cfg.Photos.SlideIntervalSeconds != 15 {

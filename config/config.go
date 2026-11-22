@@ -264,6 +264,9 @@ func normalizeFXPairs(raw []FXPairConfig) []FXPairConfig {
 			{Symbol: "CNY=X", Base: "USD", Quote: "CNY", Label: "USD / CNY"},
 			{Symbol: "JPY=X", Base: "USD", Quote: "JPY", Label: "USD / JPY"},
 			{Symbol: "EUR=X", Base: "USD", Quote: "EUR", Label: "USD / EUR"},
+			{Symbol: "GBP=X", Base: "USD", Quote: "GBP", Label: "USD / GBP"},
+			{Symbol: "AUD=X", Base: "USD", Quote: "AUD", Label: "USD / AUD"},
+			{Symbol: "SGD=X", Base: "USD", Quote: "SGD", Label: "USD / SGD"},
 		}
 	}
 	return out

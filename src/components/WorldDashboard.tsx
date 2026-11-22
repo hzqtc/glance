@@ -146,6 +146,8 @@ function currencySymbol(code: string): string {
   if (code === 'CNY' || code === 'JPY') return '¥';
   if (code === 'EUR') return '€';
   if (code === 'GBP') return '£';
+  if (code === 'AUD') return 'A$';
+  if (code === 'SGD') return 'S$';
   if (code === 'USD') return '$';
   if (code === 'KRW') return '₩';
   return code;
@@ -719,7 +721,13 @@ export function WorldDashboard(props: WorldDashboardProps) {
           { symbol: 'CNY=X', base: 'USD', quote: 'CNY', label: 'USD / CNY', rate: 0, previousClose: 0, change: 0, changePct: 0, sparkline: [] },
           { symbol: 'JPY=X', base: 'USD', quote: 'JPY', label: 'USD / JPY', rate: 0, previousClose: 0, change: 0, changePct: 0, sparkline: [] },
           { symbol: 'EUR=X', base: 'USD', quote: 'EUR', label: 'USD / EUR', rate: 0, previousClose: 0, change: 0, changePct: 0, sparkline: [] },
+          { symbol: 'GBP=X', base: 'USD', quote: 'GBP', label: 'USD / GBP', rate: 0, previousClose: 0, change: 0, changePct: 0, sparkline: [] },
+          { symbol: 'AUD=X', base: 'USD', quote: 'AUD', label: 'USD / AUD', rate: 0, previousClose: 0, change: 0, changePct: 0, sparkline: [] },
+          { symbol: 'SGD=X', base: 'USD', quote: 'SGD', label: 'USD / SGD', rate: 0, previousClose: 0, change: 0, changePct: 0, sparkline: [] },
         ];
+  var isCompactFX = fxCards.length >= 5;
+  var fxSparkW = isCompactFX ? 44 : 82;
+  var fxSparkH = isCompactFX ? 20 : 26;
 
   return (
     <div class="world-slide">
@@ -1753,23 +1761,28 @@ export function WorldDashboard(props: WorldDashboardProps) {
 
         {/* Bottom Live FX Rates Strip */}
         <section
-          class={isLoading && fxQuotes.length === 0 ? 'world-fx-row world-fx-loading' : 'world-fx-row'}
+          class={
+            'world-fx-row' +
+            (isCompactFX ? ' world-fx-row-compact' : '') +
+            (isLoading && fxQuotes.length === 0 ? ' world-fx-loading' : '')
+          }
           aria-label="Live foreign exchange rates"
         >
           {fxCards.map(function (fx) {
             var hasRate = !fx.unavailable && fx.rate > 0;
             var isUp = fx.change >= 0;
             var isFlat = Math.abs(fx.changePct) < 0.005;
-            var sparkPath = buildMiniSparkPath(fx.sparkline, 82, 26);
+            var sparkPath = buildMiniSparkPath(fx.sparkline, fxSparkW, fxSparkH);
             var sparkColor = isFlat ? '#94a3b8' : isUp ? '#34d399' : '#fb7185';
             var invHint = hasRate ? formatFXInverseHint(fx.rate, fx.base, fx.quote) : '';
+            var displayLabel = isCompactFX ? fx.label.replace(/\s*\/\s*/, '/') : fx.label;
 
             return (
               <div class="world-fx-card" key={fx.symbol}>
                 <div class="world-fx-top">
                   <div class="world-fx-pair-wrap">
                     <span class="world-fx-badge">{currencySymbol(fx.quote)}</span>
-                    <span class="world-fx-pair">{fx.label}</span>
+                    <span class="world-fx-pair">{displayLabel}</span>
                   </div>
                   {hasRate ? (
                     <span
@@ -1796,9 +1809,9 @@ export function WorldDashboard(props: WorldDashboardProps) {
                   </span>
                   {sparkPath ? (
                     <svg
-                      width="82"
-                      height="26"
-                      viewBox="0 0 82 26"
+                      width={String(fxSparkW)}
+                      height={String(fxSparkH)}
+                      viewBox={'0 0 ' + String(fxSparkW) + ' ' + String(fxSparkH)}
                       class="world-fx-spark"
                       aria-hidden="true"
                     >

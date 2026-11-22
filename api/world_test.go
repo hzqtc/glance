@@ -187,8 +187,16 @@ func TestWorldHandlerFXRates(t *testing.T) {
 						price, prev = 7.245, 7.230
 					case "JPY=X":
 						price, prev = 154.80, 155.10
-					default:
+					case "EUR=X":
 						price, prev = 0.942, 0.940
+					case "GBP=X":
+						price, prev = 0.791, 0.789
+					case "AUD=X":
+						price, prev = 1.538, 1.541
+					case "SGD=X":
+						price, prev = 1.342, 1.340
+					default:
+						price, prev = 1.000, 1.000
 					}
 					payload[sym] = map[string]any{
 						"symbol":             sym,
@@ -246,8 +254,8 @@ func TestWorldHandlerFXRates(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("invalid json: %v", err)
 	}
-	if len(resp.FX) != 3 {
-		t.Fatalf("expected 3 FX quotes, got %d: %+v", len(resp.FX), resp.FX)
+	if len(resp.FX) != 6 {
+		t.Fatalf("expected 6 FX quotes, got %d: %+v", len(resp.FX), resp.FX)
 	}
 	if resp.FX[0].Quote != "CNY" || math.Abs(resp.FX[0].Rate-7.245) > 0.0001 || len(resp.FX[0].Sparkline) != 3 {
 		t.Fatalf("unexpected CNY quote: %+v", resp.FX[0])
@@ -257,6 +265,15 @@ func TestWorldHandlerFXRates(t *testing.T) {
 	}
 	if resp.FX[2].Quote != "EUR" || math.Abs(resp.FX[2].Rate-0.942) > 0.0001 {
 		t.Fatalf("unexpected EUR quote: %+v", resp.FX[2])
+	}
+	if resp.FX[3].Quote != "GBP" || math.Abs(resp.FX[3].Rate-0.791) > 0.0001 {
+		t.Fatalf("unexpected GBP quote: %+v", resp.FX[3])
+	}
+	if resp.FX[4].Quote != "AUD" || math.Abs(resp.FX[4].Rate-1.538) > 0.0001 {
+		t.Fatalf("unexpected AUD quote: %+v", resp.FX[4])
+	}
+	if resp.FX[5].Quote != "SGD" || math.Abs(resp.FX[5].Rate-1.342) > 0.0001 {
+		t.Fatalf("unexpected SGD quote: %+v", resp.FX[5])
 	}
 	if resp.ISS == nil {
 		t.Fatalf("expected ISS orbit in response")

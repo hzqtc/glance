@@ -37,7 +37,10 @@
     "fxPairs": [
       { "symbol": "CNY=X", "base": "USD", "quote": "CNY", "label": "USD / CNY" },
       { "symbol": "JPY=X", "base": "USD", "quote": "JPY", "label": "USD / JPY" },
-      { "symbol": "EUR=X", "base": "USD", "quote": "EUR", "label": "USD / EUR" }
+      { "symbol": "EUR=X", "base": "USD", "quote": "EUR", "label": "USD / EUR" },
+      { "symbol": "GBP=X", "base": "USD", "quote": "GBP", "label": "USD / GBP" },
+      { "symbol": "AUD=X", "base": "USD", "quote": "AUD", "label": "USD / AUD" },
+      { "symbol": "SGD=X", "base": "USD", "quote": "SGD", "label": "USD / SGD" }
     ]
   },
   "cities": [
