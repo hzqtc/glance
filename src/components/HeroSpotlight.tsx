@@ -1,14 +1,22 @@
 import type { ComponentChildren } from 'preact';
-import type { CityConfig, CityWeather, TempUnit, TimeFormat } from '../types';
+import type {
+  CityConfig,
+  CityWeather,
+  HourlyForecast,
+  TempUnit,
+  TimeFormat,
+} from '../types';
 import type { CityClockInfo } from '../utils/time';
-import { formatHourlyLabel } from '../utils/time';
+import {
+  formatClockHHMM,
+  formatHourlyLabel,
+  parseMinutesFromHHMM,
+} from '../utils/time';
 import {
   describeAQI,
   describeWMO,
-  formatLowVisibility,
   formatTemp,
   formatTempDeltaYesterday,
-  formatWind,
 } from '../utils/weather';
 import { WeatherIcon } from './WeatherIcon';
 
@@ -20,6 +28,156 @@ interface HeroSpotlightProps {
   timeFormat: TimeFormat;
   isStale: boolean;
   controls?: ComponentChildren;
+}
+
+type HourlyRibbonItem =
+  | {
+      kind: 'hour';
+      key: string;
+      minute: number;
+      slot: HourlyForecast;
+    }
+  | {
+      kind: 'sun';
+      key: string;
+      minute: number;
+      event: 'sunrise' | 'sunset';
+      timeHHMM: string;
+    };
+
+function parseHourlySlotHour(isoTime: string): number {
+  var tIdx = isoTime.indexOf('T');
+  if (tIdx === -1 || tIdx + 3 > isoTime.length) {
+    return -1;
+  }
+  var h = parseInt(isoTime.slice(tIdx + 1, tIdx + 3), 10);
+  return isNaN(h) ? -1 : h;
+}
+
+function buildHourlyRibbonItems(
+  hourly: HourlyForecast[],
+  sunrise: string,
+  sunset: string,
+  clock: CityClockInfo
+): HourlyRibbonItem[] {
+  if (hourly.length === 0) {
+    return [];
+  }
+
+  var nowMin = clock.hour24 * 60 + clock.minute;
+  var items: HourlyRibbonItem[] = [];
+  var dayOffset = 0;
+  var prevHour = -1;
+  var firstSlotMin = -1;
+  var lastSlotMin = -1;
+
+  for (var i = 0; i < hourly.length; i++) {
+    var slot = hourly[i];
+    var h = parseHourlySlotHour(slot.time);
+    if (h < 0) {
+      continue;
+    }
+    if (prevHour === -1) {
+      if (h * 60 + 120 < nowMin) {
+        dayOffset = 1;
+      }
+    } else if (h < prevHour) {
+      dayOffset += 1;
+    }
+    prevHour = h;
+    var slotMin = dayOffset * 1440 + h * 60;
+    if (firstSlotMin === -1) {
+      firstSlotMin = slotMin;
+    }
+    lastSlotMin = slotMin;
+    items.push({
+      kind: 'hour',
+      key: slot.time,
+      minute: slotMin,
+      slot: slot,
+    });
+  }
+
+  if (firstSlotMin === -1 || lastSlotMin === -1) {
+    return items;
+  }
+
+  var windowMin = Math.max(nowMin, firstSlotMin - 60);
+  var sunEvents: Array<{ event: 'sunrise' | 'sunset'; hhmm: string }> = [
+    { event: 'sunrise', hhmm: sunrise },
+    { event: 'sunset', hhmm: sunset },
+  ];
+
+  for (var s = 0; s < sunEvents.length; s++) {
+    var ev = sunEvents[s];
+    var rawMin = parseMinutesFromHHMM(ev.hhmm, -1);
+    if (rawMin < 0) {
+      continue;
+    }
+    for (var d = 0; d <= 2; d++) {
+      var candidate = rawMin + d * 1440;
+      if (candidate >= windowMin && candidate <= lastSlotMin) {
+        items.push({
+          kind: 'sun',
+          key: ev.event + '-' + String(d),
+          minute: candidate,
+          event: ev.event,
+          timeHHMM: ev.hhmm,
+        });
+        break;
+      }
+    }
+  }
+
+  items.sort(function (a, b) {
+    if (a.minute !== b.minute) {
+      return a.minute - b.minute;
+    }
+    if (a.kind === b.kind) {
+      return 0;
+    }
+    return a.kind === 'hour' ? -1 : 1;
+  });
+
+  return items;
+}
+
+function SunEventIcon(props: { kind: 'sunrise' | 'sunset'; size?: number }) {
+  var size = props.size || 30;
+  var isSunrise = props.kind === 'sunrise';
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 64 64"
+      fill="none"
+      class="weather-icon"
+      aria-hidden="true"
+    >
+      <g class="wi-sun-rays" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
+        {isSunrise ? (
+          <g>
+            <line x1="32" y1="26" x2="32" y2="12" />
+            <polyline points="26,18 32,12 38,18" />
+          </g>
+        ) : (
+          <g>
+            <line x1="32" y1="12" x2="32" y2="26" />
+            <polyline points="26,20 32,26 38,20" />
+          </g>
+        )}
+        <line x1="13.5" y1="37" x2="17" y2="38.5" />
+        <line x1="19" y1="28" x2="21.8" y2="30.8" />
+        <line x1="45" y1="28" x2="42.2" y2="30.8" />
+        <line x1="50.5" y1="37" x2="47" y2="38.5" />
+      </g>
+      <path d="M20.5 45 A11.5 11.5 0 0 1 43.5 45 Z" class="wi-sun-core" />
+      <g class="wi-sun-rays" stroke-width="3" stroke-linecap="round">
+        <line x1="10" y1="45" x2="54" y2="45" />
+        <line x1="20" y1="51.5" x2="44" y2="51.5" opacity="0.55" />
+      </g>
+    </svg>
+  );
 }
 
 function getRainHeadsUp(
@@ -48,85 +206,6 @@ function getRainHeadsUp(
   return null;
 }
 
-function MetaThermometerIcon() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      class="hero-meta-icon"
-      aria-hidden="true"
-    >
-      <path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z" />
-    </svg>
-  );
-}
-
-function MetaWindIcon() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      class="hero-meta-icon"
-      aria-hidden="true"
-    >
-      <path d="M9.59 4.59A2 2 0 1 1 11 8H2" />
-      <path d="M12.59 19.41A2 2 0 1 0 14 16H2" />
-      <path d="M17.73 7.73A2.5 2.5 0 1 1 19.5 12H2" />
-    </svg>
-  );
-}
-
-function MetaDropletIcon() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      class="hero-meta-icon"
-      aria-hidden="true"
-    >
-      <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z" />
-    </svg>
-  );
-}
-
-function MetaEyeIcon() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      class="hero-meta-icon"
-      aria-hidden="true"
-    >
-      <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" />
-      <circle cx="12" cy="12" r="3" />
-    </svg>
-  );
-}
-
 export function HeroSpotlight(props: HeroSpotlightProps) {
   var city = props.city;
   var weather = props.weather;
@@ -136,6 +215,9 @@ export function HeroSpotlight(props: HeroSpotlightProps) {
 
   var desc = weather ? describeWMO(weather.weatherCode) : null;
   var hourly = weather ? weather.hourly.slice(0, 24) : [];
+  var ribbonItems = weather
+    ? buildHourlyRibbonItems(hourly, weather.sunrise, weather.sunset, clock)
+    : [];
 
   var rainHeadsUp = getRainHeadsUp(weather, timeFormat);
   var aqiVal = weather && typeof weather.usAqi === 'number' ? weather.usAqi : null;
@@ -147,7 +229,6 @@ export function HeroSpotlight(props: HeroSpotlightProps) {
   var deltaText = weather
     ? formatTempDeltaYesterday(weather.tempDeltaYesterdayC, units)
     : null;
-  var lowVis = weather ? formatLowVisibility(weather.visibilityM, units) : null;
 
   return (
     <section class="hero">
@@ -205,45 +286,7 @@ export function HeroSpotlight(props: HeroSpotlightProps) {
                     <span class="hero-meta-sep">·</span>
                     <span class="hero-meta-item">{deltaText}</span>
                   </span>
-                ) : (
-                  <span>
-                    <span class="hero-meta-sep">·</span>
-                    <span class="hero-meta-item">
-                      Feels {formatTemp(weather.feelsLikeC, units)}
-                    </span>
-                  </span>
-                )}
-              </div>
-              <div class="hero-meta-row hero-meta-secondary">
-                {deltaText ? (
-                  <span class="hero-meta-group" title="Feels like">
-                    <MetaThermometerIcon />
-                    <span class="hero-meta-item">
-                      {formatTemp(weather.feelsLikeC, units)}
-                    </span>
-                    <span class="hero-meta-sep">·</span>
-                  </span>
                 ) : null}
-                <span class="hero-meta-group" title="Wind">
-                  <MetaWindIcon />
-                  <span class="hero-meta-item">
-                    {formatWind(weather.windKmh, units)}
-                  </span>
-                </span>
-                <span class="hero-meta-sep">·</span>
-                {lowVis ? (
-                  <span class="hero-meta-group" title="Visibility">
-                    <MetaEyeIcon />
-                    <span class="hero-meta-item">{lowVis.replace(/^Vis\s+/, '')}</span>
-                  </span>
-                ) : (
-                  <span class="hero-meta-group" title="Humidity">
-                    <MetaDropletIcon />
-                    <span class="hero-meta-item">
-                      {String(weather.humidity) + '%'}
-                    </span>
-                  </span>
-                )}
               </div>
             </div>
           ) : (
@@ -252,13 +295,31 @@ export function HeroSpotlight(props: HeroSpotlightProps) {
         </div>
       </div>
 
-      {weather && hourly.length > 0 ? (
+      {weather && ribbonItems.length > 0 ? (
         <div class={rainHeadsUp ? 'hourly-ribbon hourly-ribbon-rain' : 'hourly-ribbon'}>
           <div class="hourly-slots">
-            {hourly.map(function (slot) {
+            {ribbonItems.map(function (item) {
+              if (item.kind === 'sun') {
+                return (
+                  <div class="hourly-slot hourly-slot-sun" key={item.key}>
+                    <div class="hourly-time hourly-time-sun">
+                      {formatClockHHMM(item.timeHHMM, timeFormat)}
+                    </div>
+                    <div class="hourly-icon-wrap">
+                      <SunEventIcon kind={item.event} size={30} />
+                    </div>
+                    <div class="hourly-temp-row">
+                      <span class="hourly-sun-label">
+                        {item.event === 'sunrise' ? 'Sunrise' : 'Sunset'}
+                      </span>
+                    </div>
+                  </div>
+                );
+              }
+              var slot = item.slot;
               var slotDesc = describeWMO(slot.weatherCode);
               return (
-                <div class="hourly-slot" key={slot.time}>
+                <div class="hourly-slot" key={item.key}>
                   <div class="hourly-time">
                     {formatHourlyLabel(slot.time, timeFormat)}
                   </div>

@@ -146,6 +146,25 @@ export function describeDewPoint(dewPointC: number): RatingDescriptor {
   return { label: 'Muggy', color: '#fb923c' };
 }
 
+export function describePM25(pm25: number): RatingDescriptor {
+  if (pm25 <= 9) {
+    return { label: 'Good', color: '#4ade80' };
+  }
+  if (pm25 <= 35.4) {
+    return { label: 'Moderate', color: '#facc15' };
+  }
+  if (pm25 <= 55.4) {
+    return { label: 'Sensitive', color: '#fb923c' };
+  }
+  if (pm25 <= 125.4) {
+    return { label: 'Unhealthy', color: '#f87171' };
+  }
+  if (pm25 <= 225.4) {
+    return { label: 'Very Unhealthy', color: '#c084fc' };
+  }
+  return { label: 'Hazardous', color: '#f43f5e' };
+}
+
 export function describeAQI(aqi: number): RatingDescriptor {
   if (aqi <= 50) {
     return { label: 'Good', color: '#4ade80' };

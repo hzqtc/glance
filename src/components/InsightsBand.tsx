@@ -1,26 +1,20 @@
-import type { CityWeather, TempUnit, TimeFormat } from '../types';
-import type { CityClockInfo } from '../utils/time';
-import {
-  computeDaylightProgress,
-  formatClockHHMM,
-  formatWeekdayFromISO,
-  parseMinutesFromHHMM,
-} from '../utils/time';
+import type { CityWeather, TempUnit } from '../types';
+import { formatWeekdayFromISO } from '../utils/time';
 import {
   describeAQI,
-  describeDewPoint,
+  describePM25,
   describeUV,
   describeWMO,
   formatDailySummary,
+  formatLowVisibility,
   formatTemp,
+  formatWind,
 } from '../utils/weather';
 import { WeatherIcon } from './WeatherIcon';
 
 interface InsightsBandProps {
   weather: CityWeather | undefined;
-  clock: CityClockInfo;
   units: TempUnit;
-  timeFormat: TimeFormat;
 }
 
 export function InsightsBand(props: InsightsBandProps) {
@@ -41,6 +35,13 @@ export function InsightsBand(props: InsightsBandProps) {
   var aqiVal = typeof weather.usAqi === 'number' ? weather.usAqi : null;
   var aqiDesc = aqiVal !== null ? describeAQI(aqiVal) : null;
   var pm25Val = typeof weather.pm25 === 'number' ? weather.pm25 : null;
+  var pm25Desc = pm25Val !== null ? describePM25(pm25Val) : null;
+  var pm25Text =
+    pm25Val !== null
+      ? pm25Val < 10
+        ? pm25Val.toFixed(1)
+        : String(Math.round(pm25Val))
+      : null;
 
   var showUV = weather.isDay;
   var uvVal =
@@ -51,16 +52,7 @@ export function InsightsBand(props: InsightsBandProps) {
         : null;
   var uvDesc = uvVal !== null ? describeUV(uvVal) : null;
 
-  var dewVal = typeof weather.dewPointC === 'number' ? weather.dewPointC : null;
-  var dewDesc = dewVal !== null ? describeDewPoint(dewVal) : null;
-
-  var sunriseMin = parseMinutesFromHHMM(weather.sunrise, 390);
-  var sunsetMin = parseMinutesFromHHMM(weather.sunset, 1110);
-  var daylight = computeDaylightProgress(
-    props.clock.minutesSinceMidnight,
-    sunriseMin,
-    sunsetMin
-  );
+  var lowVis = formatLowVisibility(weather.visibilityM, props.units);
 
   var dailySummary = formatDailySummary(
     weather.precipSumMm,
@@ -126,17 +118,17 @@ export function InsightsBand(props: InsightsBandProps) {
         }
       >
         <div class="insights-header">
-          <span class="insights-title">Air &amp; Daylight</span>
-          <span class="insights-sub">{daylight.durationText}</span>
+          <span class="insights-title">Air &amp; Conditions</span>
+          {lowVis ? <span class="insights-sub">{lowVis}</span> : null}
         </div>
 
         <div class="atmos-metrics">
           <div class="atmos-metric-box">
             <div class="atmos-metric-label">
               Air Quality
-              {pm25Val !== null ? (
+              {showUV && pm25Text !== null ? (
                 <span class="atmos-metric-inline-sub">
-                  {' '}· PM2.5 {pm25Val < 10 ? pm25Val.toFixed(1) : String(Math.round(pm25Val))}
+                  {' '}· PM2.5 {pm25Text}
                 </span>
               ) : null}
             </div>
@@ -179,17 +171,18 @@ export function InsightsBand(props: InsightsBandProps) {
               </div>
             ) : (
               <div>
-                <div class="atmos-metric-label">Dew Point</div>
-                {dewVal !== null && dewDesc ? (
+                <div class="atmos-metric-label">
+                  PM2.5
+                  <span class="atmos-metric-inline-sub"> µg/m³</span>
+                </div>
+                {pm25Text !== null && pm25Desc ? (
                   <div class="atmos-metric-value-row">
                     <span
                       class="metric-dot"
-                      style={{ backgroundColor: dewDesc.color }}
+                      style={{ backgroundColor: pm25Desc.color }}
                     />
-                    <span class="atmos-metric-num">
-                      {formatTemp(dewVal, props.units)}
-                    </span>
-                    <span class="atmos-metric-tag">{dewDesc.label}</span>
+                    <span class="atmos-metric-num">{pm25Text}</span>
+                    <span class="atmos-metric-tag">{pm25Desc.label}</span>
                   </div>
                 ) : (
                   <div class="atmos-metric-value-row">
@@ -204,22 +197,22 @@ export function InsightsBand(props: InsightsBandProps) {
         <div class="daylight-block">
           <div class="daylight-row">
             <div class="daylight-item">
-              <span class="daylight-item-label">Sunrise</span>
+              <span class="daylight-item-label">Feels Like</span>
               <span class="daylight-item-value">
-                {formatClockHHMM(weather.sunrise, props.timeFormat)}
+                {formatTemp(weather.feelsLikeC, props.units)}
               </span>
             </div>
             <div class="daylight-item">
-              <span class="daylight-item-label">Sunset</span>
+              <span class="daylight-item-label">Wind</span>
               <span class="daylight-item-value">
-                {formatClockHHMM(weather.sunset, props.timeFormat)}
+                {formatWind(weather.windKmh, props.units)}
               </span>
             </div>
             <div class="daylight-item daylight-item-right">
-              <span class="daylight-item-label">
-                {daylight.isDaylight ? 'Until Sunset' : 'Until Sunrise'}
+              <span class="daylight-item-label">Humidity</span>
+              <span class="daylight-item-value">
+                {String(weather.humidity) + '%'}
               </span>
-              <span class="daylight-item-value">{daylight.remainingDuration}</span>
             </div>
           </div>
         </div>

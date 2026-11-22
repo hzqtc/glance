@@ -1174,9 +1174,7 @@ function DashboardShell(props: DashboardShellProps) {
                 />
                 <InsightsBand
                   weather={activeWeather}
-                  clock={activeClock}
                   units={units}
-                  timeFormat={timeFormat}
                 />
               </div>
             ) : (

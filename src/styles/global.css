@@ -741,28 +741,6 @@ body,
   text-shadow: var(--hero-sub-shadow);
 }
 
-.hero-meta-secondary {
-  margin-top: 4px;
-  color: var(--text-muted);
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: flex-end;
-}
-
-.hero-meta-group {
-  display: inline-flex;
-  flex-direction: row;
-  align-items: center;
-}
-
-.hero-meta-icon {
-  display: inline-block;
-  margin-right: 4px;
-  opacity: 0.85;
-  flex-shrink: 0;
-}
-
 .hero-meta-sep {
   margin: 0 7px;
   opacity: 0.65;
@@ -815,16 +793,29 @@ body,
   text-align: center;
 }
 
+.hourly-slot-sun {
+  flex: 0 0 12.6%;
+  min-width: 92px;
+  padding: 0 4px;
+}
+
 .hourly-slot:last-child {
   padding-right: 12px;
 }
 
 .hourly-time {
   font-size: 16px;
+  line-height: 20px;
   font-weight: 500;
   letter-spacing: 0.02em;
   color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.hourly-time-sun {
+  font-size: 15px;
+  letter-spacing: 0.01em;
 }
 
 .hourly-icon-wrap {
@@ -840,13 +831,24 @@ body,
   flex-direction: row;
   align-items: baseline;
   justify-content: center;
+  min-height: 26px;
   white-space: nowrap;
+}
+
+.hourly-slot-sun .hourly-temp-row {
+  align-items: center;
 }
 
 .hourly-temp {
   font-size: 22px;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+
+.hourly-sun-label {
+  font-size: 17px;
+  font-weight: 500;
   color: var(--text-primary);
 }
 
@@ -3861,6 +3863,10 @@ body,
 
   .hourly-temp {
     font-size: 20px;
+  }
+
+  .hourly-sun-label {
+    font-size: 16px;
   }
 
   .insights-band,
