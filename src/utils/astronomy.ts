@@ -1,5 +1,11 @@
+import type { ISSOrbit } from '../types';
+
 var DEG2RAD = Math.PI / 180;
 var RAD2DEG = 180 / Math.PI;
+var EARTH_MU = 398600.4418; // km^3 / s^2
+var EARTH_RADIUS_KM = 6378.137; // WGS-84 equatorial radius
+var EARTH_E2 = 0.00669437999014; // WGS-84 first eccentricity squared
+var EARTH_J2 = 1.08262668e-3;
 
 /** Pacific-centered projection: 155°E center -> left edge is -25°W (mid-Atlantic), 82°N to 58°S. */
 export var MAP_CENTER_LON = 155;
@@ -317,4 +323,226 @@ export function formatUTCClock(nowMs: number): string {
   var hs = h < 10 ? '0' + String(h) : String(h);
   var ms = m < 10 ? '0' + String(m) : String(m);
   return hs + ':' + ms + ' UTC';
+}
+
+export interface ISSPosition {
+  lat: number;
+  lon: number;
+  altKm: number;
+  speedKmh: number;
+  sunlit: boolean;
+}
+
+export interface ISSTrackResult {
+  current: ISSPosition;
+  x: number;
+  y: number;
+  headingDeg: number;
+  pastSegments: string[];
+  futureSegments: string[];
+  footprintSegments: string[];
+}
+
+/**
+ * Propagates the ISS TLE orbital elements to `timeMs` using a J2-perturbed
+ * Keplerian model (nodal + apsidal precession, drag term, WGS-84 geodetic lat/alt).
+ */
+export function propagateISS(orbit: ISSOrbit, timeMs: number): ISSPosition {
+  var dtDays = (timeMs - orbit.epochMs) / 86400000;
+  var dtSec = dtDays * 86400;
+
+  var inc = orbit.inclinationDeg * DEG2RAD;
+  var e = orbit.eccentricity;
+  var n0 = (orbit.meanMotionRevPerDay * 2 * Math.PI) / 86400; // rad/s
+  var a = Math.pow(EARTH_MU / (n0 * n0), 1 / 3);
+  var p = a * (1 - e * e);
+
+  // J2 secular precession rates (rad/s)
+  var j2Factor = 1.5 * EARTH_J2 * Math.pow(EARTH_RADIUS_KM / p, 2) * n0;
+  var cosInc = Math.cos(inc);
+  var sinInc = Math.sin(inc);
+  var raanDot = -j2Factor * cosInc;
+  var argPDot = 0.5 * j2Factor * (5 * cosInc * cosInc - 1);
+
+  var raan = orbit.raanDeg * DEG2RAD + raanDot * dtSec;
+  var argP = orbit.argPerigeeDeg * DEG2RAD + argPDot * dtSec;
+
+  // Mean anomaly with secular drag term (ndot in rev/day^2)
+  var mRev =
+    orbit.meanAnomalyDeg / 360 +
+    orbit.meanMotionRevPerDay * dtDays +
+    orbit.meanMotionDot * dtDays * dtDays;
+  var M = ((mRev % 1) + 1) % 1 * 2 * Math.PI;
+
+  // Solve Kepler's equation E - e*sin(E) = M
+  var E = M;
+  for (var iter = 0; iter < 4; iter++) {
+    E = E - (E - e * Math.sin(E) - M) / (1 - e * Math.cos(E));
+  }
+
+  var cosE = Math.cos(E);
+  var sinE = Math.sin(E);
+  var xOrb = a * (cosE - e);
+  var yOrb = a * Math.sqrt(1 - e * e) * sinE;
+  var r = Math.sqrt(xOrb * xOrb + yOrb * yOrb);
+  var nu = Math.atan2(yOrb, xOrb);
+  var u = argP + nu;
+
+  var cosO = Math.cos(raan);
+  var sinO = Math.sin(raan);
+  var cosU = Math.cos(u);
+  var sinU = Math.sin(u);
+
+  // ECI position (km)
+  var xEci = r * (cosO * cosU - sinO * sinU * cosInc);
+  var yEci = r * (sinO * cosU + cosO * sinU * cosInc);
+  var zEci = r * (sinU * sinInc);
+
+  // Rotate ECI -> ECEF via GMST
+  var gmst = greenwichMeanSiderealDeg(julianDaysSinceJ2000(timeMs)) * DEG2RAD;
+  var cosG = Math.cos(gmst);
+  var sinG = Math.sin(gmst);
+  var xEcef = xEci * cosG + yEci * sinG;
+  var yEcef = -xEci * sinG + yEci * cosG;
+  var zEcef = zEci;
+
+  var lon = wrapLon180(Math.atan2(yEcef, xEcef) * RAD2DEG);
+  var rho = Math.sqrt(xEcef * xEcef + yEcef * yEcef);
+  var latRad = Math.atan2(zEcef, rho);
+  var N = EARTH_RADIUS_KM;
+  for (var gIter = 0; gIter < 3; gIter++) {
+    var sinLat = Math.sin(latRad);
+    N = EARTH_RADIUS_KM / Math.sqrt(1 - EARTH_E2 * sinLat * sinLat);
+    latRad = Math.atan2(zEcef + EARTH_E2 * N * sinLat, rho);
+  }
+  var cosLat = Math.cos(latRad);
+  var altKm =
+    Math.abs(cosLat) > 1e-6
+      ? rho / cosLat - N
+      : Math.abs(zEcef) / Math.abs(Math.sin(latRad)) - N * (1 - EARTH_E2);
+
+  // Orbital velocity via vis-viva equation
+  var speedKmS = Math.sqrt(Math.max(0, EARTH_MU * (2 / r - 1 / a)));
+  var speedKmh = speedKmS * 3600;
+
+  // Check whether the ISS is sunlit or inside Earth's cylindrical umbra
+  var sun = getSubsolarPoint(timeMs);
+  var sLat = sun.lat * DEG2RAD;
+  var sLon = sun.lon * DEG2RAD;
+  var sx = Math.cos(sLat) * Math.cos(sLon);
+  var sy = Math.cos(sLat) * Math.sin(sLon);
+  var sz = Math.sin(sLat);
+  var dotSun = xEcef * sx + yEcef * sy + zEcef * sz;
+  var sunlit = true;
+  if (dotSun < 0) {
+    var rSq = xEcef * xEcef + yEcef * yEcef + zEcef * zEcef;
+    var perpSq = rSq - dotSun * dotSun;
+    sunlit = perpSq > EARTH_RADIUS_KM * EARTH_RADIUS_KM;
+  }
+
+  return {
+    lat: latRad * RAD2DEG,
+    lon: lon,
+    altKm: altKm,
+    speedKmh: speedKmh,
+    sunlit: sunlit,
+  };
+}
+
+function buildWrappedPolylineSegments(
+  points: ProjectedPoint[],
+  mapW: number
+): string[] {
+  var segments: string[] = [];
+  var cur: string[] = [];
+  var prevX = -9999;
+
+  for (var i = 0; i < points.length; i++) {
+    var pt = points[i];
+    if (prevX !== -9999 && Math.abs(pt.x - prevX) > mapW * 0.45) {
+      if (cur.length > 1) {
+        segments.push(cur.join(' '));
+      }
+      cur = ['M ' + pt.x.toFixed(1) + ' ' + pt.y.toFixed(1)];
+    } else {
+      cur.push((cur.length === 0 ? 'M ' : 'L ') + pt.x.toFixed(1) + ' ' + pt.y.toFixed(1));
+    }
+    prevX = pt.x;
+  }
+  if (cur.length > 1) {
+    segments.push(cur.join(' '));
+  }
+  return segments;
+}
+
+/** Builds live ISS position, past trail (-45m), future orbit (+95m), and horizon footprint. */
+export function buildISSTrack(
+  orbit: ISSOrbit,
+  nowMs: number,
+  mapW: number,
+  mapH: number
+): ISSTrackResult {
+  var current = propagateISS(orbit, nowMs);
+  var curPt = projectLonLat(current.lon, current.lat, mapW, mapH);
+
+  // Sample 15s ahead for map-space heading angle
+  var ahead = propagateISS(orbit, nowMs + 15000);
+  var aheadPt = projectLonLat(ahead.lon, ahead.lat, mapW, mapH);
+  var dx = aheadPt.x - curPt.x;
+  if (dx > mapW * 0.5) dx -= mapW;
+  if (dx < -mapW * 0.5) dx += mapW;
+  var dy = aheadPt.y - curPt.y;
+  var headingDeg = Math.atan2(dy, dx) * RAD2DEG;
+
+  // Past trail: -45 minutes to now (every 1.5 min)
+  var pastPts: ProjectedPoint[] = [];
+  var pastSteps = 30;
+  for (var p = pastSteps; p >= 0; p--) {
+    var posP = propagateISS(orbit, nowMs - p * 90000);
+    pastPts.push(projectLonLat(posP.lon, posP.lat, mapW, mapH));
+  }
+
+  // Future trajectory: now to +95 minutes (~1 full orbit, every 1.5 min)
+  var futurePts: ProjectedPoint[] = [];
+  var futureSteps = 64;
+  for (var f = 0; f <= futureSteps; f++) {
+    var posF = propagateISS(orbit, nowMs + f * 90000);
+    futurePts.push(projectLonLat(posF.lon, posF.lat, mapW, mapH));
+  }
+
+  // Horizon visibility footprint circle on the sphere
+  var clampedAlt = Math.max(200, Math.min(800, current.altKm));
+  var angRad = Math.acos(EARTH_RADIUS_KM / (EARTH_RADIUS_KM + clampedAlt));
+  var lat0 = current.lat * DEG2RAD;
+  var lon0 = current.lon * DEG2RAD;
+  var sinLat0 = Math.sin(lat0);
+  var cosLat0 = Math.cos(lat0);
+  var sinAng = Math.sin(angRad);
+  var cosAng = Math.cos(angRad);
+
+  var footPts: ProjectedPoint[] = [];
+  var footSteps = 48;
+  for (var k = 0; k <= footSteps; k++) {
+    var brng = (k / footSteps) * 2 * Math.PI;
+    var fLat = Math.asin(
+      Math.max(-1, Math.min(1, sinLat0 * cosAng + cosLat0 * sinAng * Math.cos(brng)))
+    );
+    var fLon =
+      lon0 +
+      Math.atan2(
+        Math.sin(brng) * sinAng * cosLat0,
+        cosAng - sinLat0 * Math.sin(fLat)
+      );
+    footPts.push(projectLonLat(wrapLon180(fLon * RAD2DEG), fLat * RAD2DEG, mapW, mapH));
+  }
+
+  return {
+    current: current,
+    x: curPt.x,
+    y: curPt.y,
+    headingDeg: headingDeg,
+    pastSegments: buildWrappedPolylineSegments(pastPts, mapW),
+    futureSegments: buildWrappedPolylineSegments(futurePts, mapW),
+    footprintSegments: buildWrappedPolylineSegments(footPts, mapW),
+  };
 }

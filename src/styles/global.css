@@ -3628,6 +3628,17 @@ body,
   font-variant-numeric: tabular-nums;
 }
 
+.world-iss-pill {
+  background-color: rgba(34, 211, 238, 0.2);
+  color: #cffafe;
+}
+
+.world-iss-meta {
+  font-weight: 500;
+  color: #a5f3fc;
+  font-variant-numeric: tabular-nums;
+}
+
 .world-map-card {
   flex: 1;
   min-height: 0;
@@ -3649,7 +3660,8 @@ body,
 }
 
 .world-arc-group,
-.world-city-pin {
+.world-city-pin,
+.world-iss-marker {
   cursor: pointer;
 }
 

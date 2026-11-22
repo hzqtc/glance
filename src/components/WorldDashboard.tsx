@@ -3,6 +3,7 @@ import type {
   CityConfig,
   CityWeather,
   FXQuote,
+  ISSOrbit,
   TempUnit,
   TimeFormat,
   WorldResponse,
@@ -10,6 +11,7 @@ import type {
 import { WORLD_BORDER_PATH, WORLD_LAND_PATH } from '../data/worldLand';
 import {
   MAP_LEFT_LON,
+  buildISSTrack,
   buildTerminatorPaths,
   computeGreatCircleArc,
   formatFXInverseHint,
@@ -151,6 +153,13 @@ export function WorldDashboard(props: WorldDashboardProps) {
   var fxQuotes = _fxState[0];
   var setFxQuotes = _fxState[1];
 
+  var _issOrbitState = useState<ISSOrbit | null>(function () {
+    var cached = readCachedWorld();
+    return cached && cached.iss ? cached.iss : null;
+  });
+  var issOrbit = _issOrbitState[0];
+  var setIssOrbit = _issOrbitState[1];
+
   var _loadingState = useState<boolean>(false);
   var isLoading = _loadingState[0];
   var setIsLoading = _loadingState[1];
@@ -163,6 +172,10 @@ export function WorldDashboard(props: WorldDashboardProps) {
   var selectedCityId = _selectedCityState[0];
   var setSelectedCityId = _selectedCityState[1];
 
+  var _selectedISSState = useState<boolean>(false);
+  var selectedISS = _selectedISSState[0];
+  var setSelectedISS = _selectedISSState[1];
+
   var _showArcsState = useState<boolean>(true);
   var showArcs = _showArcsState[0];
   var setShowArcs = _showArcsState[1];
@@ -170,6 +183,16 @@ export function WorldDashboard(props: WorldDashboardProps) {
   var _showCelestialState = useState<boolean>(true);
   var showCelestial = _showCelestialState[0];
   var setShowCelestial = _showCelestialState[1];
+
+  var _showISSState = useState<boolean>(true);
+  var showISS = _showISSState[0];
+  var setShowISS = _showISSState[1];
+
+  var _issNowState = useState<number>(function () {
+    return Date.now();
+  });
+  var issNowMs = _issNowState[0];
+  var setIssNowMs = _issNowState[1];
 
   var hasPreloadedRef = useRef<boolean>(false);
   var lastFetchMsRef = useRef<number>(0);
@@ -195,6 +218,11 @@ export function WorldDashboard(props: WorldDashboardProps) {
         if (json.fx && json.fx.length > 0) {
           lastFetchMsRef.current = Date.now();
           setFxQuotes(json.fx);
+        }
+        if (json.iss) {
+          setIssOrbit(json.iss);
+        }
+        if ((json.fx && json.fx.length > 0) || json.iss) {
           writeCachedWorld(json);
         }
         setLoadError(null);
@@ -259,27 +287,45 @@ export function WorldDashboard(props: WorldDashboardProps) {
     [props.isActive]
   );
 
-  // Auto-clear selected city route after configured idle period
+  // Smooth 5-second ISS position tick only while World slide is visible and ISS layer is on
+  useEffect(
+    function () {
+      if (!props.isActive || !showISS || !issOrbit) {
+        return;
+      }
+      setIssNowMs(Date.now());
+      var id = window.setInterval(function () {
+        setIssNowMs(Date.now());
+      }, 5000);
+      return function () {
+        window.clearInterval(id);
+      };
+    },
+    [props.isActive, showISS, issOrbit]
+  );
+
+  // Auto-clear selected city route or ISS inspector after configured idle period
   var idleResetSec =
     typeof props.idleResetSeconds === 'number' && props.idleResetSeconds >= 5
       ? props.idleResetSeconds
       : 60;
   useEffect(
     function () {
-      if (!selectedCityId) {
+      if (!selectedCityId && !selectedISS) {
         return;
       }
       var id = window.setTimeout(function () {
         setSelectedCityId(null);
+        setSelectedISS(false);
       }, idleResetSec * 1000);
       return function () {
         window.clearTimeout(id);
       };
     },
-    [selectedCityId, idleResetSec, props.activityTick]
+    [selectedCityId, selectedISS, idleResetSec, props.activityTick]
   );
 
-  // Astronomical calculations
+  // Astronomical & ISS orbital calculations
   var sun = getSubsolarPoint(props.nowMs);
   var moon = getSublunarPoint(props.nowMs);
   var sunPt = projectLonLat(sun.lon, sun.lat, MAP_W, MAP_H);
@@ -288,6 +334,12 @@ export function WorldDashboard(props: WorldDashboardProps) {
   var isMoonFull = Math.abs(props.moonPhase - 0.5) < 0.02;
   var isMoonNew = props.moonPhase < 0.02 || props.moonPhase > 0.98;
   var moonLitPath = buildSmallMoonLitPath(props.moonPhase, 6.2);
+
+  var effectiveIssMs = Math.max(props.nowMs, issNowMs);
+  var issTrack =
+    showISS && issOrbit ? buildISSTrack(issOrbit, effectiveIssMs, MAP_W, MAP_H) : null;
+  var issLabelLeft = issTrack ? issTrack.x > MAP_W - 110 : false;
+  var issFootprintClosed = issTrack ? issTrack.footprintSegments.length === 1 : false;
 
   // Prepare city pins (deduplicate cities within < 18px of Home so Bay Area labels never collide)
   var cities = props.cities || [];
@@ -456,6 +508,26 @@ export function WorldDashboard(props: WorldDashboardProps) {
               </button>
               <button
                 type="button"
+                class={
+                  showISS
+                    ? 'ctrl-btn ctrl-btn-mode ctrl-btn-selected'
+                    : 'ctrl-btn ctrl-btn-mode'
+                }
+                onClick={function () {
+                  setShowISS(function (v) {
+                    if (v) {
+                      setSelectedISS(false);
+                    }
+                    return !v;
+                  });
+                }}
+                aria-pressed={showISS}
+                title="Toggle International Space Station & orbit"
+              >
+                ISS
+              </button>
+              <button
+                type="button"
                 class="ctrl-btn ctrl-btn-icon"
                 onClick={props.onRefresh}
                 disabled={props.isRefreshing}
@@ -482,7 +554,23 @@ export function WorldDashboard(props: WorldDashboardProps) {
           </div>
 
           <div class="world-header-right">
-            {selectedPin && selectedPin.arc && homeCity ? (
+            {selectedISS && issTrack ? (
+              <button
+                type="button"
+                class="world-route-pill world-iss-pill"
+                onClick={function () {
+                  setSelectedISS(false);
+                }}
+                title="Tap to dismiss ISS telemetry"
+              >
+                <span class="world-route-cities">ISS</span>
+                <span class="world-iss-meta">
+                  {Math.round(issTrack.current.altKm)} km ·{' '}
+                  {Math.round(issTrack.current.speedKmh).toLocaleString()} km/h ·{' '}
+                  {issTrack.current.sunlit ? 'Sunlit' : 'Shadow'}
+                </span>
+              </button>
+            ) : selectedPin && selectedPin.arc && homeCity ? (
               <button
                 type="button"
                 class="world-route-pill world-route-pill-active"
@@ -512,6 +600,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
               var tgt = e.target as Element | null;
               if (tgt && tgt.tagName && tgt.tagName.toLowerCase() === 'svg') {
                 setSelectedCityId(null);
+                setSelectedISS(false);
               }
             }}
           >
@@ -678,6 +767,195 @@ export function WorldDashboard(props: WorldDashboardProps) {
                 </g>
               ) : null}
 
+              {/* Live International Space Station orbital track, footprint, & marker */}
+              {issTrack ? (
+                <g class="world-iss-layer">
+                  {/* Past orbital trail (-45 min) */}
+                  {issTrack.pastSegments.map(function (seg, idx) {
+                    return (
+                      <path
+                        key={'iss-past-' + String(idx)}
+                        d={seg}
+                        fill="none"
+                        stroke="rgba(165, 243, 252, 0.34)"
+                        stroke-width="1.35"
+                        stroke-dasharray="3 4"
+                        stroke-linecap="round"
+                      />
+                    );
+                  })}
+
+                  {/* Future orbital trajectory (+95 min, ~1 full orbit) */}
+                  {issTrack.futureSegments.map(function (seg, idx) {
+                    return (
+                      <g key={'iss-fut-' + String(idx)}>
+                        <path
+                          d={seg}
+                          fill="none"
+                          stroke={
+                            selectedISS
+                              ? 'rgba(34, 211, 238, 0.38)'
+                              : 'rgba(34, 211, 238, 0.22)'
+                          }
+                          stroke-width={selectedISS ? '5.5' : '4'}
+                          stroke-linecap="round"
+                        />
+                        <path
+                          d={seg}
+                          fill="none"
+                          stroke={selectedISS ? '#a5f3fc' : '#67e8f9'}
+                          stroke-width={selectedISS ? '2' : '1.5'}
+                          stroke-linecap="round"
+                          opacity="0.92"
+                        />
+                      </g>
+                    );
+                  })}
+
+                  {/* Radio / visual horizon footprint circle */}
+                  {issTrack.footprintSegments.map(function (seg, idx) {
+                    return (
+                      <path
+                        key={'iss-foot-' + String(idx)}
+                        d={seg}
+                        fill={
+                          issFootprintClosed
+                            ? 'rgba(103, 232, 249, 0.08)'
+                            : 'none'
+                        }
+                        stroke="rgba(103, 232, 249, 0.42)"
+                        stroke-width="1"
+                        stroke-dasharray="3 3"
+                      />
+                    );
+                  })}
+
+                  {/* Interactive ISS Marker */}
+                  <g
+                    class="world-iss-marker"
+                    transform={
+                      'translate(' +
+                      issTrack.x.toFixed(1) +
+                      ',' +
+                      issTrack.y.toFixed(1) +
+                      ')'
+                    }
+                    onClick={function () {
+                      setSelectedCityId(null);
+                      setSelectedISS(function (v) {
+                        return !v;
+                      });
+                    }}
+                  >
+                    {/* Generous tap target */}
+                    <circle cx="0" cy="0" r="20" fill="transparent" />
+                    <circle
+                      cx="0"
+                      cy="0"
+                      r={selectedISS ? '14' : '11'}
+                      fill={
+                        selectedISS
+                          ? 'rgba(103, 232, 249, 0.28)'
+                          : 'rgba(103, 232, 249, 0.16)'
+                      }
+                    />
+                    {/* Miniature Space Station SVG oriented slightly along track */}
+                    <g
+                      transform={
+                        'rotate(' +
+                        (issTrack.headingDeg * 0.35).toFixed(1) +
+                        ')'
+                      }
+                    >
+                      {/* Main truss */}
+                      <line
+                        x1="-10"
+                        y1="0"
+                        x2="10"
+                        y2="0"
+                        stroke="#e0f2fe"
+                        stroke-width="1.8"
+                        stroke-linecap="round"
+                      />
+                      {/* Port & Starboard solar array wings */}
+                      <rect
+                        x="-9.5"
+                        y="-6"
+                        width="3"
+                        height="12"
+                        rx="0.7"
+                        fill="#38bdf8"
+                        stroke="#091326"
+                        stroke-width="0.6"
+                      />
+                      <rect
+                        x="-5.3"
+                        y="-5.5"
+                        width="2.6"
+                        height="11"
+                        rx="0.7"
+                        fill="#7dd3fc"
+                        stroke="#091326"
+                        stroke-width="0.6"
+                      />
+                      <rect
+                        x="2.7"
+                        y="-5.5"
+                        width="2.6"
+                        height="11"
+                        rx="0.7"
+                        fill="#7dd3fc"
+                        stroke="#091326"
+                        stroke-width="0.6"
+                      />
+                      <rect
+                        x="6.5"
+                        y="-6"
+                        width="3"
+                        height="12"
+                        rx="0.7"
+                        fill="#38bdf8"
+                        stroke="#091326"
+                        stroke-width="0.6"
+                      />
+                      {/* Pressurized core modules */}
+                      <rect
+                        x="-1.6"
+                        y="-3.6"
+                        width="3.2"
+                        height="7.2"
+                        rx="1.2"
+                        fill="#ffffff"
+                        stroke="#091326"
+                        stroke-width="0.7"
+                      />
+                    </g>
+                    <text
+                      x={issLabelLeft ? '-14' : '14'}
+                      y="-2"
+                      text-anchor={issLabelLeft ? 'end' : 'start'}
+                      class="world-pin-name"
+                      fill="#a5f3fc"
+                      font-size="11.5"
+                      font-weight="700"
+                    >
+                      ISS
+                    </text>
+                    <text
+                      x={issLabelLeft ? '-14' : '14'}
+                      y="10"
+                      text-anchor={issLabelLeft ? 'end' : 'start'}
+                      class="world-pin-sub"
+                      fill="rgba(186, 230, 253, 0.88)"
+                      font-size="9.5"
+                      font-weight="500"
+                    >
+                      {Math.round(issTrack.current.altKm)} km
+                    </text>
+                  </g>
+                </g>
+              ) : null}
+
               {/* Great-circle flight arcs from Home to distant cities */}
               {showArcs ? (
                 <g class="world-arcs-layer">
@@ -690,6 +968,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
                         key={'arc-' + pin.city.id}
                         class="world-arc-group"
                         onClick={function () {
+                          setSelectedISS(false);
                           setSelectedCityId(isSel ? null : pin.city.id);
                         }}
                       >
@@ -789,6 +1068,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
                       class="world-city-pin"
                       transform={'translate(' + pin.x.toFixed(1) + ',' + pin.y.toFixed(1) + ')'}
                       onClick={function () {
+                        setSelectedISS(false);
                         if (pin.isHome) {
                           setSelectedCityId(null);
                         } else {

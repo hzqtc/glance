@@ -279,10 +279,24 @@ export interface FXQuote {
   unavailable?: boolean;
 }
 
+export interface ISSOrbit {
+  name: string;
+  epochMs: number;
+  inclinationDeg: number;
+  raanDeg: number;
+  eccentricity: number;
+  argPerigeeDeg: number;
+  meanAnomalyDeg: number;
+  meanMotionRevPerDay: number;
+  meanMotionDot: number;
+  fetchedAt: string;
+}
+
 export interface WorldResponse {
   version: string;
   fetchedAt: string;
   fx: FXQuote[];
+  iss?: ISSOrbit;
 }
 
 export type WeatherKind =
