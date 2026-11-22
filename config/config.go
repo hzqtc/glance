@@ -66,22 +66,6 @@ type StocksConfig struct {
 	Symbols      []StockSymbolConfig `json:"symbols"`
 }
 
-type TripWidgetItem struct {
-	ID    string `json:"id"`
-	Title string `json:"title"`
-	Date  string `json:"date"`
-	Emoji string `json:"emoji,omitempty"`
-}
-
-type CalendarWidgetConfig struct {
-	Enabled bool `json:"enabled"`
-}
-
-type WidgetsConfig struct {
-	Trips    []TripWidgetItem     `json:"trips"`
-	Calendar CalendarWidgetConfig `json:"calendar"`
-}
-
 type DashboardConfig struct {
 	Units      string          `json:"units"`
 	TimeFormat string          `json:"timeFormat"`
@@ -92,7 +76,6 @@ type DashboardConfig struct {
 	Photos     PhotosConfig    `json:"photos"`
 	Cities     []CityConfig    `json:"cities"`
 	Stocks     StocksConfig    `json:"stocks"`
-	Widgets    WidgetsConfig   `json:"widgets"`
 }
 
 func LoadRawConfig() ([]byte, bool, error) {
@@ -139,9 +122,6 @@ func ParseAndNormalizeConfig(raw []byte) (DashboardConfig, error) {
 	}
 	if cfg.NightMode.DimOpacity <= 0 || cfg.NightMode.DimOpacity > 0.9 {
 		cfg.NightMode.DimOpacity = 0.55
-	}
-	if cfg.Widgets.Trips == nil {
-		cfg.Widgets.Trips = []TripWidgetItem{}
 	}
 	if strings.TrimSpace(cfg.Stocks.DefaultRange) == "" {
 		cfg.Stocks.DefaultRange = "1d"

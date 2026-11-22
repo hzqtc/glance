@@ -665,10 +665,6 @@ function DashboardShell(props: DashboardShellProps) {
   var units: TempUnit = unitOverride || configUnits;
   var timeFormat = data && data.config ? data.config.timeFormat : '12h';
   var nightMode = data && data.config ? data.config.nightMode : null;
-  var trips =
-    data && data.config && data.config.widgets && data.config.widgets.trips
-      ? data.config.widgets.trips
-      : [];
   var dailyReloadHour =
     data && data.config && data.config.refresh
       ? data.config.refresh.dailyReloadHour
@@ -1097,7 +1093,6 @@ function DashboardShell(props: DashboardShellProps) {
                   clock={activeClock}
                   units={units}
                   timeFormat={timeFormat}
-                  trips={trips}
                 />
               </div>
             ) : (

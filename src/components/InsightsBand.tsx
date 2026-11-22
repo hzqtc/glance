@@ -1,4 +1,4 @@
-import type { CityWeather, TempUnit, TimeFormat, TripWidgetItem } from '../types';
+import type { CityWeather, TempUnit, TimeFormat } from '../types';
 import type { CityClockInfo } from '../utils/time';
 import {
   computeDaylightProgress,
@@ -21,28 +21,6 @@ interface InsightsBandProps {
   clock: CityClockInfo;
   units: TempUnit;
   timeFormat: TimeFormat;
-  trips: TripWidgetItem[];
-}
-
-function getNextUpcomingTrip(trips: TripWidgetItem[]): { title: string; daysLeft: number; emoji: string } | null {
-  if (!trips || trips.length === 0) return null;
-  var now = Date.now();
-  var best: { title: string; daysLeft: number; emoji: string } | null = null;
-  for (var i = 0; i < trips.length; i++) {
-    var t = trips[i];
-    var parts = (t.date || '').split('-');
-    if (parts.length !== 3) continue;
-    var y = parseInt(parts[0], 10);
-    var m = parseInt(parts[1], 10);
-    var d = parseInt(parts[2], 10);
-    if (isNaN(y) || isNaN(m) || isNaN(d)) continue;
-    var targetMs = Date.UTC(y, m - 1, d);
-    var days = Math.ceil((targetMs - now) / 86400000);
-    if (days >= 0 && (!best || days < best.daysLeft)) {
-      best = { title: t.title, daysLeft: days, emoji: t.emoji || '' };
-    }
-  }
-  return best;
 }
 
 export function InsightsBand(props: InsightsBandProps) {
@@ -89,7 +67,6 @@ export function InsightsBand(props: InsightsBandProps) {
     weather.sunshineSeconds,
     props.units
   );
-  var nextTrip = getNextUpcomingTrip(props.trips);
 
   return (
     <section class="insights-band" aria-label="5-day forecast and air conditions">
@@ -149,17 +126,8 @@ export function InsightsBand(props: InsightsBandProps) {
         }
       >
         <div class="insights-header">
-          <span class="insights-title">
-            {nextTrip ? 'Air, Daylight & Trip' : 'Air & Daylight'}
-          </span>
-          {nextTrip ? (
-            <span class="trip-pill">
-              {nextTrip.emoji ? nextTrip.emoji + ' ' : ''}
-              {nextTrip.title} · {nextTrip.daysLeft === 0 ? 'Today' : String(nextTrip.daysLeft) + 'd'}
-            </span>
-          ) : (
-            <span class="insights-sub">{daylight.durationText}</span>
-          )}
+          <span class="insights-title">Air &amp; Daylight</span>
+          <span class="insights-sub">{daylight.durationText}</span>
         </div>
 
         <div class="atmos-metrics">

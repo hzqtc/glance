@@ -60,22 +60,6 @@ export interface StocksConfig {
   symbols: StockSymbolConfig[];
 }
 
-export interface TripWidgetItem {
-  id: string;
-  title: string;
-  date: string;
-  emoji?: string;
-}
-
-export interface CalendarWidgetConfig {
-  enabled: boolean;
-}
-
-export interface WidgetsConfig {
-  trips: TripWidgetItem[];
-  calendar: CalendarWidgetConfig;
-}
-
 export interface DashboardConfig {
   units: TempUnit;
   timeFormat: TimeFormat;
@@ -86,7 +70,6 @@ export interface DashboardConfig {
   photos?: PhotosConfig;
   cities: CityConfig[];
   stocks?: StocksConfig;
-  widgets: WidgetsConfig;
 }
 
 export interface HourlyForecast {

@@ -75,7 +75,7 @@ export function StocksDashboard(props: StocksDashboardProps) {
 
   var _symbolState = useState<string>(function () {
     var cached = readCachedStocks();
-    return cached && cached.hero ? cached.hero.symbol : 'NVDA';
+    return cached && cached.hero ? cached.hero.symbol : 'GOOG';
   });
   var selectedSymbol = _symbolState[0];
   var setSelectedSymbol = _symbolState[1];

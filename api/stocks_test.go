@@ -105,7 +105,7 @@ func TestStocksHandlerEndToEndAndChartOnly(t *testing.T) {
 			}
 			if r.URL.Path == "/v7/finance/quote" {
 				atomic.AddInt32(&quoteCalls, 1)
-				mockQuotes := `{"quoteResponse":{"result":[{"symbol":"NVDA","marketState":"POST","marketCap":3420000000000,"postMarketPrice":146.2,"postMarketChange":3.85,"postMarketChangePercent":2.71},{"symbol":"^GSPC","marketCap":0}]}}`
+				mockQuotes := `{"quoteResponse":{"result":[{"symbol":"GOOG","marketState":"POST","marketCap":2450000000000},{"symbol":"NVDA","marketState":"POST","marketCap":3420000000000,"postMarketPrice":146.2,"postMarketChange":3.85,"postMarketChangePercent":2.71},{"symbol":"^GSPC","marketCap":0}]}}`
 				return &http.Response{
 					StatusCode: http.StatusOK,
 					Header:     http.Header{"Content-Type": []string{"application/json"}},
@@ -184,8 +184,11 @@ func TestStocksHandlerEndToEndAndChartOnly(t *testing.T) {
 	if len(full.Quotes) != 20 {
 		t.Fatalf("expected 20 watchlist quotes, got %d", len(full.Quotes))
 	}
-	if full.Quotes[0].Symbol != "NVDA" || full.Quotes[0].MarketCap != 3420000000000 {
-		t.Fatalf("expected first categorized quote NVDA with marketCap 3.42T, got %+v", full.Quotes[0])
+	if full.Quotes[0].Symbol != "GOOG" || full.Quotes[0].MarketCap != 2450000000000 {
+		t.Fatalf("expected first quote GOOG with marketCap 2.45T, got %+v", full.Quotes[0])
+	}
+	if full.Quotes[1].Symbol != "NVDA" || full.Quotes[1].MarketCap != 3420000000000 {
+		t.Fatalf("expected second quote NVDA with marketCap 3.42T, got %+v", full.Quotes[1])
 	}
 
 	// chartOnly=1 for 1y timeframe switching
