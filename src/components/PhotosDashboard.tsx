@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import type { PhotoItem, PhotosResponse } from '../types';
 import { buildCollageDeck } from '../utils/collage';
 import type { CollageFrame } from '../utils/collage';
+import { getDemoPhotosResponse, isPhotosDemoMode } from '../data/demoPhotos';
 
 var DEFAULT_PHOTO_INTERVAL_SEC = 15;
 var PHOTO_REFRESH_MS = 30 * 60 * 1000;
@@ -292,6 +293,16 @@ export function PhotosDashboard(props: PhotosDashboardProps) {
   }
 
   function fetchPhotos(showLoading: boolean) {
+    // Demo mode (?demo=photos): bundled stock photos instead of /api/photos
+    if (isPhotosDemoMode()) {
+      var demo = getDemoPhotosResponse();
+      setResp(demo);
+      setLoadError(null);
+      setIsLoading(false);
+      lastFetchMsRef.current = Date.now();
+      applyPhotoList(demo.photos);
+      return Promise.resolve(demo);
+    }
     if (showLoading) {
       setIsLoading(true);
     }

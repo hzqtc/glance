@@ -11,6 +11,8 @@ Captured at the iPad mini 2's 1024×768 landscape resolution (Retina 2×).
 | ![Weather dashboard: live clock, current conditions, 24-hour ribbon, 5-day forecast, air quality, and multi-city cards](docs/screenshots/weather.jpg) | ![Stocks dashboard: selected symbol chart with timeframes and a 20-card watchlist](docs/screenshots/stocks.jpg) |
 | **Calendar** | **World** |
 | ![Calendar dashboard: month grid with Chinese lunar dates and US holidays beside the selected-day agenda](docs/screenshots/calendar.jpg) | ![World dashboard: day/night map with city arcs, ISS orbit, earthquakes, and FX currency cards](docs/screenshots/world.jpg) |
+| **Photos** (demo mode) | |
+| ![Photos frame: auto-collage of one portrait and two landscape stock photos](docs/screenshots/photos.jpg) | |
 
 ## Features
 
@@ -99,9 +101,11 @@ npm run dev
 npm run build && npm run preview
 ```
 
-### Weather & Sky Preview Modes
+### Preview & Demo Modes
 Append `?demo=<mode>` to preview any condition immediately:
 `?demo=night`, `?demo=day`, `?demo=sunset`, `?demo=rain`, `?demo=snow`, `?demo=storm`, `?demo=fog`, `?demo=cloudy`, `?demo=wind`.
+
+`?demo=photos` fills the Photos slide with 15 bundled stock photos (from [`public/demo/photos/`](./public/demo/photos/), Unsplash License; see [CREDITS](./public/demo/photos/CREDITS.md)) instead of your Google Photos albums — handy for screenshots or trying the collage layouts without configuring `PHOTOS_ALBUM_URLS`.
 
 ## Deploy to Vercel
 
