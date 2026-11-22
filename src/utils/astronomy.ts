@@ -44,14 +44,21 @@ export function projectLat(lat: number, mapH: number): number {
   return ((MAP_MAX_LAT - clampedLat) / MAP_LAT_SPAN) * mapH;
 }
 
-/** Projects (lon, lat) onto an equirectangular canvas centered at MAP_CENTER_LON (155°E). */
+export function getMapLeftLon(centerLon?: number): number {
+  var c = typeof centerLon === 'number' && isFinite(centerLon) ? centerLon : MAP_CENTER_LON;
+  return c - 180;
+}
+
+/** Projects (lon, lat) onto an equirectangular canvas centered at `centerLon` (defaults to MAP_CENTER_LON). */
 export function projectLonLat(
   lon: number,
   lat: number,
   mapW: number,
-  mapH: number
+  mapH: number,
+  centerLon?: number
 ): ProjectedPoint {
-  var shifted = ((lon - MAP_LEFT_LON) % 360 + 360) % 360;
+  var leftLon = getMapLeftLon(centerLon);
+  var shifted = ((lon - leftLon) % 360 + 360) % 360;
   return {
     x: (shifted / 360) * mapW,
     y: projectLat(lat, mapH),
@@ -121,7 +128,8 @@ export function buildTerminatorPaths(
   sunLat: number,
   sunLon: number,
   mapW: number,
-  mapH: number
+  mapH: number,
+  centerLon?: number
 ): { nightPath: string; twilightPath: string; terminatorLine: string } {
   // Guard exact equinox (0° declination) to keep tan(sunLat) well-behaved
   var effLat = sunLat;
@@ -130,6 +138,7 @@ export function buildTerminatorPaths(
   }
   var tanSun = Math.tan(effLat * DEG2RAD);
   var nightPoleY = effLat >= 0 ? mapH : 0;
+  var leftLon = getMapLeftLon(centerLon);
 
   var steps = 120;
   var lineParts: string[] = [];
@@ -139,7 +148,7 @@ export function buildTerminatorPaths(
 
   for (var i = 0; i <= steps; i++) {
     var frac = i / steps;
-    var lon = MAP_LEFT_LON + frac * 360;
+    var lon = leftLon + frac * 360;
     var dLonRad = (lon - sunLon) * DEG2RAD;
     var termLat = Math.atan(-Math.cos(dLonRad) / tanSun) * RAD2DEG;
     var x = frac * mapW;
@@ -187,7 +196,8 @@ export function computeGreatCircleArc(
   lat2: number,
   lon2: number,
   mapW: number,
-  mapH: number
+  mapH: number,
+  centerLon?: number
 ): GreatCircleArcResult {
   var p1Lat = lat1 * DEG2RAD;
   var p1Lon = lon1 * DEG2RAD;
@@ -227,7 +237,7 @@ export function computeGreatCircleArc(
   var prevX = -9999;
   var steps = 40;
   var sinOmega = Math.sin(omega);
-  var midPt: ProjectedPoint = projectLonLat(lon1, lat1, mapW, mapH);
+  var midPt: ProjectedPoint = projectLonLat(lon1, lat1, mapW, mapH, centerLon);
 
   for (var i = 0; i <= steps; i++) {
     var t = i / steps;
@@ -247,7 +257,7 @@ export function computeGreatCircleArc(
     }
     var lat = Math.atan2(pz, Math.sqrt(px * px + py * py)) * RAD2DEG;
     var lon = Math.atan2(py, px) * RAD2DEG;
-    var proj = projectLonLat(lon, lat, mapW, mapH);
+    var proj = projectLonLat(lon, lat, mapW, mapH, centerLon);
 
     if (i === Math.floor(steps / 2)) {
       midPt = proj;
@@ -457,14 +467,15 @@ export function buildISSTrack(
   orbit: ISSOrbit,
   nowMs: number,
   mapW: number,
-  mapH: number
+  mapH: number,
+  centerLon?: number
 ): ISSTrackResult {
   var current = propagateISS(orbit, nowMs);
-  var curPt = projectLonLat(current.lon, current.lat, mapW, mapH);
+  var curPt = projectLonLat(current.lon, current.lat, mapW, mapH, centerLon);
 
   // Sample 15s ahead for map-space heading angle
   var ahead = propagateISS(orbit, nowMs + 15000);
-  var aheadPt = projectLonLat(ahead.lon, ahead.lat, mapW, mapH);
+  var aheadPt = projectLonLat(ahead.lon, ahead.lat, mapW, mapH, centerLon);
   var dx = aheadPt.x - curPt.x;
   if (dx > mapW * 0.5) dx -= mapW;
   if (dx < -mapW * 0.5) dx += mapW;
@@ -476,7 +487,7 @@ export function buildISSTrack(
   var pastSteps = 30;
   for (var p = pastSteps; p >= 0; p--) {
     var posP = propagateISS(orbit, nowMs - p * 90000);
-    pastPts.push(projectLonLat(posP.lon, posP.lat, mapW, mapH));
+    pastPts.push(projectLonLat(posP.lon, posP.lat, mapW, mapH, centerLon));
   }
 
   // Future trajectory: now to +95 minutes (~1 full orbit, every 1.5 min)
@@ -484,7 +495,7 @@ export function buildISSTrack(
   var futureSteps = 64;
   for (var f = 0; f <= futureSteps; f++) {
     var posF = propagateISS(orbit, nowMs + f * 90000);
-    futurePts.push(projectLonLat(posF.lon, posF.lat, mapW, mapH));
+    futurePts.push(projectLonLat(posF.lon, posF.lat, mapW, mapH, centerLon));
   }
 
   // Horizon visibility footprint circle on the sphere
@@ -510,7 +521,9 @@ export function buildISSTrack(
         Math.sin(brng) * sinAng * cosLat0,
         cosAng - sinLat0 * Math.sin(fLat)
       );
-    footPts.push(projectLonLat(wrapLon180(fLon * RAD2DEG), fLat * RAD2DEG, mapW, mapH));
+    footPts.push(
+      projectLonLat(wrapLon180(fLon * RAD2DEG), fLat * RAD2DEG, mapW, mapH, centerLon)
+    );
   }
 
   return {
@@ -559,9 +572,11 @@ function buildAuroraBandPolygon(
   sunLon: number,
   widthScale: number,
   mapW: number,
-  mapH: number
+  mapH: number,
+  centerLon?: number
 ): string {
   var clampedKp = Math.max(0, Math.min(9, kp));
+  var leftLon = getMapLeftLon(centerLon);
   var steps = 120;
   var upperPts: ProjectedPoint[] = [];
   var lowerPts: ProjectedPoint[] = [];
@@ -569,7 +584,7 @@ function buildAuroraBandPolygon(
 
   for (var i = 0; i <= steps; i++) {
     var frac = i / steps;
-    var lon = MAP_LEFT_LON + frac * 360;
+    var lon = leftLon + frac * 360;
     // Nightside expansion factor: 0 at solar noon, 1 at solar midnight
     var nightFactor = 0.5 * (1 - Math.cos((lon - sunLon) * DEG2RAD));
     var centerColat = 15.2 + 2.25 * clampedKp + 4.4 * nightFactor;
@@ -621,15 +636,16 @@ export function buildAuroraOvalPaths(
   kp: number,
   sunLon: number,
   mapW: number,
-  mapH: number
+  mapH: number,
+  centerLon?: number
 ): AuroraOvalPaths {
   var clampedKp = Math.max(0, Math.min(9, kp));
   var intensity = Math.max(0.28, Math.min(0.95, 0.28 + (clampedKp / 8) * 0.67));
   return {
-    northOuter: buildAuroraBandPolygon(80.8, -72.8, clampedKp, sunLon, 1.45, mapW, mapH),
-    northCore: buildAuroraBandPolygon(80.8, -72.8, clampedKp, sunLon, 0.72, mapW, mapH),
-    southOuter: buildAuroraBandPolygon(-80.8, 107.2, clampedKp, sunLon, 1.45, mapW, mapH),
-    southCore: buildAuroraBandPolygon(-80.8, 107.2, clampedKp, sunLon, 0.72, mapW, mapH),
+    northOuter: buildAuroraBandPolygon(80.8, -72.8, clampedKp, sunLon, 1.45, mapW, mapH, centerLon),
+    northCore: buildAuroraBandPolygon(80.8, -72.8, clampedKp, sunLon, 0.72, mapW, mapH, centerLon),
+    southOuter: buildAuroraBandPolygon(-80.8, 107.2, clampedKp, sunLon, 1.45, mapW, mapH, centerLon),
+    southCore: buildAuroraBandPolygon(-80.8, 107.2, clampedKp, sunLon, 0.72, mapW, mapH, centerLon),
     intensity: intensity,
     isStorm: clampedKp >= 5,
   };

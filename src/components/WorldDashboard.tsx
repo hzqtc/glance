@@ -13,6 +13,7 @@ import type {
 } from '../types';
 import { WORLD_BORDER_PATH, WORLD_LAND_PATH } from '../data/worldLand';
 import {
+  MAP_CENTER_LON,
   MAP_LEFT_LON,
   buildAuroraOvalPaths,
   buildISSTrack,
@@ -21,6 +22,7 @@ import {
   formatFXInverseHint,
   formatFXRate,
   formatUTCClock,
+  getMapLeftLon,
   getSublunarPoint,
   getSubsolarPoint,
   projectLat,
@@ -432,33 +434,44 @@ export function WorldDashboard(props: WorldDashboardProps) {
     ]
   );
 
+  // Center the map horizontally on the Home city's longitude (defaulting to MAP_CENTER_LON)
+  var cities = props.cities || [];
+  var homeCity = cities.length > 0 ? cities[0] : null;
+  var homeWeather = homeCity ? props.weatherById[homeCity.id] : undefined;
+  var homeOffsetSec = homeWeather ? homeWeather.utcOffsetSeconds : 0;
+  var mapCenterLon = homeCity ? homeCity.lon : MAP_CENTER_LON;
+  var mapLeftLon = getMapLeftLon(mapCenterLon);
+  var landShiftX =
+    ((((MAP_LEFT_LON - mapLeftLon) % 360) + 360) % 360 / 360) * MAP_W;
+  var landTileOffsets = [landShiftX - MAP_W, landShiftX];
+
   // Astronomical & ISS orbital calculations
   var sun = getSubsolarPoint(props.nowMs);
   var moon = getSublunarPoint(props.nowMs);
-  var sunPt = projectLonLat(sun.lon, sun.lat, MAP_W, MAP_H);
-  var moonPt = projectLonLat(moon.lon, moon.lat, MAP_W, MAP_H);
-  var term = buildTerminatorPaths(sun.lat, sun.lon, MAP_W, MAP_H);
+  var sunPt = projectLonLat(sun.lon, sun.lat, MAP_W, MAP_H, mapCenterLon);
+  var moonPt = projectLonLat(moon.lon, moon.lat, MAP_W, MAP_H, mapCenterLon);
+  var term = buildTerminatorPaths(sun.lat, sun.lon, MAP_W, MAP_H, mapCenterLon);
   var isMoonFull = Math.abs(props.moonPhase - 0.5) < 0.02;
   var isMoonNew = props.moonPhase < 0.02 || props.moonPhase > 0.98;
   var moonLitPath = buildSmallMoonLitPath(props.moonPhase, 6.2);
 
   var auroraOval =
     showAurora && aurora
-      ? buildAuroraOvalPaths(aurora.kp, sun.lon, MAP_W, MAP_H)
+      ? buildAuroraOvalPaths(aurora.kp, sun.lon, MAP_W, MAP_H, mapCenterLon)
       : null;
 
   var effectiveIssMs = Math.max(props.nowMs, issNowMs);
   var issTrack =
-    showISS && issOrbit ? buildISSTrack(issOrbit, effectiveIssMs, MAP_W, MAP_H) : null;
+    showISS && issOrbit
+      ? buildISSTrack(issOrbit, effectiveIssMs, MAP_W, MAP_H, mapCenterLon)
+      : null;
   var issLabelLeft = issTrack ? issTrack.x > MAP_W - 110 : false;
   var issFootprintClosed = issTrack ? issTrack.footprintSegments.length === 1 : false;
 
   // Prepare city pins (deduplicate cities within < 18px of Home so Bay Area labels never collide)
-  var cities = props.cities || [];
-  var homeCity = cities.length > 0 ? cities[0] : null;
-  var homeWeather = homeCity ? props.weatherById[homeCity.id] : undefined;
-  var homeOffsetSec = homeWeather ? homeWeather.utcOffsetSeconds : 0;
-  var homePt = homeCity ? projectLonLat(homeCity.lon, homeCity.lat, MAP_W, MAP_H) : null;
+  var homePt = homeCity
+    ? projectLonLat(homeCity.lon, homeCity.lat, MAP_W, MAP_H, mapCenterLon)
+    : null;
 
   interface CityPinData {
     city: CityConfig;
@@ -478,7 +491,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
   for (var i = 0; i < cities.length; i++) {
     var c = cities[i];
     var isHome = i === 0;
-    var pt = projectLonLat(c.lon, c.lat, MAP_W, MAP_H);
+    var pt = projectLonLat(c.lon, c.lat, MAP_W, MAP_H, mapCenterLon);
     var w = props.weatherById[c.id];
     var clk = getCityClock(props.nowMs, w ? w.utcOffsetSeconds : undefined, props.timeFormat);
     var isDay = w ? w.isDay : clk.hour24 >= 6 && clk.hour24 < 19;
@@ -494,7 +507,15 @@ export function WorldDashboard(props: WorldDashboardProps) {
 
     var arc =
       !isHome && homeCity
-        ? computeGreatCircleArc(homeCity.lat, homeCity.lon, c.lat, c.lon, MAP_W, MAP_H)
+        ? computeGreatCircleArc(
+            homeCity.lat,
+            homeCity.lon,
+            c.lat,
+            c.lon,
+            MAP_W,
+            MAP_H,
+            mapCenterLon
+          )
         : null;
 
     var timeLabel =
@@ -572,12 +593,9 @@ export function WorldDashboard(props: WorldDashboardProps) {
     }
   }
 
-  // Graticule coordinates (82°N to 58°S)
+  // Graticule coordinates (82°N to 58°S, true 30° meridians)
   var latLines = [-30, 0, 30, 60];
-  var lonSteps: number[] = [];
-  for (var lg = 0; lg < 12; lg++) {
-    lonSteps.push(MAP_LEFT_LON + lg * 30);
-  }
+  var lonSteps = [-180, -150, -120, -90, -60, -30, 0, 30, 60, 90, 120, 150];
   var tropicNorthY = projectLat(23.44, MAP_H);
   var tropicSouthY = projectLat(-23.44, MAP_H);
 
@@ -1006,8 +1024,8 @@ export function WorldDashboard(props: WorldDashboardProps) {
                     />
                   );
                 })}
-                {lonSteps.map(function (lon, idx) {
-                  var x = (idx / 12) * MAP_W;
+                {lonSteps.map(function (lon) {
+                  var x = projectLonLat(lon, 0, MAP_W, MAP_H, mapCenterLon).x;
                   return (
                     <line
                       key={'lon-' + String(lon)}
@@ -1015,7 +1033,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
                       y1="0"
                       x2={x.toFixed(1)}
                       y2={String(MAP_H)}
-                      stroke="rgba(214, 234, 255, 0.08)"
+                      stroke={lon === 0 ? 'rgba(214, 234, 255, 0.16)' : 'rgba(214, 234, 255, 0.08)'}
                       stroke-width="0.8"
                     />
                   );
@@ -1041,22 +1059,31 @@ export function WorldDashboard(props: WorldDashboardProps) {
                 />
               </g>
 
-              {/* High-detail Natural Earth 110m landmasses & subtle country borders */}
+              {/* High-detail Natural Earth 110m landmasses & subtle country borders (tiled seamlessly for Home centering) */}
               <g class="world-land-layer">
-                <path
-                  d={WORLD_LAND_PATH}
-                  fill="rgba(210, 234, 255, 0.46)"
-                  stroke="rgba(236, 246, 255, 0.72)"
-                  stroke-width="0.75"
-                  stroke-linejoin="round"
-                />
-                <path
-                  d={WORLD_BORDER_PATH}
-                  fill="none"
-                  stroke="rgba(220, 238, 255, 0.26)"
-                  stroke-width="0.55"
-                  stroke-linejoin="round"
-                />
+                {landTileOffsets.map(function (tx, tIdx) {
+                  return (
+                    <g
+                      key={'land-tile-' + String(tIdx)}
+                      transform={'translate(' + tx.toFixed(2) + ',0)'}
+                    >
+                      <path
+                        d={WORLD_LAND_PATH}
+                        fill="rgba(210, 234, 255, 0.46)"
+                        stroke="rgba(236, 246, 255, 0.72)"
+                        stroke-width="0.75"
+                        stroke-linejoin="round"
+                      />
+                      <path
+                        d={WORLD_BORDER_PATH}
+                        fill="none"
+                        stroke="rgba(220, 238, 255, 0.26)"
+                        stroke-width="0.55"
+                        stroke-linejoin="round"
+                      />
+                    </g>
+                  );
+                })}
               </g>
 
               {/* High-contrast twilight ribbon, deep night shadow hemisphere, & golden terminator */}
@@ -1152,7 +1179,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
               {showStorms && storms.length > 0 ? (
                 <g class="world-storms-layer">
                   {storms.map(function (storm) {
-                    var sPt = projectLonLat(storm.lon, storm.lat, MAP_W, MAP_H);
+                    var sPt = projectLonLat(storm.lon, storm.lat, MAP_W, MAP_H, mapCenterLon);
                     var isSelS = selectedStormId === storm.id;
                     var isMajor = storm.windKmh >= 178 || storm.alertLevel === 'Red';
                     var isHurr = storm.windKmh >= 119 || storm.alertLevel === 'Orange';
@@ -1239,7 +1266,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
               {showQuakes && quakes.length > 0 ? (
                 <g class="world-quakes-layer">
                   {quakes.map(function (q) {
-                    var qPt = projectLonLat(q.lon, q.lat, MAP_W, MAP_H);
+                    var qPt = projectLonLat(q.lon, q.lat, MAP_W, MAP_H, mapCenterLon);
                     var isSelQ = selectedQuakeId === q.id;
                     var isMajor = q.mag >= 6.5;
                     var isStrong = q.mag >= 5.5;
