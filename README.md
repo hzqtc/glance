@@ -5,7 +5,7 @@ An ambient personal wall dashboard PWA designed for an **iPad mini 2 (iOS 12.5.7
 ## Features
 
 - **One-Time 4-Digit PIN Gate:**
-  - Protected server-side via `GLANCE_PASSCODE` (stored in Vercel Environment Variables; never committed to Git or sent to the client). Issues a 1-year HMAC-SHA256 signed `HttpOnly` cookie on unlock and blocks `/api/weather`, `/api/stocks`, `/api/calendar`, `/api/world`, and `/api/photos` until verified. Local dev allows open access when `GLANCE_PASSCODE` is unset, while Vercel fails closed if unset.
+  - Protected server-side via `GLANCE_PASSCODE` (stored in Vercel Environment Variables; never committed to Git or sent to the client). Issues a 1-year `HttpOnly` cookie on unlock, HMAC-SHA256 signed with a separate random `GLANCE_SESSION_SECRET` (32+ characters, e.g. `openssl rand -hex 32`) so the cookie can't be forged by guessing the PIN. Rotating either the PIN or the secret logs out every device. The gate blocks `/api/weather`, `/api/stocks`, `/api/calendar`, `/api/world`, and `/api/photos` until verified. Local dev allows open access when `GLANCE_PASSCODE` is unset, while Vercel fails closed if either variable is missing.
 - **Vertical Auto-Rotating Carousel (Weather ↕ Stocks ↕ Calendar ↕ World ↕ Photos):**
   - Auto-cycles across dashboards every `carousel.intervalSeconds` (15s by default), or follows an explicit `carousel.schedule` of `{ "slide": "<weather|stocks|calendar|world|photos>", "seconds": N }` steps (the default schedule interleaves 60s of Photos between each 15s dashboard). Rotation pauses for `carousel.manualPauseSeconds` (60s by default) whenever you manually swipe up/down, tap the right-side icon rail, or press `↑`/`↓`.
 - **Weather Dashboard (Slide 1):**
@@ -96,7 +96,7 @@ Append `?demo=<mode>` to preview any condition immediately:
 ## Deploy to Vercel
 
 **Option A — GitHub Auto-Deploy (Recommended):**
-Import this repository at [vercel.com/new](https://vercel.com/new) and click **Deploy** (Vercel detects [`vercel.json`](./vercel.json), [`go.mod`](./go.mod), and the Go handlers in `api/` automatically). Set `GLANCE_PASSCODE`, `CALENDAR_ICS_URLS`, and `PHOTOS_ALBUM_URLS` under **Project Settings → Environment Variables**. Pushing edits to `config/dashboard.config.json` auto-deploys and updates the wall-mounted iPad automatically.
+Import this repository at [vercel.com/new](https://vercel.com/new) and click **Deploy** (Vercel detects [`vercel.json`](./vercel.json), [`go.mod`](./go.mod), and the Go handlers in `api/` automatically). Set `GLANCE_PASSCODE`, `GLANCE_SESSION_SECRET`, `CALENDAR_ICS_URLS`, and `PHOTOS_ALBUM_URLS` under **Project Settings → Environment Variables**. Pushing edits to `config/dashboard.config.json` auto-deploys and updates the wall-mounted iPad automatically.
 
 **Option B — Vercel CLI:**
 ```bash

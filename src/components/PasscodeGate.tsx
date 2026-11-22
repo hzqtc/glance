@@ -195,7 +195,7 @@ export function PasscodeGate(props: PasscodeGateProps) {
           <div class="pin-misconfig">
             <p class="pin-sub">Passcode not configured</p>
             <p class="pin-misconfig-hint">
-              Set <code>GLANCE_PASSCODE</code> (4-digit PIN) in Vercel Project Settings → Environment Variables and redeploy.
+              Set <code>GLANCE_PASSCODE</code> (4-digit PIN) and <code>GLANCE_SESSION_SECRET</code> (random, 32+ characters) in Vercel Project Settings → Environment Variables and redeploy.
             </p>
           </div>
         ) : (

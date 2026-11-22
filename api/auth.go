@@ -40,7 +40,7 @@ func AuthHandler(w http.ResponseWriter, r *http.Request) {
 	if auth.IsMisconfigured() {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		_ = json.NewEncoder(w).Encode(map[string]string{
-			"error": "GLANCE_PASSCODE is not configured on Vercel",
+			"error": auth.MisconfiguredMessage(),
 		})
 		return
 	}
@@ -97,7 +97,13 @@ func AuthHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	auth.ClearFailures(r)
-	auth.SetSessionCookie(w, r)
+	if !auth.SetSessionCookie(w, r) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"error": "failed to issue session",
+		})
+		return
+	}
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(auth.Status{
 		Authenticated: true,

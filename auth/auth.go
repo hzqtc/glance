@@ -2,6 +2,7 @@ package auth
 
 import (
 	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
@@ -16,13 +17,15 @@ import (
 )
 
 const (
-	CookieName       = "glance_auth"
-	cookieMaxAgeSec  = 365 * 24 * 3600 // 1 year (one-time unlock per device)
-	tokenVersionTag  = "glance-session-v1:"
-	maxFailedTries   = 5
-	failWindow       = 10 * time.Minute
-	lockoutDuration  = 5 * time.Minute
-	wrongPinDelay    = 400 * time.Millisecond
+	CookieName      = "glance_auth"
+	cookieMaxAgeSec = 365 * 24 * 3600 // 1 year (one-time unlock per device)
+	tokenVersionTag = "glance-session-v2:"
+	// MinSessionSecretLen is the minimum accepted length of GLANCE_SESSION_SECRET.
+	MinSessionSecretLen = 32
+	maxFailedTries      = 5
+	failWindow          = 10 * time.Minute
+	lockoutDuration     = 5 * time.Minute
+	wrongPinDelay       = 400 * time.Millisecond
 )
 
 var (
@@ -31,6 +34,11 @@ var (
 
 	rateMu      sync.Mutex
 	rateEntries = map[string]*ipRateState{}
+
+	// Random per-process fallback secret for local dev when GLANCE_SESSION_SECRET
+	// is unset (sessions reset whenever the dev server restarts).
+	devSecretOnce sync.Once
+	devSecret     string
 )
 
 type ipRateState struct {
@@ -49,6 +57,37 @@ func configuredPasscode() string {
 	return strings.TrimSpace(os.Getenv("GLANCE_PASSCODE"))
 }
 
+// configuredSessionSecret returns GLANCE_SESSION_SECRET if it is long enough to
+// be a real signing key, or "" otherwise.
+func configuredSessionSecret() string {
+	secret := strings.TrimSpace(os.Getenv("GLANCE_SESSION_SECRET"))
+	if len(secret) < MinSessionSecretLen {
+		return ""
+	}
+	return secret
+}
+
+// sessionSecret returns the high-entropy key used to sign session cookies.
+// The key must be independent of the 4-digit PIN: a PIN-derived key could be
+// brute-forced in 10^4 guesses by forging cookies against any protected
+// endpoint, bypassing the PIN rate limiter. On Vercel the secret is required;
+// locally a random per-process secret is used when it is unset.
+func sessionSecret() string {
+	if secret := configuredSessionSecret(); secret != "" {
+		return secret
+	}
+	if isVercelRuntime() {
+		return ""
+	}
+	devSecretOnce.Do(func() {
+		buf := make([]byte, 32)
+		if _, err := rand.Read(buf); err == nil {
+			devSecret = hex.EncodeToString(buf)
+		}
+	})
+	return devSecret
+}
+
 func isVercelRuntime() bool {
 	return strings.TrimSpace(os.Getenv("VERCEL")) != ""
 }
@@ -59,25 +98,38 @@ func IsRequired() bool {
 	return configuredPasscode() != "" || isVercelRuntime()
 }
 
-// IsMisconfigured reports true when running on Vercel without GLANCE_PASSCODE set.
+// IsMisconfigured reports true when running on Vercel without GLANCE_PASSCODE
+// or without a valid GLANCE_SESSION_SECRET.
 func IsMisconfigured() bool {
-	return isVercelRuntime() && configuredPasscode() == ""
+	return isVercelRuntime() && (configuredPasscode() == "" || configuredSessionSecret() == "")
 }
 
-func deriveHMACKey(passcode string) []byte {
-	sum := sha256.Sum256([]byte("glance-hmac-v1:" + passcode))
-	return sum[:]
+// MisconfiguredMessage describes what is missing on a misconfigured deployment.
+func MisconfiguredMessage() string {
+	return "GLANCE_PASSCODE and GLANCE_SESSION_SECRET (at least 32 characters) must be configured on Vercel"
 }
 
-func signToken(issuedUnix int64, passcode string) string {
+// deriveHMACKey binds the signing key to both the server secret and the current
+// PIN, so rotating either one invalidates every existing session cookie.
+func deriveHMACKey(secret, passcode string) []byte {
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write([]byte("glance-hmac-v2:"))
+	mac.Write([]byte(passcode))
+	return mac.Sum(nil)
+}
+
+func signToken(issuedUnix int64, secret, passcode string) string {
 	ts := strconv.FormatInt(issuedUnix, 10)
-	mac := hmac.New(sha256.New, deriveHMACKey(passcode))
+	mac := hmac.New(sha256.New, deriveHMACKey(secret, passcode))
 	mac.Write([]byte(tokenVersionTag))
 	mac.Write([]byte(ts))
 	return ts + "." + hex.EncodeToString(mac.Sum(nil))
 }
 
-func verifyToken(token, passcode string, now time.Time) bool {
+func verifyToken(token, secret, passcode string, now time.Time) bool {
+	if secret == "" || passcode == "" {
+		return false
+	}
 	dot := strings.IndexByte(token, '.')
 	if dot <= 0 || dot >= len(token)-1 {
 		return false
@@ -98,7 +150,7 @@ func verifyToken(token, passcode string, now time.Time) bool {
 	if err != nil {
 		return false
 	}
-	mac := hmac.New(sha256.New, deriveHMACKey(passcode))
+	mac := hmac.New(sha256.New, deriveHMACKey(secret, passcode))
 	mac.Write([]byte(tokenVersionTag))
 	mac.Write([]byte(tsStr))
 	expectedSig := mac.Sum(nil)
@@ -123,11 +175,14 @@ func IsAuthenticated(r *http.Request) bool {
 		// Fail closed on Vercel; allow open access locally.
 		return !isVercelRuntime()
 	}
+	if IsMisconfigured() {
+		return false
+	}
 	c, err := r.Cookie(CookieName)
 	if err != nil || c == nil || c.Value == "" {
 		return false
 	}
-	return verifyToken(c.Value, passcode, time.Now())
+	return verifyToken(c.Value, sessionSecret(), passcode, time.Now())
 }
 
 // GetStatus returns the current authentication status for GET /api/auth.
@@ -162,7 +217,7 @@ func RequireAuth(w http.ResponseWriter, r *http.Request) bool {
 	w.WriteHeader(http.StatusUnauthorized)
 	msg := "passcode required"
 	if IsMisconfigured() {
-		msg = "GLANCE_PASSCODE is not configured on Vercel"
+		msg = MisconfiguredMessage()
 	}
 	_ = json.NewEncoder(w).Encode(map[string]string{
 		"error": msg,
@@ -173,10 +228,11 @@ func RequireAuth(w http.ResponseWriter, r *http.Request) bool {
 // SetSessionCookie writes a long-lived signed HttpOnly session cookie for the device.
 func SetSessionCookie(w http.ResponseWriter, r *http.Request) bool {
 	passcode := configuredPasscode()
-	if passcode == "" {
+	secret := sessionSecret()
+	if passcode == "" || secret == "" {
 		return false
 	}
-	token := signToken(time.Now().Unix(), passcode)
+	token := signToken(time.Now().Unix(), secret, passcode)
 	http.SetCookie(w, &http.Cookie{
 		Name:     CookieName,
 		Value:    token,

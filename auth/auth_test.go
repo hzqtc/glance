@@ -4,10 +4,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 func TestLocalOpenAndVercelFailClosedWhenUnset(t *testing.T) {
 	t.Setenv("GLANCE_PASSCODE", "")
+	t.Setenv("GLANCE_SESSION_SECRET", "")
 	t.Setenv("VERCEL", "")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/weather", nil)
@@ -32,6 +34,7 @@ func TestLocalOpenAndVercelFailClosedWhenUnset(t *testing.T) {
 func TestPasscodeCookieSigningAndRotationInvalidation(t *testing.T) {
 	t.Setenv("GLANCE_PASSCODE", "4829")
 	t.Setenv("VERCEL", "1")
+	t.Setenv("GLANCE_SESSION_SECRET", testSecret)
 
 	if !VerifyPasscode("4829") {
 		t.Fatalf("expected valid passcode to verify")
@@ -71,5 +74,73 @@ func TestPasscodeCookieSigningAndRotationInvalidation(t *testing.T) {
 	t.Setenv("GLANCE_PASSCODE", "9999")
 	if IsAuthenticated(authedReq) {
 		t.Fatalf("expected rotated passcode to invalidate old cookie")
+	}
+
+	// Rotating GLANCE_SESSION_SECRET should also invalidate existing cookies
+	t.Setenv("GLANCE_PASSCODE", "4829")
+	if !IsAuthenticated(authedReq) {
+		t.Fatalf("expected cookie to be valid again with the original passcode")
+	}
+	t.Setenv("GLANCE_SESSION_SECRET", testSecret+"-rotated")
+	if IsAuthenticated(authedReq) {
+		t.Fatalf("expected rotated session secret to invalidate old cookie")
+	}
+}
+
+const testSecret = "test-session-secret-0123456789abcdef"
+
+func TestVercelRequiresStrongSessionSecret(t *testing.T) {
+	t.Setenv("GLANCE_PASSCODE", "4829")
+	t.Setenv("VERCEL", "1")
+
+	for _, secret := range []string{"", "too-short"} {
+		t.Setenv("GLANCE_SESSION_SECRET", secret)
+		if !IsMisconfigured() {
+			t.Fatalf("expected Vercel with secret %q to be misconfigured", secret)
+		}
+		if st := GetStatus(httptest.NewRequest(http.MethodGet, "/api/auth", nil)); !st.Misconfigured || st.Authenticated {
+			t.Fatalf("unexpected status for secret %q: %+v", secret, st)
+		}
+		rec := httptest.NewRecorder()
+		if SetSessionCookie(rec, httptest.NewRequest(http.MethodPost, "/api/auth", nil)) {
+			t.Fatalf("expected SetSessionCookie to refuse without a valid secret")
+		}
+	}
+}
+
+// A cookie signed with a key derived only from the PIN (the old v1 scheme an
+// attacker could brute-force in 10^4 guesses) must not authenticate.
+func TestPinOnlyForgedCookieRejected(t *testing.T) {
+	t.Setenv("GLANCE_PASSCODE", "4829")
+	t.Setenv("VERCEL", "1")
+	t.Setenv("GLANCE_SESSION_SECRET", testSecret)
+
+	issued := time.Now().Unix()
+	for _, key := range []string{"", "4829"} {
+		forged := signToken(issued, key, "4829")
+		req := httptest.NewRequest(http.MethodGet, "/api/weather", nil)
+		req.AddCookie(&http.Cookie{Name: CookieName, Value: forged})
+		if IsAuthenticated(req) {
+			t.Fatalf("expected cookie forged without the server secret (key %q) to be rejected", key)
+		}
+	}
+}
+
+func TestLocalDevWithoutSecretUsesRandomSecret(t *testing.T) {
+	t.Setenv("GLANCE_PASSCODE", "4829")
+	t.Setenv("VERCEL", "")
+	t.Setenv("GLANCE_SESSION_SECRET", "")
+
+	if IsMisconfigured() {
+		t.Fatalf("local dev without a session secret should not be misconfigured")
+	}
+	rec := httptest.NewRecorder()
+	if !SetSessionCookie(rec, httptest.NewRequest(http.MethodPost, "/api/auth", nil)) {
+		t.Fatalf("expected SetSessionCookie to succeed locally with a random secret")
+	}
+	req := httptest.NewRequest(http.MethodGet, "/api/weather", nil)
+	req.AddCookie(rec.Result().Cookies()[0])
+	if !IsAuthenticated(req) {
+		t.Fatalf("expected locally issued cookie to authenticate")
 	}
 }

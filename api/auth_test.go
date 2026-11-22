@@ -21,6 +21,7 @@ func TestAuthHandlerFlowAndProtectedEndpoints(t *testing.T) {
 
 	t.Setenv("GLANCE_PASSCODE", "2468")
 	t.Setenv("VERCEL", "1")
+	t.Setenv("GLANCE_SESSION_SECRET", "test-session-secret-0123456789abcdef")
 
 	// 1. Unauthenticated GET /api/auth
 	req := httptest.NewRequest(http.MethodGet, "/api/auth", nil)
@@ -99,6 +100,7 @@ func TestAuthHandlerRateLimit(t *testing.T) {
 
 	t.Setenv("GLANCE_PASSCODE", "1357")
 	t.Setenv("VERCEL", "1")
+	t.Setenv("GLANCE_SESSION_SECRET", "test-session-secret-0123456789abcdef")
 
 	for i := 0; i < 5; i++ {
 		req := httptest.NewRequest(http.MethodPost, "/api/auth", bytes.NewBufferString(`{"passcode":"9999"}`))
