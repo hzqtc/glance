@@ -5,9 +5,9 @@ An ambient personal wall dashboard PWA designed for an **iPad mini 2 (iOS 12.5.7
 ## Features
 
 - **One-Time 4-Digit PIN Gate:**
-  - Protected server-side via `GLANCE_PASSCODE` (stored in Vercel Environment Variables; never committed to Git or sent to the client). Issues a 1-year HMAC-SHA256 signed `HttpOnly` cookie on unlock and blocks `/api/weather`, `/api/stocks`, `/api/calendar`, and `/api/photos` until verified. Local dev allows open access when `GLANCE_PASSCODE` is unset, while Vercel fails closed if unset.
-- **Vertical Auto-Rotating Carousel (Weather ↕ Stocks ↕ Calendar ↕ Photos):**
-  - Auto-cycles across dashboards every 30s (`carousel.intervalSeconds`), automatically pausing for 5 minutes (`carousel.manualPauseSeconds`) whenever you manually swipe up/down, tap the right-side icon rail, or press `↑`/`↓`.
+  - Protected server-side via `GLANCE_PASSCODE` (stored in Vercel Environment Variables; never committed to Git or sent to the client). Issues a 1-year HMAC-SHA256 signed `HttpOnly` cookie on unlock and blocks `/api/weather`, `/api/stocks`, `/api/calendar`, `/api/world`, and `/api/photos` until verified. Local dev allows open access when `GLANCE_PASSCODE` is unset, while Vercel fails closed if unset.
+- **Vertical Auto-Rotating Carousel (Weather ↕ Stocks ↕ Calendar ↕ World ↕ Photos):**
+  - Auto-cycles across dashboards every `carousel.intervalSeconds` (15s by default), or follows an explicit `carousel.schedule` of `{ "slide": "<weather|stocks|calendar|world|photos>", "seconds": N }` steps (the default schedule interleaves 60s of Photos between each 15s dashboard). Rotation pauses for `carousel.manualPauseSeconds` (60s by default) whenever you manually swipe up/down, tap the right-side icon rail, or press `↑`/`↓`.
 - **Weather Dashboard (Slide 1):**
   - **Atmospheric Sky & Real Moon Phase:** Solar-elevation-driven sky canvas (dawn, day, sunset, twilight, night) paired with a crisp Retina vector SVG Moon showing tonight's actual astronomical phase, drifting clouds, twinkling stars, shooting stars, wind ribbons, rain, snow, fog, and storm flashes (celestial bodies hide automatically during overcast/precipitation).
   - **Adaptive Day / Twilight / Night Themes:** Light frosted-white borderless cards with crisp slate typography during daytime, warm twilight glass at sunrise/sunset, and lifted slate-blue frosted cards at night.
@@ -21,7 +21,10 @@ An ambient personal wall dashboard PWA designed for an **iPad mini 2 (iOS 12.5.7
 - **Calendar Dashboard (Slide 3):**
   - **Side-by-Side Month & Selected Day View:** Monday–Sunday month grid (swipe left/right for prev/next month) with Chinese lunar dates (1900–2100), built-in US Holidays, month/year navigation (`«`, `‹`, `Today`, `›`, `»`), next-trip countdown pill, and a scrollable agenda for the selected day with live `"NOW"` badges.
   - **Private `.ics` Sync (Zero Secrets in Git):** Reads `CALENDAR_ICS_URLS` from Vercel Environment Variables (or gitignored `.env.local` locally) — supports single URLs, comma/newline-separated URLs, `webcal://` iCloud URLs, or color-coded JSON arrays (`[{"name":"Personal","color":"#38bdf8","url":"https://..."}]`), served with `Cache-Control: private, no-store`.
-- **Photos Frame (Slide 4):**
+- **World Dashboard (Slide 4):**
+  - **Live World Map:** Seamless equirectangular map centered horizontally on the Home city, with the real-time day/night terminator, live ISS position and orbit track (propagated from TLEs via wheretheiss.at with a CelesTrak fallback), M4.5+ earthquakes from the past day (USGS), NOAA SWPC Kp-index aurora ovals, and active tropical storms (NHC + GDACS). Tap any marker for an inline popover with details.
+  - **FX Currency Cards:** Live exchange rates for the pairs listed in `world.fxPairs` (USD/CNY, USD/JPY, USD/EUR, USD/GBP, USD/AUD, USD/SGD by default).
+- **Photos Frame (Slide 5):**
   - **Pure Edge-to-Edge Smart Auto-Collage:** Reads one or more Google Photos link-shared album URLs from `PHOTOS_ALBUM_URL` / `PHOTOS_ALBUM_URLS` (stored in Vercel Environment Variables or gitignored `.env.local`). Automatically composes aspect-ratio-aware full-screen layouts (1 landscape hero, 2–3 side-by-side portraits, or 1 portrait + 2 stacked landscape bento grids), shuffles & crossfades every 15s, and supports tap or left/right swipe to jump between collages.
 - **Minimalist Top-Center Controls:**
   - **Motion / Static icon toggle:** Switch between animated sky and 0-FPS static sky (saved per-device in `localStorage` so older iPad mini 2 hardware stays cool 24/7 while newer devices stay animated).
@@ -65,14 +68,18 @@ Edit [`config/dashboard.config.json`](./config/dashboard.config.json) to customi
 - **Shared Config (`config/`):** Embeds `config/dashboard.config.json` via `//go:embed` for Vercel serverless functions while supporting live-from-disk overrides in local dev.
 - **Serverless Weather API (`api/weather.go`):** Stdlib-only Go `WeatherHandler` exposed at `/api/weather` on Vercel. Batches Open-Meteo Forecast (5-day + 24h hourly + 15-min nowcast) and Air Quality (US AQI + UV) concurrently with Edge caching (`s-maxage=600`).
 - **Serverless Stocks API (`api/stocks.go`):** Stdlib-only Go `StocksHandler` exposed at `/api/stocks` on Vercel. Fetches Yahoo Finance chart series (`1D`–`ALL`) and watchlist quotes concurrently with smart market-hours Edge caching (`s-maxage=120` open / `s-maxage=900` closed).
-- **Local Dev Server (`cmd/devserver/main.go`):** Mounts both `/api/weather` and `/api/stocks` on `127.0.0.1:8080` and reads `config/dashboard.config.json` live from disk on every request.
+- **Serverless Calendar API (`api/calendar.go`):** Fetches and parses the private `.ics` feeds from `CALENDAR_ICS_URLS` (including recurring events), served `private, no-store`.
+- **Serverless Photos API (`api/photos.go`):** Resolves Google Photos shared-album links from `PHOTOS_ALBUM_URLS` into image URLs and dimensions for the collage layout, served `private, no-store`.
+- **Serverless World API (`api/world.go`):** Concurrently fetches FX quotes (Yahoo Finance), ISS TLEs, USGS earthquakes, NOAA aurora Kp index, and tropical storms, each with its own in-memory cache (`?refresh=1` bypasses it).
+- **Auth API (`api/auth.go` + `auth/`):** `GET /api/auth` reports lock status; `POST /api/auth` verifies the PIN (per-IP rate limited) and issues the signed session cookie.
+- **Local Dev Server (`cmd/devserver/main.go`):** Mounts `/api/auth`, `/api/weather`, `/api/stocks`, `/api/calendar`, `/api/world`, and `/api/photos` on `127.0.0.1:8080`, loads secrets from `.env.local`/`.env`, and reads `config/dashboard.config.json` live from disk on every request.
 
 ## Local Development
 
 Run the Go API and frontend in two terminals:
 
 ```bash
-# Terminal 1 — Go API (http://127.0.0.1:8080/api/weather & /api/stocks)
+# Terminal 1 — Go API (http://127.0.0.1:8080/api/*)
 npm run dev:api
 
 # Terminal 2 — Modern dev server with HMR (Mac / modern iPads, port 5173)
@@ -89,7 +96,7 @@ Append `?demo=<mode>` to preview any condition immediately:
 ## Deploy to Vercel
 
 **Option A — GitHub Auto-Deploy (Recommended):**
-Import this repository at [vercel.com/new](https://vercel.com/new) and click **Deploy** (Vercel detects [`vercel.json`](./vercel.json), [`go.mod`](./go.mod), `api/weather.go`, and `api/stocks.go` automatically). Pushing edits to `config/dashboard.config.json` auto-deploys and updates the wall-mounted iPad automatically.
+Import this repository at [vercel.com/new](https://vercel.com/new) and click **Deploy** (Vercel detects [`vercel.json`](./vercel.json), [`go.mod`](./go.mod), and the Go handlers in `api/` automatically). Set `GLANCE_PASSCODE`, `CALENDAR_ICS_URLS`, and `PHOTOS_ALBUM_URLS` under **Project Settings → Environment Variables**. Pushing edits to `config/dashboard.config.json` auto-deploys and updates the wall-mounted iPad automatically.
 
 **Option B — Vercel CLI:**
 ```bash
