@@ -31,14 +31,15 @@ func TestParseAndNormalizeCarouselSchedule(t *testing.T) {
 			t.Fatalf("step %d: got %+v, want %+v", i, cfg.Carousel.Schedule[i], want[i])
 		}
 	}
-	if len(cfg.World.FXPairs) != 6 ||
-		cfg.World.FXPairs[0].Symbol != "CNY=X" ||
-		cfg.World.FXPairs[1].Symbol != "JPY=X" ||
-		cfg.World.FXPairs[2].Symbol != "EUR=X" ||
-		cfg.World.FXPairs[3].Symbol != "GBP=X" ||
-		cfg.World.FXPairs[4].Symbol != "AUD=X" ||
-		cfg.World.FXPairs[5].Symbol != "SGD=X" {
-		t.Fatalf("unexpected default world FX pairs: %+v", cfg.World.FXPairs)
+	// FX pairs are derived from the embedded cities (Home = Sunnyvale, USD)
+	wantSyms := []string{"EUR=X", "CNY=X", "JPY=X", "GBP=X", "SGD=X", "AUD=X"}
+	if len(cfg.World.FXPairs) != len(wantSyms) {
+		t.Fatalf("unexpected derived world FX pairs: %+v", cfg.World.FXPairs)
+	}
+	for i, sym := range wantSyms {
+		if cfg.World.FXPairs[i].Symbol != sym || cfg.World.FXPairs[i].Base != "USD" {
+			t.Fatalf("derived FX pair %d: got %+v, want %s", i, cfg.World.FXPairs[i], sym)
+		}
 	}
 	if cfg.Photos.SlideIntervalSeconds != 15 {
 		t.Fatalf("expected default photos slideIntervalSeconds 15, got %d", cfg.Photos.SlideIntervalSeconds)
@@ -91,5 +92,65 @@ func TestParseAndNormalizeCarouselSchedule(t *testing.T) {
 	}
 	if customCfg.IdleResetSeconds != 90 {
 		t.Fatalf("expected custom idleResetSeconds 90, got %d", customCfg.IdleResetSeconds)
+	}
+}
+
+func city(id, tz string) CityConfig {
+	return CityConfig{ID: id, Name: id, Timezone: tz}
+}
+
+func TestDeriveFXPairsFromCities(t *testing.T) {
+	// Dedupes currencies, skips the home currency and unknown zones, keeps city order
+	pairs := deriveFXPairs([]CityConfig{
+		city("sunnyvale", "America/Los_Angeles"),
+		city("nyc", "America/New_York"),
+		city("tokyo", "Asia/Tokyo"),
+		city("paris", "Europe/Paris"),
+		city("berlin", "Europe/Berlin"),
+		city("nowhere", "Antarctica/Troll"),
+		city("zurich", "Europe/Zurich"),
+	})
+	want := []FXPairConfig{
+		{Symbol: "JPY=X", Base: "USD", Quote: "JPY", Label: "USD / JPY"},
+		{Symbol: "EUR=X", Base: "USD", Quote: "EUR", Label: "USD / EUR"},
+		{Symbol: "CHF=X", Base: "USD", Quote: "CHF", Label: "USD / CHF"},
+	}
+	if len(pairs) != len(want) {
+		t.Fatalf("got %+v, want %+v", pairs, want)
+	}
+	for i := range want {
+		if pairs[i] != want[i] {
+			t.Fatalf("pair %d: got %+v, want %+v", i, pairs[i], want[i])
+		}
+	}
+
+	// Non-USD home uses Yahoo cross symbols
+	cross := deriveFXPairs([]CityConfig{city("london", "Europe/London"), city("tokyo", "Asia/Tokyo"), city("sf", "America/Los_Angeles")})
+	if len(cross) != 2 || cross[0].Symbol != "GBPJPY=X" || cross[1].Symbol != "GBPUSD=X" || cross[1].Label != "GBP / USD" {
+		t.Fatalf("unexpected cross pairs: %+v", cross)
+	}
+
+	// Unknown home timezone or a single city yields no pairs
+	if got := deriveFXPairs([]CityConfig{city("x", "Antarctica/Troll"), city("tokyo", "Asia/Tokyo")}); len(got) != 0 {
+		t.Fatalf("expected no pairs for unknown home zone, got %+v", got)
+	}
+	if got := deriveFXPairs([]CityConfig{city("tokyo", "Asia/Tokyo")}); len(got) != 0 {
+		t.Fatalf("expected no pairs for a single city, got %+v", got)
+	}
+}
+
+func TestExplicitFXPairsOverrideDerivation(t *testing.T) {
+	cfg, err := ParseAndNormalizeConfig([]byte(`{
+		"cities": [
+			{"id":"a","name":"A","timezone":"America/Los_Angeles"},
+			{"id":"b","name":"B","timezone":"Asia/Tokyo"}
+		],
+		"world": {"fxPairs": [{"symbol": "KRW=X"}]}
+	}`))
+	if err != nil {
+		t.Fatalf("ParseAndNormalizeConfig failed: %v", err)
+	}
+	if len(cfg.World.FXPairs) != 1 || cfg.World.FXPairs[0].Quote != "KRW" || cfg.World.FXPairs[0].Label != "USD / KRW" {
+		t.Fatalf("expected explicit fxPairs to win, got %+v", cfg.World.FXPairs)
 	}
 }

@@ -257,23 +257,24 @@ func TestWorldHandlerFXRates(t *testing.T) {
 	if len(resp.FX) != 6 {
 		t.Fatalf("expected 6 FX quotes, got %d: %+v", len(resp.FX), resp.FX)
 	}
-	if resp.FX[0].Quote != "CNY" || math.Abs(resp.FX[0].Rate-7.245) > 0.0001 || len(resp.FX[0].Sparkline) != 3 {
-		t.Fatalf("unexpected CNY quote: %+v", resp.FX[0])
+	// Pairs are derived from the embedded cities' timezones, in city order
+	if resp.FX[0].Quote != "EUR" || math.Abs(resp.FX[0].Rate-0.942) > 0.0001 {
+		t.Fatalf("unexpected EUR quote: %+v", resp.FX[0])
 	}
-	if resp.FX[1].Quote != "JPY" || math.Abs(resp.FX[1].Rate-154.80) > 0.001 || resp.FX[1].Change >= 0 {
-		t.Fatalf("unexpected JPY quote: %+v", resp.FX[1])
+	if resp.FX[1].Quote != "CNY" || math.Abs(resp.FX[1].Rate-7.245) > 0.0001 || len(resp.FX[1].Sparkline) != 3 {
+		t.Fatalf("unexpected CNY quote: %+v", resp.FX[1])
 	}
-	if resp.FX[2].Quote != "EUR" || math.Abs(resp.FX[2].Rate-0.942) > 0.0001 {
-		t.Fatalf("unexpected EUR quote: %+v", resp.FX[2])
+	if resp.FX[2].Quote != "JPY" || math.Abs(resp.FX[2].Rate-154.80) > 0.001 || resp.FX[2].Change >= 0 {
+		t.Fatalf("unexpected JPY quote: %+v", resp.FX[2])
 	}
 	if resp.FX[3].Quote != "GBP" || math.Abs(resp.FX[3].Rate-0.791) > 0.0001 {
 		t.Fatalf("unexpected GBP quote: %+v", resp.FX[3])
 	}
-	if resp.FX[4].Quote != "AUD" || math.Abs(resp.FX[4].Rate-1.538) > 0.0001 {
-		t.Fatalf("unexpected AUD quote: %+v", resp.FX[4])
+	if resp.FX[4].Quote != "SGD" || math.Abs(resp.FX[4].Rate-1.342) > 0.0001 {
+		t.Fatalf("unexpected SGD quote: %+v", resp.FX[4])
 	}
-	if resp.FX[5].Quote != "SGD" || math.Abs(resp.FX[5].Rate-1.342) > 0.0001 {
-		t.Fatalf("unexpected SGD quote: %+v", resp.FX[5])
+	if resp.FX[5].Quote != "AUD" || math.Abs(resp.FX[5].Rate-1.538) > 0.0001 {
+		t.Fatalf("unexpected AUD quote: %+v", resp.FX[5])
 	}
 	if resp.ISS == nil {
 		t.Fatalf("expected ISS orbit in response")

@@ -4,6 +4,7 @@ import type {
   CityConfig,
   CityWeather,
   EarthquakeEvent,
+  FXPairConfig,
   FXQuote,
   ISSOrbit,
   TempUnit,
@@ -65,6 +66,7 @@ interface WorldDashboardProps {
   isActive: boolean;
   preload?: boolean;
   cities: CityConfig[];
+  fxPairs: FXPairConfig[];
   weatherById: { [id: string]: CityWeather };
   nowMs: number;
   units: TempUnit;
@@ -746,17 +748,24 @@ export function WorldDashboard(props: WorldDashboardProps) {
   var tropicNorthY = projectLat(23.44, MAP_H);
   var tropicSouthY = projectLat(-23.44, MAP_H);
 
+  // Before the first /api/world response, show placeholder cards for the
+  // configured (or city-derived) pairs so the row doesn't jump on load.
   var fxCards: FXQuote[] =
     fxQuotes.length > 0
       ? fxQuotes
-      : [
-          { symbol: 'CNY=X', base: 'USD', quote: 'CNY', label: 'USD / CNY', rate: 0, previousClose: 0, change: 0, changePct: 0, sparkline: [] },
-          { symbol: 'JPY=X', base: 'USD', quote: 'JPY', label: 'USD / JPY', rate: 0, previousClose: 0, change: 0, changePct: 0, sparkline: [] },
-          { symbol: 'EUR=X', base: 'USD', quote: 'EUR', label: 'USD / EUR', rate: 0, previousClose: 0, change: 0, changePct: 0, sparkline: [] },
-          { symbol: 'GBP=X', base: 'USD', quote: 'GBP', label: 'USD / GBP', rate: 0, previousClose: 0, change: 0, changePct: 0, sparkline: [] },
-          { symbol: 'AUD=X', base: 'USD', quote: 'AUD', label: 'USD / AUD', rate: 0, previousClose: 0, change: 0, changePct: 0, sparkline: [] },
-          { symbol: 'SGD=X', base: 'USD', quote: 'SGD', label: 'USD / SGD', rate: 0, previousClose: 0, change: 0, changePct: 0, sparkline: [] },
-        ];
+      : props.fxPairs.map(function (p) {
+          return {
+            symbol: p.symbol,
+            base: p.base,
+            quote: p.quote,
+            label: p.label,
+            rate: 0,
+            previousClose: 0,
+            change: 0,
+            changePct: 0,
+            sparkline: [],
+          };
+        });
   var isCompactFX = fxCards.length >= 5;
   var fxSparkW = isCompactFX ? 44 : 82;
   var fxSparkH = isCompactFX ? 20 : 26;

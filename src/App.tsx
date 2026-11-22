@@ -719,6 +719,10 @@ function DashboardShell(props: DashboardShellProps) {
   }, []);
 
   var cities = data && data.config ? data.config.cities : [];
+  var fxPairs =
+    data && data.config && data.config.world && data.config.world.fxPairs
+      ? data.config.world.fxPairs
+      : [];
   var configUnits: TempUnit = data && data.config ? data.config.units : 'F';
   var units: TempUnit = unitOverride || configUnits;
   var timeFormat = data && data.config ? data.config.timeFormat : '12h';
@@ -1300,6 +1304,7 @@ function DashboardShell(props: DashboardShellProps) {
             isActive={activeSlide === 3}
             preload={preloadReady}
             cities={cities}
+            fxPairs={fxPairs}
             weatherById={weatherById}
             nowMs={nowMs}
             units={units}

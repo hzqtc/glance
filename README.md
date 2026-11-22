@@ -13,7 +13,7 @@ An ambient personal wall dashboard PWA designed for an **iPad mini 2 (iOS 12.5.7
   - **Adaptive Day / Twilight / Night Themes:** Light frosted-white borderless cards with crisp slate typography during daytime, warm twilight glass at sunrise/sunset, and lifted slate-blue frosted cards at night.
   - **Top Hero & Scrollable 24-Hour Forecast:** Large room-readable clock, temperature, compact weather metrics, subtle heads-up pills (imminent rain ≥60% or US AQI ≥101), and a horizontally scrollable 24-hour forecast ribbon.
   - **5-Day Forecast + Air & Daylight:** 5-day outlook with proportional Low→High temperature range bars alongside live US AQI, UV Index, Sunrise/Sunset, daylight duration, and countdown.
-  - **Bottom City Row:** Displays all configured cities on a single landscape row (**Sunnyvale**, **San Francisco**, **Shanghai**, **Tokyo** by default) with live clocks, relative hour offsets (`HOME`, `SAME`, `+16h`, `+17h`), `+1d` day badges, and Feels Like / Wind / Humidity / AQI stats. Tap any city card to switch the top two rows and living sky to that location.
+  - **Bottom City Row:** Displays all configured cities on a single landscape row (**Sunnyvale**, **Paris**, **Shanghai**, **Tokyo**, **New York**, **London**, **Singapore**, **Sydney** by default) with live clocks, relative hour offsets (`HOME`, `+9h`, `+16h`, `+17h`), `+1d` day badges, and Feels Like / Wind / Humidity / AQI stats. Tap any city card to switch the top two rows and living sky to that location.
 - **Stocks Dashboard (Slide 2):**
   - **Selected Symbol Hero & Time-Series Chart:** Ticker with vector company/index logo, price, gain/loss delta, dynamic Low/High for the selected timeframe, subtle emerald/coral atmospheric backdrop glow, **9 timeframes (`1D`, `1W`, `1M`, `YTD`, `1Y`, `2Y`, `5Y`, `10Y`, `ALL`)**, and a crisp vector SVG area chart.
   - **4×5 Watchlist Grid:** 20 tappable cards (**S&P 500**, **NASDAQ**, **10Y Bond**, **NVDA**, **AAPL** / **MSFT**, **GOOGL**, **AMZN**, **META**, **TSLA** / **ANT**, **TSM**, **AMD**, **NFLX**, **BTC** / **Gold**, **Oil**, **Silver**, **SPCX**, **Dow**) with vector logos, live quotes, percent change pills, and mini intraday sparklines.
@@ -23,7 +23,7 @@ An ambient personal wall dashboard PWA designed for an **iPad mini 2 (iOS 12.5.7
   - **Private `.ics` Sync (Zero Secrets in Git):** Reads `CALENDAR_ICS_URLS` from Vercel Environment Variables (or gitignored `.env.local` locally) — supports single URLs, comma/newline-separated URLs, `webcal://` iCloud URLs, or color-coded JSON arrays (`[{"name":"Personal","color":"#38bdf8","url":"https://..."}]`), served with `Cache-Control: private, no-store`.
 - **World Dashboard (Slide 4):**
   - **Live World Map:** Seamless equirectangular map centered horizontally on the Home city, with the real-time day/night terminator, live ISS position and orbit track (propagated from TLEs via wheretheiss.at with a CelesTrak fallback), M4.5+ earthquakes from the past day (USGS), NOAA SWPC Kp-index aurora ovals, and active tropical storms (NHC + GDACS). Tap any marker for an inline popover with details.
-  - **FX Currency Cards:** Live exchange rates for the pairs listed in `world.fxPairs` (USD/CNY, USD/JPY, USD/EUR, USD/GBP, USD/AUD, USD/SGD by default).
+  - **FX Currency Cards:** Live exchange rates derived automatically from your cities: the first (Home) city's currency is the base, and each other city adds its local currency (looked up from its `timezone`, deduplicated, in city order). The default cities give USD → EUR, CNY, JPY, GBP, SGD, AUD; a non-USD Home uses cross rates (e.g. `GBPJPY=X`). Cities whose timezone isn't in [`config/currency.go`](./config/currency.go) get no card. To pick pairs by hand instead, set `world.fxPairs` (e.g. `[{ "symbol": "KRW=X" }]`).
 - **Photos Frame (Slide 5):**
   - **Pure Edge-to-Edge Smart Auto-Collage:** Reads one or more Google Photos link-shared album URLs from `PHOTOS_ALBUM_URL` / `PHOTOS_ALBUM_URLS` (stored in Vercel Environment Variables or gitignored `.env.local`). Automatically composes aspect-ratio-aware full-screen layouts (1 landscape hero, 2–3 side-by-side portraits, or 1 portrait + 2 stacked landscape bento grids), shuffles & crossfades every 15s, and supports tap or left/right swipe to jump between collages.
 - **Minimalist Top-Center Controls:**
@@ -37,7 +37,7 @@ An ambient personal wall dashboard PWA designed for an **iPad mini 2 (iOS 12.5.7
 
 ## Configuration
 
-Edit [`config/dashboard.config.json`](./config/dashboard.config.json) to customize units (`"F"` or `"C"`), clock format (`"12h"` or `"24h"`), night dimming hours, cities, stock symbols, and future trip countdowns:
+Edit [`config/dashboard.config.json`](./config/dashboard.config.json) to customize units (`"F"` or `"C"`), clock format (`"12h"` or `"24h"`), night dimming hours, cities (which also determine the World FX cards), stock symbols, and future trip countdowns:
 
 ```json
 {
@@ -46,7 +46,7 @@ Edit [`config/dashboard.config.json`](./config/dashboard.config.json) to customi
   "nightMode": { "enabled": true, "startHour": 23, "endHour": 7, "dimOpacity": 0.55 },
   "cities": [
     { "id": "sunnyvale", "name": "Sunnyvale", "region": "CA", "lat": 37.3688, "lon": -122.0363, "timezone": "America/Los_Angeles" },
-    { "id": "san-francisco", "name": "San Francisco", "region": "CA", "lat": 37.7749, "lon": -122.4194, "timezone": "America/Los_Angeles" },
+    { "id": "paris", "name": "Paris", "region": "France", "lat": 48.8566, "lon": 2.3522, "timezone": "Europe/Paris" },
     { "id": "shanghai", "name": "Shanghai", "region": "China", "lat": 31.2304, "lon": 121.4737, "timezone": "Asia/Shanghai" },
     { "id": "tokyo", "name": "Tokyo", "region": "Japan", "lat": 35.6762, "lon": 139.6503, "timezone": "Asia/Tokyo" }
   ],

@@ -61,6 +61,8 @@ type FXPairConfig struct {
 }
 
 type WorldConfig struct {
+	// FXPairs is optional: when omitted, pairs are derived from the cities'
+	// timezones (see deriveFXPairs). Set it to override the derived list.
 	FXPairs []FXPairConfig `json:"fxPairs"`
 }
 
@@ -167,7 +169,7 @@ func ParseAndNormalizeConfig(raw []byte) (DashboardConfig, error) {
 	if cfg.Photos.SlideIntervalSeconds < 3 {
 		cfg.Photos.SlideIntervalSeconds = 15
 	}
-	cfg.World.FXPairs = normalizeFXPairs(cfg.World.FXPairs)
+	cfg.World.FXPairs = normalizeFXPairs(cfg.World.FXPairs, cfg.Cities)
 	if cfg.NightMode.DimOpacity <= 0 || cfg.NightMode.DimOpacity > 0.9 {
 		cfg.NightMode.DimOpacity = 0.55
 	}
@@ -233,7 +235,9 @@ func normalizeCarouselSlideName(raw string) string {
 	}
 }
 
-func normalizeFXPairs(raw []FXPairConfig) []FXPairConfig {
+// normalizeFXPairs cleans up explicitly configured pairs, or derives them from
+// the cities when none are configured.
+func normalizeFXPairs(raw []FXPairConfig, cities []CityConfig) []FXPairConfig {
 	out := make([]FXPairConfig, 0, len(raw))
 	for _, p := range raw {
 		sym := strings.TrimSpace(p.Symbol)
@@ -260,14 +264,7 @@ func normalizeFXPairs(raw []FXPairConfig) []FXPairConfig {
 		})
 	}
 	if len(out) == 0 {
-		return []FXPairConfig{
-			{Symbol: "CNY=X", Base: "USD", Quote: "CNY", Label: "USD / CNY"},
-			{Symbol: "JPY=X", Base: "USD", Quote: "JPY", Label: "USD / JPY"},
-			{Symbol: "EUR=X", Base: "USD", Quote: "EUR", Label: "USD / EUR"},
-			{Symbol: "GBP=X", Base: "USD", Quote: "GBP", Label: "USD / GBP"},
-			{Symbol: "AUD=X", Base: "USD", Quote: "AUD", Label: "USD / AUD"},
-			{Symbol: "SGD=X", Base: "USD", Quote: "SGD", Label: "USD / SGD"},
-		}
+		return deriveFXPairs(cities)
 	}
 	return out
 }
