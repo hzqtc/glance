@@ -450,13 +450,16 @@ function DashboardShell(props: DashboardShellProps) {
   var isRotatePaused = _rotatePausedState[0];
   var setIsRotatePaused = _rotatePausedState[1];
 
+  var rootRef = useRef<HTMLDivElement | null>(null);
   var bootTimeRef = useRef<number>(Date.now());
   var pollTimerRef = useRef<number | null>(null);
   var reloadTriggeredRef = useRef<boolean>(false);
   var deployedVersionRef = useRef<string | null>(null);
   var touchStartRef = useRef<{ x: number; y: number; ignore: boolean } | null>(null);
+  var autoRotateRef = useRef<boolean>(true);
   var manualPauseUntilRef = useRef<number>(0);
   var manualPauseSecRef = useRef<number>(300);
+  var lastPauseBumpMsRef = useRef<number>(0);
   var scheduleIdxRef = useRef<number>(0);
 
   // Entrance transition trigger & quiet background preload of inactive slides after boot settles
@@ -474,16 +477,26 @@ function DashboardShell(props: DashboardShellProps) {
   }, []);
 
   function pauseAutoRotate() {
+    if (!autoRotateRef.current) {
+      return;
+    }
+    var now = Date.now();
     if (manualPauseSecRef.current > 0) {
-      manualPauseUntilRef.current = Date.now() + manualPauseSecRef.current * 1000;
-      setIsRotatePaused(true);
+      var wasPaused = manualPauseUntilRef.current > now;
+      manualPauseUntilRef.current = now + manualPauseSecRef.current * 1000;
+      if (!wasPaused) {
+        setIsRotatePaused(true);
+      }
+      if (!wasPaused || now - lastPauseBumpMsRef.current >= 1000) {
+        lastPauseBumpMsRef.current = now;
+        setPauseBump(function (n) {
+          return n + 1;
+        });
+      }
     } else {
       manualPauseUntilRef.current = 0;
       setIsRotatePaused(false);
     }
-    setPauseBump(function (n) {
-      return n + 1;
-    });
   }
 
   function handleManualSlideSelect(nextSlide: number) {
@@ -491,16 +504,52 @@ function DashboardShell(props: DashboardShellProps) {
     setActiveSlide(nextSlide);
   }
 
-  // Desktop keyboard up/down (and left/right) navigation between dashboards (pauses auto-rotate)
+  // Treat any user interaction on any dashboard (tap, click, swipe, scroll, scrub) as pausing auto-rotate
+  useEffect(function () {
+    var rootEl = rootRef.current;
+    if (!rootEl) return;
+    var target: HTMLDivElement = rootEl;
+
+    function handleInteraction(e: Event) {
+      if (e && e.isTrusted === false) return;
+      pauseAutoRotate();
+    }
+
+    var opts: AddEventListenerOptions = { capture: true, passive: true };
+    target.addEventListener('touchstart', handleInteraction, opts);
+    target.addEventListener('touchmove', handleInteraction, opts);
+    target.addEventListener('mousedown', handleInteraction, opts);
+    target.addEventListener('wheel', handleInteraction, opts);
+    target.addEventListener('scroll', handleInteraction, opts);
+    target.addEventListener('click', handleInteraction, opts);
+
+    return function () {
+      target.removeEventListener('touchstart', handleInteraction, true);
+      target.removeEventListener('touchmove', handleInteraction, true);
+      target.removeEventListener('mousedown', handleInteraction, true);
+      target.removeEventListener('wheel', handleInteraction, true);
+      target.removeEventListener('scroll', handleInteraction, true);
+      target.removeEventListener('click', handleInteraction, true);
+    };
+  }, []);
+
+  // Desktop keyboard navigation & interaction (any key pauses auto-rotate)
   useEffect(function () {
     function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+      if (e.isTrusted === false) return;
+      if (
+        e.key !== 'Shift' &&
+        e.key !== 'Control' &&
+        e.key !== 'Alt' &&
+        e.key !== 'Meta'
+      ) {
         pauseAutoRotate();
+      }
+      if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
         setActiveSlide(function (prev) {
           return prev < TOTAL_SLIDES - 1 ? prev + 1 : prev;
         });
       } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
-        pauseAutoRotate();
         setActiveSlide(function (prev) {
           return prev > 0 ? prev - 1 : prev;
         });
@@ -627,6 +676,7 @@ function DashboardShell(props: DashboardShellProps) {
 
   var carouselCfg = data && data.config ? data.config.carousel : null;
   var autoRotate = carouselCfg ? carouselCfg.autoRotate : true;
+  autoRotateRef.current = autoRotate;
   var rotateIntervalSec =
     carouselCfg && carouselCfg.intervalSeconds >= 5
       ? carouselCfg.intervalSeconds
@@ -985,6 +1035,7 @@ function DashboardShell(props: DashboardShellProps) {
 
   return (
     <div
+      ref={rootRef}
       class={rootClass}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
