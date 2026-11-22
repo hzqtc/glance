@@ -20,6 +20,8 @@ func TestParseAndNormalizeCarouselSchedule(t *testing.T) {
 		{Slide: "stocks", Seconds: 15},
 		{Slide: "photos", Seconds: 60},
 		{Slide: "calendar", Seconds: 15},
+		{Slide: "photos", Seconds: 60},
+		{Slide: "world", Seconds: 15},
 	}
 	if len(cfg.Carousel.Schedule) != len(want) {
 		t.Fatalf("expected %d schedule steps, got %d: %+v", len(want), len(cfg.Carousel.Schedule), cfg.Carousel.Schedule)
@@ -28,6 +30,9 @@ func TestParseAndNormalizeCarouselSchedule(t *testing.T) {
 		if cfg.Carousel.Schedule[i] != want[i] {
 			t.Fatalf("step %d: got %+v, want %+v", i, cfg.Carousel.Schedule[i], want[i])
 		}
+	}
+	if len(cfg.World.FXPairs) != 3 || cfg.World.FXPairs[0].Symbol != "CNY=X" || cfg.World.FXPairs[1].Symbol != "JPY=X" || cfg.World.FXPairs[2].Symbol != "EUR=X" {
+		t.Fatalf("unexpected default world FX pairs: %+v", cfg.World.FXPairs)
 	}
 	if cfg.Photos.SlideIntervalSeconds != 15 {
 		t.Fatalf("expected default photos slideIntervalSeconds 15, got %d", cfg.Photos.SlideIntervalSeconds)

@@ -53,6 +53,17 @@ type PhotosConfig struct {
 	SlideIntervalSeconds int `json:"slideIntervalSeconds"`
 }
 
+type FXPairConfig struct {
+	Symbol string `json:"symbol"`
+	Base   string `json:"base"`
+	Quote  string `json:"quote"`
+	Label  string `json:"label"`
+}
+
+type WorldConfig struct {
+	FXPairs []FXPairConfig `json:"fxPairs"`
+}
+
 type CityConfig struct {
 	ID       string  `json:"id"`
 	Name     string  `json:"name"`
@@ -83,6 +94,7 @@ type DashboardConfig struct {
 	Refresh    RefreshConfig   `json:"refresh"`
 	Carousel   CarouselConfig  `json:"carousel"`
 	Photos     PhotosConfig    `json:"photos"`
+	World      WorldConfig     `json:"world"`
 	Cities     []CityConfig    `json:"cities"`
 	Stocks     StocksConfig    `json:"stocks"`
 }
@@ -155,6 +167,7 @@ func ParseAndNormalizeConfig(raw []byte) (DashboardConfig, error) {
 	if cfg.Photos.SlideIntervalSeconds < 3 {
 		cfg.Photos.SlideIntervalSeconds = 15
 	}
+	cfg.World.FXPairs = normalizeFXPairs(cfg.World.FXPairs)
 	if cfg.NightMode.DimOpacity <= 0 || cfg.NightMode.DimOpacity > 0.9 {
 		cfg.NightMode.DimOpacity = 0.55
 	}
@@ -196,6 +209,8 @@ func normalizeCarouselSchedule(raw []CarouselScheduleStep, fallbackSeconds int) 
 			{Slide: "stocks", Seconds: 15},
 			{Slide: "photos", Seconds: 60},
 			{Slide: "calendar", Seconds: 15},
+			{Slide: "photos", Seconds: 60},
+			{Slide: "world", Seconds: 15},
 		}
 	}
 	return normalized
@@ -211,9 +226,47 @@ func normalizeCarouselSlideName(raw string) string {
 		return "calendar"
 	case "photo", "photos":
 		return "photos"
+	case "world", "map":
+		return "world"
 	default:
 		return ""
 	}
+}
+
+func normalizeFXPairs(raw []FXPairConfig) []FXPairConfig {
+	out := make([]FXPairConfig, 0, len(raw))
+	for _, p := range raw {
+		sym := strings.TrimSpace(p.Symbol)
+		if sym == "" {
+			continue
+		}
+		base := strings.ToUpper(strings.TrimSpace(p.Base))
+		quote := strings.ToUpper(strings.TrimSpace(p.Quote))
+		label := strings.TrimSpace(p.Label)
+		if base == "" {
+			base = "USD"
+		}
+		if quote == "" {
+			quote = strings.TrimSuffix(strings.ToUpper(sym), "=X")
+		}
+		if label == "" {
+			label = base + " / " + quote
+		}
+		out = append(out, FXPairConfig{
+			Symbol: sym,
+			Base:   base,
+			Quote:  quote,
+			Label:  label,
+		})
+	}
+	if len(out) == 0 {
+		return []FXPairConfig{
+			{Symbol: "CNY=X", Base: "USD", Quote: "CNY", Label: "USD / CNY"},
+			{Symbol: "JPY=X", Base: "USD", Quote: "JPY", Label: "USD / JPY"},
+			{Symbol: "EUR=X", Base: "USD", Quote: "EUR", Label: "USD / EUR"},
+		}
+	}
+	return out
 }
 
 func ComputeVersion(rawConfig []byte) string {

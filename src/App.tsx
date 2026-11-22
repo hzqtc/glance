@@ -23,6 +23,7 @@ import { CityCard } from './components/CityCard';
 import { STOCKS_STORAGE_KEY, StocksDashboard } from './components/StocksDashboard';
 import { CalendarDashboard } from './components/CalendarDashboard';
 import { PhotosDashboard } from './components/PhotosDashboard';
+import { WORLD_STORAGE_KEY, WorldDashboard } from './components/WorldDashboard';
 import { PasscodeGate } from './components/PasscodeGate';
 import { RotateCountdown } from './components/RotateCountdown';
 
@@ -30,7 +31,7 @@ var WEATHER_STORAGE_KEY = 'glance:lastDashboard:v1';
 var ANIM_STORAGE_KEY = 'glance:animEnabled:v1';
 var STOCK_METRIC_STORAGE_KEY = 'glance:stockCardMetric:v1';
 var ACTIVE_SLIDE_STORAGE_KEY = 'glance:activeSlide:v1';
-var TOTAL_SLIDES = 4;
+var TOTAL_SLIDES = 5;
 
 interface ResolvedRotationStep {
   slide: number;
@@ -44,6 +45,8 @@ var DEFAULT_ROTATION_SCHEDULE: ResolvedRotationStep[] = [
   { slide: 1, seconds: 15 }, // stocks
   { slide: 3, seconds: 60 }, // photos
   { slide: 2, seconds: 15 }, // calendar
+  { slide: 3, seconds: 60 }, // photos
+  { slide: 4, seconds: 15 }, // world
 ];
 
 function slideNameToIndex(name: string): number {
@@ -52,6 +55,7 @@ function slideNameToIndex(name: string): number {
   if (lower === 'stocks' || lower === 'stock') return 1;
   if (lower === 'calendar') return 2;
   if (lower === 'photos' || lower === 'photo') return 3;
+  if (lower === 'world' || lower === 'map') return 4;
   return -1;
 }
 
@@ -265,6 +269,7 @@ function clearCachedDashboardData(): void {
   try {
     window.localStorage.removeItem(WEATHER_STORAGE_KEY);
     window.localStorage.removeItem(STOCKS_STORAGE_KEY);
+    window.localStorage.removeItem(WORLD_STORAGE_KEY);
   } catch (_err) {
     // Ignore storage errors
   }
@@ -673,6 +678,7 @@ function DashboardShell(props: DashboardShellProps) {
               writeCachedWeather(json);
               try {
                 window.localStorage.removeItem(STOCKS_STORAGE_KEY);
+                window.localStorage.removeItem(WORLD_STORAGE_KEY);
               } catch (_err) {
                 // Ignore storage errors
               }
@@ -1023,6 +1029,7 @@ function DashboardShell(props: DashboardShellProps) {
     try {
       window.localStorage.removeItem(WEATHER_STORAGE_KEY);
       window.localStorage.removeItem(STOCKS_STORAGE_KEY);
+      window.localStorage.removeItem(WORLD_STORAGE_KEY);
     } catch (_err) {
       // Ignore storage errors
     }
@@ -1272,6 +1279,24 @@ function DashboardShell(props: DashboardShellProps) {
             onUnauthorized={props.onUnauthorized}
           />
         </section>
+        {/* Slide 4: World Day/Night Map & FX */}
+        <section class="carousel-slide" aria-hidden={activeSlide !== 4}>
+          <WorldDashboard
+            isActive={activeSlide === 4}
+            preload={preloadReady}
+            cities={cities}
+            weatherById={weatherById}
+            nowMs={nowMs}
+            units={units}
+            timeFormat={timeFormat}
+            moonPhase={moonPhase}
+            idleResetSeconds={idleResetSec}
+            activityTick={activityTick}
+            isRefreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            onUnauthorized={props.onUnauthorized}
+          />
+        </section>
       </div>
 
       {/* Vertical side rail dashboard switcher + minimalist auto-rotate countdown pill */}
@@ -1437,6 +1462,45 @@ function DashboardShell(props: DashboardShellProps) {
             <rect x="3" y="4" width="18" height="16" rx="2.5" />
             <circle cx="8.5" cy="9.5" r="1.5" />
             <path d="M21 15.5l-5-5L5 20" />
+          </svg>
+        </button>
+
+        <button
+          type="button"
+          class={
+            activeSlide === 4
+              ? isRotatePaused
+                ? 'rail-btn rail-btn-active rail-btn-paused'
+                : 'rail-btn rail-btn-active'
+              : 'rail-btn'
+          }
+          onClick={function () {
+            handleManualSlideSelect(4);
+          }}
+          title={
+            activeSlide === 4 && isRotatePaused
+              ? 'World Map (auto-rotate paused)'
+              : 'World Map dashboard'
+          }
+          aria-label="World Map dashboard"
+          aria-current={activeSlide === 4 ? 'page' : undefined}
+        >
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="ctrl-svg"
+            aria-hidden="true"
+          >
+            <circle cx="12" cy="12" r="9.5" />
+            <line x1="2.5" y1="12" x2="21.5" y2="12" />
+            <path d="M12 2.5a14 14 0 0 1 0 19" />
+            <path d="M12 2.5a14 14 0 0 0 0 19" />
           </svg>
         </button>
         </nav>

@@ -25,11 +25,20 @@
       { "slide": "photos", "seconds": 60 },
       { "slide": "stocks", "seconds": 15 },
       { "slide": "photos", "seconds": 60 },
-      { "slide": "calendar", "seconds": 15 }
+      { "slide": "calendar", "seconds": 15 },
+      { "slide": "photos", "seconds": 60 },
+      { "slide": "world", "seconds": 15 }
     ]
   },
   "photos": {
     "slideIntervalSeconds": 15
+  },
+  "world": {
+    "fxPairs": [
+      { "symbol": "CNY=X", "base": "USD", "quote": "CNY", "label": "USD / CNY" },
+      { "symbol": "JPY=X", "base": "USD", "quote": "JPY", "label": "USD / JPY" },
+      { "symbol": "EUR=X", "base": "USD", "quote": "EUR", "label": "USD / EUR" }
+    ]
   },
   "cities": [
     {

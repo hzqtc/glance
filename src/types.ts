@@ -21,10 +21,10 @@ export interface RefreshConfig {
   dailyReloadHour: number;
 }
 
-export type CarouselSlideName = 'weather' | 'stocks' | 'calendar' | 'photos';
+export type CarouselSlideName = 'weather' | 'stocks' | 'calendar' | 'photos' | 'world';
 
 export interface CarouselScheduleStep {
-  slide: CarouselSlideName | 'stock' | 'photo';
+  slide: CarouselSlideName | 'stock' | 'photo' | 'map';
   seconds: number;
 }
 
@@ -37,6 +37,17 @@ export interface CarouselConfig {
 
 export interface PhotosConfig {
   slideIntervalSeconds: number;
+}
+
+export interface FXPairConfig {
+  symbol: string;
+  base: string;
+  quote: string;
+  label: string;
+}
+
+export interface WorldConfig {
+  fxPairs: FXPairConfig[];
 }
 
 export interface CityConfig {
@@ -69,6 +80,7 @@ export interface DashboardConfig {
   refresh: RefreshConfig;
   carousel?: CarouselConfig;
   photos?: PhotosConfig;
+  world?: WorldConfig;
   cities: CityConfig[];
   stocks?: StocksConfig;
 }
@@ -252,6 +264,25 @@ export interface PhotosResponse {
   photoCount: number;
   photos: PhotoItem[];
   warnings?: string[];
+}
+
+export interface FXQuote {
+  symbol: string;
+  base: string;
+  quote: string;
+  label: string;
+  rate: number;
+  previousClose: number;
+  change: number;
+  changePct: number;
+  sparkline: number[];
+  unavailable?: boolean;
+}
+
+export interface WorldResponse {
+  version: string;
+  fetchedAt: string;
+  fx: FXQuote[];
 }
 
 export type WeatherKind =
