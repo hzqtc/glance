@@ -490,7 +490,22 @@ export function CalendarDashboard(props: CalendarDashboardProps) {
                 title="Previous year"
                 aria-label="Previous year"
               >
-                «
+                <span class="cal-nav-icon" aria-hidden="true">
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.1"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="ctrl-svg"
+                  >
+                    <polyline points="11 17.5 5.5 12 11 6.5" />
+                    <polyline points="18.5 17.5 13 12 18.5 6.5" />
+                  </svg>
+                </span>
               </button>
               <button
                 type="button"
@@ -501,7 +516,21 @@ export function CalendarDashboard(props: CalendarDashboardProps) {
                 title="Previous month"
                 aria-label="Previous month"
               >
-                ‹
+                <span class="cal-nav-icon" aria-hidden="true">
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.1"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="ctrl-svg"
+                  >
+                    <polyline points="14.75 17.5 9.25 12 14.75 6.5" />
+                  </svg>
+                </span>
               </button>
               <button
                 type="button"
@@ -524,7 +553,21 @@ export function CalendarDashboard(props: CalendarDashboardProps) {
                 title="Next month"
                 aria-label="Next month"
               >
-                ›
+                <span class="cal-nav-icon" aria-hidden="true">
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.1"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="ctrl-svg"
+                  >
+                    <polyline points="9.25 17.5 14.75 12 9.25 6.5" />
+                  </svg>
+                </span>
               </button>
               <button
                 type="button"
@@ -535,10 +578,25 @@ export function CalendarDashboard(props: CalendarDashboardProps) {
                 title="Next year"
                 aria-label="Next year"
               >
-                »
+                <span class="cal-nav-icon" aria-hidden="true">
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.1"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="ctrl-svg"
+                  >
+                    <polyline points="5.5 17.5 11 12 5.5 6.5" />
+                    <polyline points="13 17.5 18.5 12 13 6.5" />
+                  </svg>
+                </span>
               </button>
 
-              <span class="ctrl-sep cal-nav-sep" aria-hidden="true" />
+              <span class="cal-nav-sep" aria-hidden="true" />
 
               <button
                 type="button"
@@ -548,21 +606,22 @@ export function CalendarDashboard(props: CalendarDashboardProps) {
                 title="Hard reload & clear cache"
                 aria-label="Hard reload and clear cache"
               >
-                <svg
-                  width="13"
-                  height="13"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.1"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  class={props.isRefreshing ? 'ctrl-svg ctrl-spinning' : 'ctrl-svg'}
-                  aria-hidden="true"
-                >
-                  <path d="M21 12a9 9 0 1 1-2.64-6.36" />
-                  <polyline points="21 3 21 9 15 9" />
-                </svg>
+                <span class="cal-nav-icon" aria-hidden="true">
+                  <svg
+                    width="13"
+                    height="13"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.1"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class={props.isRefreshing ? 'ctrl-svg ctrl-spinning' : 'ctrl-svg'}
+                  >
+                    <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+                    <polyline points="21 3 21 9 15 9" />
+                  </svg>
+                </span>
               </button>
             </div>
           </div>

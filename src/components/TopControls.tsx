@@ -134,10 +134,6 @@ export function TopControls(props: TopControlsProps) {
         </button>
       ) : null}
 
-      {showAnim && showUnits ? (
-        <span class="ctrl-sep" aria-hidden="true" />
-      ) : null}
-
       {showUnits ? (
         <button
           type="button"
@@ -150,10 +146,6 @@ export function TopControls(props: TopControlsProps) {
           <span class="ctrl-unit-slash">/</span>
           <span class="ctrl-unit-alt">{props.units === 'F' ? 'C' : 'F'}</span>
         </button>
-      ) : null}
-
-      {showStockMetrics || showAnim || showUnits ? (
-        <span class="ctrl-sep" aria-hidden="true" />
       ) : null}
 
       <button

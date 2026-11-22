@@ -1105,8 +1105,6 @@ function DashboardShell(props: DashboardShellProps) {
           </svg>
         </button>
 
-        <span class="rail-sep" aria-hidden="true" />
-
         <button
           type="button"
           class={
@@ -1143,8 +1141,6 @@ function DashboardShell(props: DashboardShellProps) {
             <polyline points="16 7 22 7 22 13" />
           </svg>
         </button>
-
-        <span class="rail-sep" aria-hidden="true" />
 
         <button
           type="button"
@@ -1184,8 +1180,6 @@ function DashboardShell(props: DashboardShellProps) {
             <line x1="3" y1="10" x2="21" y2="10" />
           </svg>
         </button>
-
-        <span class="rail-sep" aria-hidden="true" />
 
         <button
           type="button"
