@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type {
+  CarouselScheduleStep,
   CityWeather,
   StockCardMetric,
   TempUnit,
@@ -29,6 +30,51 @@ var ANIM_STORAGE_KEY = 'glance:animEnabled:v1';
 var STOCK_METRIC_STORAGE_KEY = 'glance:stockCardMetric:v1';
 var ACTIVE_SLIDE_STORAGE_KEY = 'glance:activeSlide:v1';
 var TOTAL_SLIDES = 4;
+
+interface ResolvedRotationStep {
+  slide: number;
+  seconds: number;
+}
+
+var DEFAULT_ROTATION_SCHEDULE: ResolvedRotationStep[] = [
+  { slide: 3, seconds: 30 }, // photos
+  { slide: 0, seconds: 15 }, // weather
+  { slide: 3, seconds: 30 }, // photos
+  { slide: 1, seconds: 15 }, // stocks
+  { slide: 3, seconds: 30 }, // photos
+  { slide: 2, seconds: 15 }, // calendar
+];
+
+function slideNameToIndex(name: string): number {
+  var lower = (name || '').toLowerCase();
+  if (lower === 'weather') return 0;
+  if (lower === 'stocks' || lower === 'stock') return 1;
+  if (lower === 'calendar') return 2;
+  if (lower === 'photos' || lower === 'photo') return 3;
+  return -1;
+}
+
+function resolveRotationSchedule(
+  rawSchedule: CarouselScheduleStep[] | undefined,
+  fallbackSeconds: number
+): ResolvedRotationStep[] {
+  if (!rawSchedule || rawSchedule.length === 0) {
+    return DEFAULT_ROTATION_SCHEDULE;
+  }
+  var out: ResolvedRotationStep[] = [];
+  for (var i = 0; i < rawSchedule.length; i++) {
+    var step = rawSchedule[i];
+    if (!step) continue;
+    var slideIdx = slideNameToIndex(step.slide);
+    if (slideIdx < 0) continue;
+    var sec =
+      typeof step.seconds === 'number' && step.seconds >= 5
+        ? step.seconds
+        : fallbackSeconds;
+    out.push({ slide: slideIdx, seconds: sec });
+  }
+  return out.length > 0 ? out : DEFAULT_ROTATION_SCHEDULE;
+}
 
 interface DemoOverride {
   weatherKind?: WeatherKind;
@@ -411,6 +457,7 @@ function DashboardShell(props: DashboardShellProps) {
   var touchStartRef = useRef<{ x: number; y: number; ignore: boolean } | null>(null);
   var manualPauseUntilRef = useRef<number>(0);
   var manualPauseSecRef = useRef<number>(300);
+  var scheduleIdxRef = useRef<number>(0);
 
   // Entrance transition trigger & quiet background preload of inactive slides after boot settles
   useEffect(function () {
@@ -583,20 +630,56 @@ function DashboardShell(props: DashboardShellProps) {
   var rotateIntervalSec =
     carouselCfg && carouselCfg.intervalSeconds >= 5
       ? carouselCfg.intervalSeconds
-      : 30;
+      : 15;
   var manualPauseSec =
     carouselCfg && carouselCfg.manualPauseSeconds >= 0
       ? carouselCfg.manualPauseSeconds
       : 300;
   manualPauseSecRef.current = manualPauseSec;
 
-  // Auto-rotate dashboards every intervalSeconds; pauses for manualPauseSeconds on manual switch
+  var rotationSchedule = resolveRotationSchedule(
+    carouselCfg ? carouselCfg.schedule : undefined,
+    rotateIntervalSec
+  );
+  var scheduleKeyParts: string[] = [];
+  for (var sk = 0; sk < rotationSchedule.length; sk++) {
+    scheduleKeyParts.push(
+      String(rotationSchedule[sk].slide) + ':' + String(rotationSchedule[sk].seconds)
+    );
+  }
+  var rotationScheduleKey = scheduleKeyParts.join(',');
+  var rotationScheduleRef = useRef<ResolvedRotationStep[]>(rotationSchedule);
+  rotationScheduleRef.current = rotationSchedule;
+
+  // Auto-rotate dashboards along the configured schedule (default: photo 30s -> weather 15s -> photo 30s -> stocks 15s -> photo 30s -> calendar 15s)
   useEffect(
     function () {
-      if (!autoRotate || rotateIntervalSec <= 0) {
+      var schedule = rotationScheduleRef.current;
+      if (!autoRotate || schedule.length === 0) {
         setIsRotatePaused(false);
         return;
       }
+
+      // Keep schedule index aligned with activeSlide (searching forward on manual jumps)
+      var curIdx = scheduleIdxRef.current % schedule.length;
+      if (curIdx < 0) curIdx = 0;
+      var matchedStep = schedule[curIdx].slide === activeSlide;
+      if (!matchedStep) {
+        for (var offset = 1; offset < schedule.length; offset++) {
+          var candIdx = (curIdx + offset) % schedule.length;
+          if (schedule[candIdx].slide === activeSlide) {
+            curIdx = candIdx;
+            matchedStep = true;
+            break;
+          }
+        }
+      }
+      scheduleIdxRef.current = curIdx;
+
+      var currentStepSeconds = matchedStep
+        ? schedule[curIdx].seconds
+        : rotateIntervalSec;
+      var nextIdx = matchedStep ? (curIdx + 1) % schedule.length : curIdx;
       var timerId: number | null = null;
 
       function scheduleNext() {
@@ -604,7 +687,7 @@ function DashboardShell(props: DashboardShellProps) {
         var pauseLeft = manualPauseUntilRef.current - now;
         var paused = pauseLeft > 0;
         setIsRotatePaused(paused);
-        var delayMs = paused ? pauseLeft : rotateIntervalSec * 1000;
+        var delayMs = paused ? pauseLeft : currentStepSeconds * 1000;
         timerId = window.setTimeout(function () {
           if (document.hidden) {
             scheduleNext();
@@ -615,9 +698,10 @@ function DashboardShell(props: DashboardShellProps) {
             return;
           }
           setIsRotatePaused(false);
-          setActiveSlide(function (prev) {
-            return (prev + 1) % TOTAL_SLIDES;
-          });
+          var latestSchedule = rotationScheduleRef.current;
+          var targetIdx = nextIdx % latestSchedule.length;
+          scheduleIdxRef.current = targetIdx;
+          setActiveSlide(latestSchedule[targetIdx].slide);
         }, delayMs);
       }
 
@@ -629,7 +713,7 @@ function DashboardShell(props: DashboardShellProps) {
         }
       };
     },
-    [autoRotate, rotateIntervalSec, manualPauseSec, activeSlide, pauseBump]
+    [autoRotate, rotateIntervalSec, rotationScheduleKey, manualPauseSec, activeSlide, pauseBump]
   );
 
   var weatherById: { [id: string]: CityWeather } = {};

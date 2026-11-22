@@ -29,10 +29,16 @@ type RefreshConfig struct {
 	DailyReloadHour int `json:"dailyReloadHour"`
 }
 
+type CarouselScheduleStep struct {
+	Slide   string `json:"slide"`
+	Seconds int    `json:"seconds"`
+}
+
 type CarouselConfig struct {
-	AutoRotate         bool `json:"autoRotate"`
-	IntervalSeconds    int  `json:"intervalSeconds"`
-	ManualPauseSeconds int  `json:"manualPauseSeconds"`
+	AutoRotate         bool                   `json:"autoRotate"`
+	IntervalSeconds    int                    `json:"intervalSeconds"`
+	ManualPauseSeconds int                    `json:"manualPauseSeconds"`
+	Schedule           []CarouselScheduleStep `json:"schedule,omitempty"`
 }
 
 type CityConfig struct {
@@ -117,11 +123,12 @@ func ParseAndNormalizeConfig(raw []byte) (DashboardConfig, error) {
 		cfg.Refresh.PollMinutes = 10
 	}
 	if cfg.Carousel.IntervalSeconds < 5 {
-		cfg.Carousel.IntervalSeconds = 30
+		cfg.Carousel.IntervalSeconds = 15
 	}
 	if cfg.Carousel.ManualPauseSeconds < 0 {
 		cfg.Carousel.ManualPauseSeconds = 300
 	}
+	cfg.Carousel.Schedule = normalizeCarouselSchedule(cfg.Carousel.Schedule, cfg.Carousel.IntervalSeconds)
 	if cfg.NightMode.DimOpacity <= 0 || cfg.NightMode.DimOpacity > 0.9 {
 		cfg.NightMode.DimOpacity = 0.55
 	}
@@ -140,6 +147,50 @@ func ParseAndNormalizeConfig(raw []byte) (DashboardConfig, error) {
 		}
 	}
 	return cfg, nil
+}
+
+func normalizeCarouselSchedule(raw []CarouselScheduleStep, fallbackSeconds int) []CarouselScheduleStep {
+	normalized := make([]CarouselScheduleStep, 0, len(raw))
+	for _, step := range raw {
+		slide := normalizeCarouselSlideName(step.Slide)
+		if slide == "" {
+			continue
+		}
+		sec := step.Seconds
+		if sec < 5 {
+			sec = fallbackSeconds
+		}
+		normalized = append(normalized, CarouselScheduleStep{
+			Slide:   slide,
+			Seconds: sec,
+		})
+	}
+	if len(normalized) == 0 {
+		return []CarouselScheduleStep{
+			{Slide: "photos", Seconds: 30},
+			{Slide: "weather", Seconds: 15},
+			{Slide: "photos", Seconds: 30},
+			{Slide: "stocks", Seconds: 15},
+			{Slide: "photos", Seconds: 30},
+			{Slide: "calendar", Seconds: 15},
+		}
+	}
+	return normalized
+}
+
+func normalizeCarouselSlideName(raw string) string {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "weather":
+		return "weather"
+	case "stock", "stocks":
+		return "stocks"
+	case "calendar":
+		return "calendar"
+	case "photo", "photos":
+		return "photos"
+	default:
+		return ""
+	}
 }
 
 func ComputeVersion(rawConfig []byte) string {

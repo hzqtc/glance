@@ -21,10 +21,18 @@ export interface RefreshConfig {
   dailyReloadHour: number;
 }
 
+export type CarouselSlideName = 'weather' | 'stocks' | 'calendar' | 'photos';
+
+export interface CarouselScheduleStep {
+  slide: CarouselSlideName | 'stock' | 'photo';
+  seconds: number;
+}
+
 export interface CarouselConfig {
   autoRotate: boolean;
   intervalSeconds: number;
   manualPauseSeconds: number;
+  schedule?: CarouselScheduleStep[];
 }
 
 export interface CityConfig {

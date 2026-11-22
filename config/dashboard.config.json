@@ -16,8 +16,16 @@
   },
   "carousel": {
     "autoRotate": true,
-    "intervalSeconds": 30,
-    "manualPauseSeconds": 300
+    "intervalSeconds": 15,
+    "manualPauseSeconds": 300,
+    "schedule": [
+      { "slide": "photos", "seconds": 30 },
+      { "slide": "weather", "seconds": 15 },
+      { "slide": "photos", "seconds": 30 },
+      { "slide": "stocks", "seconds": 15 },
+      { "slide": "photos", "seconds": 30 },
+      { "slide": "calendar", "seconds": 15 }
+    ]
   },
   "cities": [
     {
