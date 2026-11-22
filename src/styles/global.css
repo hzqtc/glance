@@ -3588,11 +3588,43 @@ body,
 }
 
 .world-controls {
-  opacity: 0.84;
+  opacity: 0.86;
 }
 
-.world-controls .ctrl-btn-mode {
-  padding: 0 8px;
+.world-controls .ctrl-btn-world-icon {
+  min-width: 28px;
+  width: 28px;
+  height: 24px;
+  padding: 0;
+  opacity: 0.55;
+}
+
+.world-controls .ctrl-btn-world-icon.ctrl-btn-selected {
+  opacity: 1;
+}
+
+.world-controls .world-icon-flights {
+  color: #7dd3fc;
+}
+
+.world-controls .world-icon-celestial {
+  color: #fde047;
+}
+
+.world-controls .world-icon-iss {
+  color: #67e8f9;
+}
+
+.world-controls .world-icon-quakes {
+  color: #fb923c;
+}
+
+.world-controls .world-icon-aurora {
+  color: #34d399;
+}
+
+.world-controls .world-icon-storms {
+  color: #fda4af;
 }
 
 .world-controls:hover,

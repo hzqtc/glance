@@ -608,8 +608,8 @@ export function WorldDashboard(props: WorldDashboardProps) {
                 type="button"
                 class={
                   showArcs
-                    ? 'ctrl-btn ctrl-btn-mode ctrl-btn-selected'
-                    : 'ctrl-btn ctrl-btn-mode'
+                    ? 'ctrl-btn ctrl-btn-mode ctrl-btn-world-icon ctrl-btn-selected world-icon-flights'
+                    : 'ctrl-btn ctrl-btn-mode ctrl-btn-world-icon'
                 }
                 onClick={function () {
                   setShowArcs(function (v) {
@@ -617,16 +617,30 @@ export function WorldDashboard(props: WorldDashboardProps) {
                   });
                 }}
                 aria-pressed={showArcs}
-                title="Toggle flight routes"
+                aria-label="Toggle flight routes"
+                title="Flight routes"
               >
-                Flights
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  class="ctrl-svg"
+                  aria-hidden="true"
+                >
+                  <path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z" />
+                </svg>
               </button>
               <button
                 type="button"
                 class={
                   showCelestial
-                    ? 'ctrl-btn ctrl-btn-mode ctrl-btn-selected'
-                    : 'ctrl-btn ctrl-btn-mode'
+                    ? 'ctrl-btn ctrl-btn-mode ctrl-btn-world-icon ctrl-btn-selected world-icon-celestial'
+                    : 'ctrl-btn ctrl-btn-mode ctrl-btn-world-icon'
                 }
                 onClick={function () {
                   setShowCelestial(function (v) {
@@ -634,16 +648,38 @@ export function WorldDashboard(props: WorldDashboardProps) {
                   });
                 }}
                 aria-pressed={showCelestial}
-                title="Toggle Sun & Moon markers"
+                aria-label="Toggle Sun and Moon markers"
+                title="Sun & Moon"
               >
-                Sun/Moon
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  class="ctrl-svg"
+                  aria-hidden="true"
+                >
+                  <path d="M12 8a2.83 2.83 0 0 0 4 4 4 4 0 1 1-4-4" />
+                  <path d="M12 2v2" />
+                  <path d="M12 20v2" />
+                  <path d="m4.9 4.9 1.4 1.4" />
+                  <path d="m17.7 17.7 1.4 1.4" />
+                  <path d="M2 12h2" />
+                  <path d="M20 12h2" />
+                  <path d="m6.3 17.7-1.4 1.4" />
+                  <path d="m19.1 4.9-1.4 1.4" />
+                </svg>
               </button>
               <button
                 type="button"
                 class={
                   showISS
-                    ? 'ctrl-btn ctrl-btn-mode ctrl-btn-selected'
-                    : 'ctrl-btn ctrl-btn-mode'
+                    ? 'ctrl-btn ctrl-btn-mode ctrl-btn-world-icon ctrl-btn-selected world-icon-iss'
+                    : 'ctrl-btn ctrl-btn-mode ctrl-btn-world-icon'
                 }
                 onClick={function () {
                   setShowISS(function (v) {
@@ -651,16 +687,34 @@ export function WorldDashboard(props: WorldDashboardProps) {
                   });
                 }}
                 aria-pressed={showISS}
-                title="Toggle International Space Station & orbit"
+                aria-label="Toggle International Space Station and orbit"
+                title="ISS & orbit"
               >
-                ISS
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  class="ctrl-svg"
+                  aria-hidden="true"
+                >
+                  <path d="M13 7 9 3 5 7l4 4" />
+                  <path d="m17 11 4 4-4 4-4-4" />
+                  <path d="m8 12 4 4 6-6-4-4Z" />
+                  <path d="m16 8 3-3" />
+                  <path d="M9 21a6 6 0 0 0-6-6" />
+                </svg>
               </button>
               <button
                 type="button"
                 class={
                   showQuakes
-                    ? 'ctrl-btn ctrl-btn-mode ctrl-btn-selected'
-                    : 'ctrl-btn ctrl-btn-mode'
+                    ? 'ctrl-btn ctrl-btn-mode ctrl-btn-world-icon ctrl-btn-selected world-icon-quakes'
+                    : 'ctrl-btn ctrl-btn-mode ctrl-btn-world-icon'
                 }
                 onClick={function () {
                   setShowQuakes(function (v) {
@@ -671,16 +725,30 @@ export function WorldDashboard(props: WorldDashboardProps) {
                   });
                 }}
                 aria-pressed={showQuakes}
-                title="Toggle recent M4.5+ earthquakes (24h)"
+                aria-label="Toggle recent earthquakes"
+                title="Earthquakes (M4.5+, 24h)"
               >
-                Quakes
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  class="ctrl-svg"
+                  aria-hidden="true"
+                >
+                  <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+                </svg>
               </button>
               <button
                 type="button"
                 class={
                   showAurora
-                    ? 'ctrl-btn ctrl-btn-mode ctrl-btn-selected'
-                    : 'ctrl-btn ctrl-btn-mode'
+                    ? 'ctrl-btn ctrl-btn-mode ctrl-btn-world-icon ctrl-btn-selected world-icon-aurora'
+                    : 'ctrl-btn ctrl-btn-mode ctrl-btn-world-icon'
                 }
                 onClick={function () {
                   setShowAurora(function (v) {
@@ -691,16 +759,33 @@ export function WorldDashboard(props: WorldDashboardProps) {
                   });
                 }}
                 aria-pressed={showAurora}
-                title="Toggle Aurora Oval & geomagnetic Kp activity"
+                aria-label="Toggle Aurora Oval and geomagnetic Kp activity"
+                title="Aurora Oval"
               >
-                Aurora
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  class="ctrl-svg"
+                  aria-hidden="true"
+                >
+                  <path d="M3 18c2-6 4.5-9 7.5-9s4.5 4 7 4c1.5 0 2.5-.8 3.5-2" />
+                  <path d="M3 13c2-5 4.5-7.5 7.5-7.5s4.5 3.5 7 3.5c1.5 0 2.5-.7 3.5-1.8" opacity="0.6" />
+                  <path d="M18 3v3" />
+                  <path d="M16.5 4.5h3" />
+                </svg>
               </button>
               <button
                 type="button"
                 class={
                   showStorms
-                    ? 'ctrl-btn ctrl-btn-mode ctrl-btn-selected'
-                    : 'ctrl-btn ctrl-btn-mode'
+                    ? 'ctrl-btn ctrl-btn-mode ctrl-btn-world-icon ctrl-btn-selected world-icon-storms'
+                    : 'ctrl-btn ctrl-btn-mode ctrl-btn-world-icon'
                 }
                 onClick={function () {
                   setShowStorms(function (v) {
@@ -711,9 +796,27 @@ export function WorldDashboard(props: WorldDashboardProps) {
                   });
                 }}
                 aria-pressed={showStorms}
-                title="Toggle active tropical cyclones, typhoons, & hurricanes"
+                aria-label="Toggle active tropical cyclones and hurricanes"
+                title="Tropical cyclones & hurricanes"
               >
-                Storms
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  class="ctrl-svg"
+                  aria-hidden="true"
+                >
+                  <circle cx="12" cy="12" r="3.4" />
+                  <path d="M12 8.6C15.8 8.6 18.8 5.8 18.5 2.5" />
+                  <path d="M12 15.4C8.2 15.4 5.2 18.2 5.5 21.5" />
+                  <path d="M15.4 12C15.4 15.8 12.6 19 8.8 19.2" />
+                  <path d="M8.6 12C8.6 8.2 11.4 5 15.2 4.8" />
+                </svg>
               </button>
               <button
                 type="button"
