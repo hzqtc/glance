@@ -17,7 +17,7 @@
   "carousel": {
     "autoRotate": true,
     "intervalSeconds": 15,
-    "manualPauseSeconds": 300,
+    "manualPauseSeconds": 60,
     "schedule": [
       { "slide": "photos", "seconds": 60 },
       { "slide": "weather", "seconds": 15 },

@@ -24,6 +24,7 @@ import { STOCKS_STORAGE_KEY, StocksDashboard } from './components/StocksDashboar
 import { CalendarDashboard } from './components/CalendarDashboard';
 import { PhotosDashboard } from './components/PhotosDashboard';
 import { PasscodeGate } from './components/PasscodeGate';
+import { RotateCountdown } from './components/RotateCountdown';
 
 var WEATHER_STORAGE_KEY = 'glance:lastDashboard:v1';
 var ANIM_STORAGE_KEY = 'glance:animEnabled:v1';
@@ -474,6 +475,10 @@ function DashboardShell(props: DashboardShellProps) {
   var isRotatePaused = _rotatePausedState[0];
   var setIsRotatePaused = _rotatePausedState[1];
 
+  var _rotateTargetState = useState<number>(0);
+  var rotateTargetMs = _rotateTargetState[0];
+  var setRotateTargetMs = _rotateTargetState[1];
+
   var rootRef = useRef<HTMLDivElement | null>(null);
   var bootTimeRef = useRef<number>(Date.now());
   var pollTimerRef = useRef<number | null>(null);
@@ -510,6 +515,7 @@ function DashboardShell(props: DashboardShellProps) {
       manualPauseUntilRef.current = now + manualPauseSecRef.current * 1000;
       if (!wasPaused) {
         setIsRotatePaused(true);
+        setRotateTargetMs(0);
       }
       if (!wasPaused || now - lastPauseBumpMsRef.current >= 1000) {
         lastPauseBumpMsRef.current = now;
@@ -740,6 +746,7 @@ function DashboardShell(props: DashboardShellProps) {
       var schedule = rotationScheduleRef.current;
       if (!autoRotate || schedule.length === 0) {
         setIsRotatePaused(false);
+        setRotateTargetMs(0);
         return;
       }
 
@@ -771,6 +778,7 @@ function DashboardShell(props: DashboardShellProps) {
         var paused = pauseLeft > 0;
         setIsRotatePaused(paused);
         var delayMs = paused ? pauseLeft : currentStepSeconds * 1000;
+        setRotateTargetMs(paused ? 0 : now + delayMs);
         timerId = window.setTimeout(function () {
           if (document.hidden) {
             scheduleNext();
@@ -1222,17 +1230,18 @@ function DashboardShell(props: DashboardShellProps) {
         </section>
       </div>
 
-      {/* Vertical side rail dashboard switcher (matches top-controls pill aesthetic) */}
-      <nav
-        class={
-          isLightRail
-            ? 'carousel-rail carousel-rail-light'
-            : activeSlide === 3
-              ? 'carousel-rail carousel-rail-photos'
-              : 'carousel-rail'
-        }
-        aria-label="Switch dashboard"
-      >
+      {/* Vertical side rail dashboard switcher + minimalist auto-rotate countdown pill */}
+      <div class="carousel-rail-wrap">
+        <nav
+          class={
+            isLightRail
+              ? 'carousel-rail carousel-rail-light'
+              : activeSlide === 3
+                ? 'carousel-rail carousel-rail-photos'
+                : 'carousel-rail'
+          }
+          aria-label="Switch dashboard"
+        >
         <button
           type="button"
           class={
@@ -1386,7 +1395,15 @@ function DashboardShell(props: DashboardShellProps) {
             <path d="M21 15.5l-5-5L5 20" />
           </svg>
         </button>
-      </nav>
+        </nav>
+
+        <RotateCountdown
+          targetMs={rotateTargetMs}
+          visible={autoRotate && !isRotatePaused}
+          light={isLightRail}
+          photos={activeSlide === 3}
+        />
+      </div>
 
       <div
         class="night-veil"
