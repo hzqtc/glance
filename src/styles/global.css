@@ -2527,6 +2527,7 @@ body,
 .cal-month-card {
   flex: 1.54;
   min-width: 0;
+  overflow: hidden;
   margin-right: 14px;
   padding: 12px 12px 10px 12px;
   border-radius: 20px;
@@ -2568,6 +2569,36 @@ body,
   display: flex;
   flex-direction: column;
   width: 100%;
+}
+
+.cal-weeks-slide-next {
+  animation: calSlideNext 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cal-weeks-slide-prev {
+  animation: calSlidePrev 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes calSlideNext {
+  0% {
+    opacity: 0.55;
+    transform: translate3d(18px, 0, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes calSlidePrev {
+  0% {
+    opacity: 0.55;
+    transform: translate3d(-18px, 0, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
 }
 
 .cal-week-row {

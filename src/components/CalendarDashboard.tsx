@@ -84,11 +84,19 @@ export function CalendarDashboard(props: CalendarDashboardProps) {
   var hiddenCals = _hiddenState[0];
   var setHiddenCals = _hiddenState[1];
 
+  var _slideDirState = useState<'' | 'next' | 'prev'>('');
+  var slideDir = _slideDirState[0];
+  var setSlideDir = _slideDirState[1];
+
   var monthCacheRef = useRef<{ [ym: string]: CalendarResponse }>({});
   var reqSeqRef = useRef<number>(0);
   var pollTimerRef = useRef<number | null>(null);
   var hasPreloadedRef = useRef<boolean>(false);
   var lastFetchMsRef = useRef<{ [ym: string]: number }>({});
+  var monthTouchRef = useRef<{ x: number; y: number } | null>(null);
+  var monthMouseRef = useRef<{ x: number; y: number } | null>(null);
+  var suppressClickUntilRef = useRef<number>(0);
+  var wheelCooldownRef = useRef<number>(0);
   var viewYearRef = useRef<number>(viewYear);
   var viewMonthRef = useRef<number>(viewMonth);
   var selectedDateKeyRef = useRef<string>(selectedDateKey);
@@ -223,6 +231,7 @@ export function CalendarDashboard(props: CalendarDashboardProps) {
     var ny = d.getFullYear();
     var nm = d.getMonth() + 1;
     if (ny < 1900 || ny > 2100) return;
+    setSlideDir(delta > 0 ? 'next' : 'prev');
     setViewYear(ny);
     setViewMonth(nm);
     if (ny === today.year && nm === today.month) {
@@ -235,6 +244,7 @@ export function CalendarDashboard(props: CalendarDashboardProps) {
   function shiftYear(delta: number) {
     var ny = viewYear + delta;
     if (ny < 1900 || ny > 2100) return;
+    setSlideDir(delta > 0 ? 'next' : 'prev');
     setViewYear(ny);
     if (ny === today.year && viewMonth === today.month) {
       setSelectedDateKey(today.dateKey);
@@ -244,6 +254,7 @@ export function CalendarDashboard(props: CalendarDashboardProps) {
   }
 
   function jumpToToday() {
+    setSlideDir('');
     setViewYear(today.year);
     setViewMonth(today.month);
     setSelectedDateKey(today.dateKey);
@@ -252,17 +263,86 @@ export function CalendarDashboard(props: CalendarDashboardProps) {
   function jumpToTrip(trip: CalendarTrip) {
     var targetKey = trip.startDate < today.dateKey ? today.dateKey : trip.startDate;
     var parts = parseDateKey(targetKey);
+    setSlideDir('');
     setViewYear(parts.year);
     setViewMonth(parts.month);
     setSelectedDateKey(targetKey);
   }
 
   function handleSelectDay(year: number, month: number, dateKey: string) {
+    if (Date.now() < suppressClickUntilRef.current) {
+      return;
+    }
     setSelectedDateKey(dateKey);
     if (year !== viewYear || month !== viewMonth) {
+      setSlideDir(year > viewYear || (year === viewYear && month > viewMonth) ? 'next' : 'prev');
       setViewYear(year);
       setViewMonth(month);
     }
+  }
+
+  function handleMonthTouchStart(e: TouchEvent) {
+    if (!e.touches || e.touches.length !== 1) {
+      monthTouchRef.current = null;
+      return;
+    }
+    monthTouchRef.current = {
+      x: e.touches[0].clientX,
+      y: e.touches[0].clientY,
+    };
+  }
+
+  function handleMonthTouchCancel() {
+    monthTouchRef.current = null;
+  }
+
+  function handleMonthTouchEnd(e: TouchEvent) {
+    var start = monthTouchRef.current;
+    monthTouchRef.current = null;
+    if (!start || !e.changedTouches || e.changedTouches.length === 0) {
+      return;
+    }
+    var dx = e.changedTouches[0].clientX - start.x;
+    var dy = e.changedTouches[0].clientY - start.y;
+    if (Math.abs(dx) < 48 || Math.abs(dx) < Math.abs(dy) * 1.25) {
+      return;
+    }
+    suppressClickUntilRef.current = Date.now() + 350;
+    shiftMonth(dx < 0 ? 1 : -1);
+  }
+
+  function handleMonthMouseDown(e: MouseEvent) {
+    if (e.button !== 0) return;
+    monthMouseRef.current = { x: e.clientX, y: e.clientY };
+  }
+
+  function handleMonthMouseUp(e: MouseEvent) {
+    var start = monthMouseRef.current;
+    monthMouseRef.current = null;
+    if (!start) return;
+    var dx = e.clientX - start.x;
+    var dy = e.clientY - start.y;
+    if (Math.abs(dx) < 48 || Math.abs(dx) < Math.abs(dy) * 1.25) {
+      return;
+    }
+    suppressClickUntilRef.current = Date.now() + 350;
+    shiftMonth(dx < 0 ? 1 : -1);
+  }
+
+  function handleMonthMouseLeave() {
+    monthMouseRef.current = null;
+  }
+
+  function handleMonthWheel(e: WheelEvent) {
+    if (Math.abs(e.deltaX) < 24 || Math.abs(e.deltaX) <= Math.abs(e.deltaY) * 1.4) {
+      return;
+    }
+    var now = Date.now();
+    if (now < wheelCooldownRef.current) {
+      return;
+    }
+    wheelCooldownRef.current = now + 420;
+    shiftMonth(e.deltaX > 0 ? 1 : -1);
   }
 
   function handleToggleCalendar(calId: string) {
@@ -543,6 +623,13 @@ export function CalendarDashboard(props: CalendarDashboardProps) {
           <section
             class={isLoading ? 'cal-month-card cal-loading' : 'cal-month-card'}
             aria-label="Month view"
+            onTouchStart={handleMonthTouchStart}
+            onTouchEnd={handleMonthTouchEnd}
+            onTouchCancel={handleMonthTouchCancel}
+            onMouseDown={handleMonthMouseDown}
+            onMouseUp={handleMonthMouseUp}
+            onMouseLeave={handleMonthMouseLeave}
+            onWheel={handleMonthWheel}
           >
             <div class="cal-weekdays-row">
               {WEEKDAYS_MON_START.map(function (wd, idx) {
@@ -561,7 +648,16 @@ export function CalendarDashboard(props: CalendarDashboardProps) {
               })}
             </div>
 
-            <div class="cal-weeks-wrap">
+            <div
+              key={String(viewYear) + '-' + String(viewMonth)}
+              class={
+                slideDir === 'next'
+                  ? 'cal-weeks-wrap cal-weeks-slide-next'
+                  : slideDir === 'prev'
+                    ? 'cal-weeks-wrap cal-weeks-slide-prev'
+                    : 'cal-weeks-wrap'
+              }
+            >
               {weekRows.map(function (week, wIdx) {
                 return (
                   <div class="cal-week-row" key={wIdx}>
