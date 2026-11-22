@@ -209,10 +209,6 @@ export function WorldDashboard(props: WorldDashboardProps) {
   var selectedCityId = _selectedCityState[0];
   var setSelectedCityId = _selectedCityState[1];
 
-  var _selectedISSState = useState<boolean>(false);
-  var selectedISS = _selectedISSState[0];
-  var setSelectedISS = _selectedISSState[1];
-
   var _selectedQuakeState = useState<string | null>(null);
   var selectedQuakeId = _selectedQuakeState[0];
   var setSelectedQuakeId = _selectedQuakeState[1];
@@ -254,6 +250,25 @@ export function WorldDashboard(props: WorldDashboardProps) {
   });
   var issNowMs = _issNowState[0];
   var setIssNowMs = _issNowState[1];
+
+  var _wideMapState = useState<boolean>(function () {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth / Math.max(1, window.innerHeight - 180) > 2.02;
+  });
+  var isWideMap = _wideMapState[0];
+  var setIsWideMap = _wideMapState[1];
+
+  useEffect(function () {
+    function handleResize() {
+      setIsWideMap(window.innerWidth / Math.max(1, window.innerHeight - 180) > 2.02);
+    }
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleResize);
+    return function () {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleResize);
+    };
+  }, []);
 
   var hasPreloadedRef = useRef<boolean>(false);
   var lastFetchMsRef = useRef<number>(0);
@@ -391,7 +406,6 @@ export function WorldDashboard(props: WorldDashboardProps) {
     function () {
       if (
         !selectedCityId &&
-        !selectedISS &&
         !selectedQuakeId &&
         !selectedAurora &&
         !selectedStormId
@@ -400,7 +414,6 @@ export function WorldDashboard(props: WorldDashboardProps) {
       }
       var id = window.setTimeout(function () {
         setSelectedCityId(null);
-        setSelectedISS(false);
         setSelectedQuakeId(null);
         setSelectedAurora(false);
         setSelectedStormId(null);
@@ -411,7 +424,6 @@ export function WorldDashboard(props: WorldDashboardProps) {
     },
     [
       selectedCityId,
-      selectedISS,
       selectedQuakeId,
       selectedAurora,
       selectedStormId,
@@ -635,9 +647,6 @@ export function WorldDashboard(props: WorldDashboardProps) {
                 }
                 onClick={function () {
                   setShowISS(function (v) {
-                    if (v) {
-                      setSelectedISS(false);
-                    }
                     return !v;
                   });
                 }}
@@ -738,23 +747,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
 
         {/* Main Day/Night World Map Card */}
         <section class="world-map-card" aria-label="Live day and night world map">
-          {selectedISS && issTrack ? (
-            <button
-              type="button"
-              class="world-map-inspector world-iss-pill"
-              onClick={function () {
-                setSelectedISS(false);
-              }}
-              title="Tap to dismiss ISS telemetry"
-            >
-              <span class="world-route-cities">ISS</span>
-              <span class="world-iss-meta">
-                {Math.round(issTrack.current.altKm)} km ·{' '}
-                {Math.round(issTrack.current.speedKmh).toLocaleString()} km/h ·{' '}
-                {issTrack.current.sunlit ? 'Sunlit' : 'Shadow'}
-              </span>
-            </button>
-          ) : selectedStorm ? (
+          {selectedStorm ? (
             <button
               type="button"
               class="world-map-inspector world-storm-pill"
@@ -824,12 +817,11 @@ export function WorldDashboard(props: WorldDashboardProps) {
           <svg
             class="world-map-svg"
             viewBox={'0 0 ' + String(MAP_W) + ' ' + String(MAP_H)}
-            preserveAspectRatio="xMidYMid meet"
+            preserveAspectRatio={isWideMap ? 'xMidYMid slice' : 'xMidYMid meet'}
             onClick={function (e) {
               var tgt = e.target as Element | null;
               if (tgt && tgt.tagName && tgt.tagName.toLowerCase() === 'svg') {
                 setSelectedCityId(null);
-                setSelectedISS(false);
                 setSelectedQuakeId(null);
                 setSelectedAurora(false);
                 setSelectedStormId(null);
@@ -885,7 +877,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
               </linearGradient>
 
               <clipPath id="world-map-clip">
-                <rect x="0" y="0" width={MAP_W} height={MAP_H} rx="14" />
+                <rect x="0" y="0" width={MAP_W} height={MAP_H} />
               </clipPath>
             </defs>
 
@@ -988,7 +980,6 @@ export function WorldDashboard(props: WorldDashboardProps) {
                   class="world-aurora-layer"
                   onClick={function () {
                     setSelectedCityId(null);
-                    setSelectedISS(false);
                     setSelectedQuakeId(null);
                     setSelectedStormId(null);
                     setSelectedAurora(function (v) {
@@ -1081,7 +1072,6 @@ export function WorldDashboard(props: WorldDashboardProps) {
                         }
                         onClick={function () {
                           setSelectedCityId(null);
-                          setSelectedISS(false);
                           setSelectedQuakeId(null);
                           setSelectedAurora(false);
                           setSelectedStormId(isSelS ? null : storm.id);
@@ -1167,7 +1157,6 @@ export function WorldDashboard(props: WorldDashboardProps) {
                         }
                         onClick={function () {
                           setSelectedCityId(null);
-                          setSelectedISS(false);
                           setSelectedAurora(false);
                           setSelectedStormId(null);
                           setSelectedQuakeId(isSelQ ? null : q.id);
@@ -1247,19 +1236,15 @@ export function WorldDashboard(props: WorldDashboardProps) {
                         <path
                           d={seg}
                           fill="none"
-                          stroke={
-                            selectedISS
-                              ? 'rgba(34, 211, 238, 0.38)'
-                              : 'rgba(34, 211, 238, 0.22)'
-                          }
-                          stroke-width={selectedISS ? '5.5' : '4'}
+                          stroke="rgba(34, 211, 238, 0.22)"
+                          stroke-width="4"
                           stroke-linecap="round"
                         />
                         <path
                           d={seg}
                           fill="none"
-                          stroke={selectedISS ? '#a5f3fc' : '#67e8f9'}
-                          stroke-width={selectedISS ? '2' : '1.5'}
+                          stroke="#67e8f9"
+                          stroke-width="1.5"
                           stroke-linecap="round"
                           opacity="0.92"
                         />
@@ -1285,9 +1270,10 @@ export function WorldDashboard(props: WorldDashboardProps) {
                     );
                   })}
 
-                  {/* Interactive ISS Marker */}
+                  {/* ISS Marker */}
                   <g
                     class="world-iss-marker"
+                    aria-hidden="true"
                     transform={
                       'translate(' +
                       issTrack.x.toFixed(1) +
@@ -1295,27 +1281,12 @@ export function WorldDashboard(props: WorldDashboardProps) {
                       issTrack.y.toFixed(1) +
                       ')'
                     }
-                    onClick={function () {
-                      setSelectedCityId(null);
-                      setSelectedQuakeId(null);
-                      setSelectedAurora(false);
-                      setSelectedStormId(null);
-                      setSelectedISS(function (v) {
-                        return !v;
-                      });
-                    }}
                   >
-                    {/* Generous tap target */}
-                    <circle cx="0" cy="0" r="20" fill="transparent" />
                     <circle
                       cx="0"
                       cy="0"
-                      r={selectedISS ? '14' : '11'}
-                      fill={
-                        selectedISS
-                          ? 'rgba(103, 232, 249, 0.28)'
-                          : 'rgba(103, 232, 249, 0.16)'
-                      }
+                      r="11"
+                      fill="rgba(103, 232, 249, 0.16)"
                     />
                     {/* Miniature Space Station SVG oriented slightly along track */}
                     <g
@@ -1390,7 +1361,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
                     </g>
                     <text
                       x={issLabelLeft ? '-14' : '14'}
-                      y="-2"
+                      y="4"
                       text-anchor={issLabelLeft ? 'end' : 'start'}
                       class="world-pin-name"
                       fill="#a5f3fc"
@@ -1398,17 +1369,6 @@ export function WorldDashboard(props: WorldDashboardProps) {
                       font-weight="700"
                     >
                       ISS
-                    </text>
-                    <text
-                      x={issLabelLeft ? '-14' : '14'}
-                      y="10"
-                      text-anchor={issLabelLeft ? 'end' : 'start'}
-                      class="world-pin-sub"
-                      fill="rgba(186, 230, 253, 0.88)"
-                      font-size="9.5"
-                      font-weight="500"
-                    >
-                      {Math.round(issTrack.current.altKm)} km
                     </text>
                   </g>
                 </g>
@@ -1426,7 +1386,6 @@ export function WorldDashboard(props: WorldDashboardProps) {
                         key={'arc-' + pin.city.id}
                         class="world-arc-group"
                         onClick={function () {
-                          setSelectedISS(false);
                           setSelectedQuakeId(null);
                           setSelectedAurora(false);
                           setSelectedStormId(null);
@@ -1529,7 +1488,6 @@ export function WorldDashboard(props: WorldDashboardProps) {
                       class="world-city-pin"
                       transform={'translate(' + pin.x.toFixed(1) + ',' + pin.y.toFixed(1) + ')'}
                       onClick={function () {
-                        setSelectedISS(false);
                         setSelectedQuakeId(null);
                         setSelectedAurora(false);
                         setSelectedStormId(null);
