@@ -1208,17 +1208,17 @@ body,
 
 .cities-row-compact .city-card-temp {
   font-size: 24px;
-  margin-left: 3px;
-}
-
-.cities-row-compact .city-card-cond {
-  font-size: 12px;
   margin-left: 4px;
 }
 
+.cities-row-compact .city-card-cond {
+  font-size: 13px;
+  margin-top: 3px;
+}
+
 .cities-row-compact .city-card-hl {
-  font-size: 14px;
-  margin-top: 4px;
+  font-size: 13px;
+  margin-top: 2px;
 }
 
 .cities-row-compact .city-card-footer {
@@ -1317,7 +1317,7 @@ body,
   width: 100%;
   display: flex;
   flex-direction: row;
-  align-items: flex-end;
+  align-items: stretch;
   justify-content: space-between;
   margin-bottom: 14px;
 }
@@ -1325,6 +1325,7 @@ body,
 .city-card-time-block {
   display: flex;
   flex-direction: column;
+  justify-content: space-between;
   flex-shrink: 0;
   margin-right: 10px;
 }
@@ -1393,17 +1394,19 @@ body,
 }
 
 .city-card-cond {
-  margin-left: 6px;
+  margin-top: 4px;
   font-size: 14px;
   font-weight: 500;
+  line-height: 1.2;
   color: var(--text-secondary);
+  max-width: 100%;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .city-card-hl {
-  margin-top: 6px;
+  margin-top: 3px;
   font-size: 14px;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;

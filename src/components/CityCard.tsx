@@ -101,11 +101,11 @@ export function CityCard(props: CityCardProps) {
                 <WeatherIcon
                   kind={desc.kind}
                   isDay={weather.isDay}
-                  size={props.compact ? 22 : 28}
+                  size={props.compact ? 24 : 28}
                 />
                 <span class="city-card-temp">{formatTemp(weather.tempC, units)}</span>
-                <span class="city-card-cond">{desc.shortLabel}</span>
               </div>
+              <div class="city-card-cond">{desc.shortLabel}</div>
               <div class="city-card-hl">
                 H {formatTemp(weather.highC, units)} · L {formatTemp(weather.lowC, units)}
               </div>
