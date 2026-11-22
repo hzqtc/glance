@@ -27,13 +27,29 @@ export function PasscodeGate(props: PasscodeGateProps) {
 
   var submittingRef = useRef<boolean>(false);
   var pinRef = useRef<string>('');
+  var shakeTimerRef = useRef<number | null>(null);
   submittingRef.current = isSubmitting;
   pinRef.current = pin;
 
+  function clearShakeTimer() {
+    if (shakeTimerRef.current !== null) {
+      window.clearTimeout(shakeTimerRef.current);
+      shakeTimerRef.current = null;
+    }
+  }
+
+  useEffect(function () {
+    return function () {
+      clearShakeTimer();
+    };
+  }, []);
+
   function triggerShake(msg: string) {
+    clearShakeTimer();
     setErrorMsg(msg);
     setIsShaking(true);
-    window.setTimeout(function () {
+    shakeTimerRef.current = window.setTimeout(function () {
+      shakeTimerRef.current = null;
       setIsShaking(false);
       setPin('');
     }, 420);
@@ -86,6 +102,11 @@ export function PasscodeGate(props: PasscodeGateProps) {
   function handleDigit(d: string) {
     if (props.misconfigured || submittingRef.current) return;
     var cur = pinRef.current;
+    if (shakeTimerRef.current !== null) {
+      clearShakeTimer();
+      setIsShaking(false);
+      cur = '';
+    }
     if (cur.length >= PIN_LENGTH) return;
     var next = cur + d;
     setPin(next);
@@ -97,6 +118,13 @@ export function PasscodeGate(props: PasscodeGateProps) {
 
   function handleBackspace() {
     if (props.misconfigured || submittingRef.current) return;
+    if (shakeTimerRef.current !== null) {
+      clearShakeTimer();
+      setIsShaking(false);
+      setPin('');
+      setErrorMsg(null);
+      return;
+    }
     var cur = pinRef.current;
     if (cur.length === 0) return;
     setPin(cur.slice(0, cur.length - 1));
@@ -105,6 +133,8 @@ export function PasscodeGate(props: PasscodeGateProps) {
 
   function handleClear() {
     if (props.misconfigured || submittingRef.current) return;
+    clearShakeTimer();
+    setIsShaking(false);
     setPin('');
     setErrorMsg(null);
   }

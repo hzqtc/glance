@@ -144,13 +144,7 @@ func WeatherHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rawConfig, isDevDisk, err := config.LoadRawConfig()
-	if err != nil {
-		writeWeatherError(w, http.StatusInternalServerError, fmt.Sprintf("failed to load config: %v", err))
-		return
-	}
-
-	cfg, err := config.ParseAndNormalizeConfig(rawConfig)
+	cfg, version, isDevDisk, err := config.LoadNormalizedConfig()
 	if err != nil {
 		writeWeatherError(w, http.StatusInternalServerError, fmt.Sprintf("invalid dashboard config: %v", err))
 		return
@@ -163,7 +157,7 @@ func WeatherHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := WeatherResponse{
-		Version:   config.ComputeVersion(rawConfig),
+		Version:   version,
 		FetchedAt: time.Now().UTC().Format(time.RFC3339),
 		Config:    cfg,
 		Weather:   weather,
@@ -271,7 +265,7 @@ func weatherHTTPGet(reqURL string) ([]byte, error) {
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 4*1024*1024))
 	if err != nil {
 		return nil, err
 	}

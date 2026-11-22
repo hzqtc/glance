@@ -26,7 +26,8 @@ var (
 )
 
 type icsCacheEntry struct {
-	raw       string
+	events    []rawICSEvent
+	calName   string
 	fetchedAt time.Time
 }
 
@@ -105,12 +106,7 @@ func CalendarHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rawConfig, _, err := config.LoadRawConfig()
-	if err != nil {
-		writeCalendarError(w, http.StatusInternalServerError, fmt.Sprintf("failed to load config: %v", err))
-		return
-	}
-	cfg, err := config.ParseAndNormalizeConfig(rawConfig)
+	cfg, version, _, err := config.LoadNormalizedConfig()
 	if err != nil {
 		writeCalendarError(w, http.StatusInternalServerError, fmt.Sprintf("invalid config: %v", err))
 		return
@@ -167,19 +163,16 @@ func CalendarHandler(w http.ResponseWriter, r *http.Request) {
 		wg.Add(1)
 		go func(s calendarSource) {
 			defer wg.Done()
-			rawICS, fetchErr := fetchICSCached(s.URL, forceRefresh)
+			parsed, extractedName, fetchErr := fetchParsedICSCached(s.URL, loc, forceRefresh)
 			if fetchErr != nil {
 				mu.Lock()
 				warnings = append(warnings, fmt.Sprintf("%s: %v", s.Name, fetchErr))
 				mu.Unlock()
 				return
 			}
-			parsed := parseICSEvents(rawICS, loc)
 			calName := s.Name
-			if s.AutoName || calName == "" {
-				if extracted := cleanCalendarDisplayName(extractICSCalendarName(rawICS)); extracted != "" {
-					calName = extracted
-				}
+			if (s.AutoName || calName == "") && extractedName != "" {
+				calName = extractedName
 			}
 
 			winEvs := expandEventsForWindow(parsed, s.ID, calName, s.Color, winStart, winEnd, loc)
@@ -226,7 +219,7 @@ func CalendarHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := CalendarResponse{
-		Version:       config.ComputeVersion(rawConfig),
+		Version:       version,
 		FetchedAt:     time.Now().UTC().Format(time.RFC3339),
 		Timezone:      tzName,
 		Year:          year,
@@ -351,48 +344,56 @@ func shortHash(s string) string {
 	return hex.EncodeToString(sum[:])[:10]
 }
 
-func fetchICSCached(rawURL string, forceRefresh bool) (string, error) {
+func fetchParsedICSCached(rawURL string, loc *time.Location, forceRefresh bool) ([]rawICSEvent, string, error) {
 	const cacheTTL = 5 * time.Minute
+	locName := "UTC"
+	if loc != nil {
+		locName = loc.String()
+	}
+	cacheKey := rawURL + "|" + locName
 
 	if !forceRefresh {
 		icsCacheMu.Lock()
-		if entry, ok := icsCache[rawURL]; ok && time.Since(entry.fetchedAt) < cacheTTL {
+		if entry, ok := icsCache[cacheKey]; ok && time.Since(entry.fetchedAt) < cacheTTL {
 			icsCacheMu.Unlock()
-			return entry.raw, nil
+			return entry.events, entry.calName, nil
 		}
 		icsCacheMu.Unlock()
 	}
 
 	req, err := http.NewRequest(http.MethodGet, rawURL, nil)
 	if err != nil {
-		return "", err
+		return nil, "", err
 	}
 	req.Header.Set("User-Agent", "GlanceCalendar/1.0")
 	req.Header.Set("Accept", "text/calendar, text/plain;q=0.9, */*;q=0.8")
 
 	resp, err := calendarHTTPClient.Do(req)
 	if err != nil {
-		return "", err
+		return nil, "", err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("status %d", resp.StatusCode)
+		return nil, "", fmt.Errorf("status %d", resp.StatusCode)
 	}
 	// Cap at 8 MB for safety
 	bodyBytes, err := io.ReadAll(io.LimitReader(resp.Body, 8*1024*1024))
 	if err != nil {
-		return "", err
+		return nil, "", err
 	}
-	raw := string(bodyBytes)
+	lines := unfoldICSLines(string(bodyBytes))
+	parsed := parseICSEventsFromLines(lines, loc)
+	calName := cleanCalendarDisplayName(extractICSCalendarNameFromLines(lines))
 
 	icsCacheMu.Lock()
-	icsCache[rawURL] = icsCacheEntry{
-		raw:       raw,
+	icsCache[cacheKey] = icsCacheEntry{
+		events:    parsed,
+		calName:   calName,
 		fetchedAt: time.Now(),
 	}
 	icsCacheMu.Unlock()
-	return raw, nil
+	return parsed, calName, nil
 }
 
 // monthGridWindowMonday returns the exact 42-day Monday-start window covering (year, month).
@@ -447,7 +448,10 @@ func unfoldICSLines(raw string) []string {
 }
 
 func extractICSCalendarName(raw string) string {
-	lines := unfoldICSLines(raw)
+	return extractICSCalendarNameFromLines(unfoldICSLines(raw))
+}
+
+func extractICSCalendarNameFromLines(lines []string) string {
 	for _, line := range lines {
 		if strings.HasPrefix(line, "BEGIN:VEVENT") {
 			break
@@ -463,7 +467,10 @@ func extractICSCalendarName(raw string) string {
 }
 
 func parseICSEvents(raw string, defaultLoc *time.Location) []rawICSEvent {
-	lines := unfoldICSLines(raw)
+	return parseICSEventsFromLines(unfoldICSLines(raw), defaultLoc)
+}
+
+func parseICSEventsFromLines(lines []string, defaultLoc *time.Location) []rawICSEvent {
 	var events []rawICSEvent
 	var cur *rawICSEvent
 	inAlarm := false

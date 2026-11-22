@@ -267,6 +267,22 @@ function clearCachedDashboardData(): void {
   } catch (_err) {
     // Ignore storage errors
   }
+  if ('caches' in window) {
+    try {
+      window.caches
+        .keys()
+        .then(function (keys) {
+          for (var i = 0; i < keys.length; i++) {
+            if (keys[i].indexOf('glance-api-') === 0) {
+              window.caches.delete(keys[i]);
+            }
+          }
+        })
+        .catch(function () {});
+    } catch (_err) {
+      // Ignore Cache Storage errors
+    }
+  }
 }
 
 export function App() {
@@ -326,6 +342,15 @@ export function App() {
     };
   }, []);
 
+  useEffect(
+    function () {
+      if (authState === 'locked') {
+        setThemeColorMeta('#0b1322');
+      }
+    },
+    [authState]
+  );
+
   function handleUnauthorized() {
     clearCachedDashboardData();
     setAuthState('locked');
@@ -341,7 +366,6 @@ export function App() {
   }
 
   if (authState === 'locked') {
-    setThemeColorMeta('#0b1322');
     return (
       <PasscodeGate
         misconfigured={isMisconfigured}
@@ -625,6 +649,11 @@ function DashboardShell(props: DashboardShellProps) {
               deployedVersionRef.current = json.version;
             } else if (deployedVersionRef.current !== json.version) {
               writeCachedWeather(json);
+              try {
+                window.localStorage.removeItem(STOCKS_STORAGE_KEY);
+              } catch (_err) {
+                // Ignore storage errors
+              }
               window.location.reload();
               return;
             }

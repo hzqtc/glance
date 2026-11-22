@@ -306,11 +306,11 @@ export function PhotosDashboard(props: PhotosDashboardProps) {
       })
       .then(function (json: PhotosResponse | null) {
         if (!json) return json;
-        lastFetchMsRef.current = Date.now();
         setResp(json);
         setLoadError(null);
         setIsLoading(false);
         if (json.photos && json.photos.length > 0) {
+          lastFetchMsRef.current = Date.now();
           applyPhotoList(json.photos);
         }
         return json;

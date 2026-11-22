@@ -8,10 +8,18 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 )
 
 //go:embed dashboard.config.json
 var embeddedConfigJSON []byte
+
+var (
+	embeddedOnce    sync.Once
+	embeddedCfg     DashboardConfig
+	embeddedVersion string
+	embeddedErr     error
+)
 
 type HeroConfig struct {
 	LockFirstCity bool `json:"lockFirstCity"`
@@ -87,6 +95,29 @@ func LoadRawConfig() ([]byte, bool, error) {
 		return data, true, nil
 	}
 	return embeddedConfigJSON, false, nil
+}
+
+// LoadNormalizedConfig returns the normalized dashboard config and version hash,
+// caching the immutable embedded production config while hot-reloading disk dev configs.
+func LoadNormalizedConfig() (DashboardConfig, string, bool, error) {
+	if devPath := strings.TrimSpace(os.Getenv("GLANCE_DEV_CONFIG_PATH")); devPath != "" {
+		raw, err := os.ReadFile(devPath)
+		if err != nil {
+			return DashboardConfig{}, "", true, err
+		}
+		cfg, err := ParseAndNormalizeConfig(raw)
+		if err != nil {
+			return DashboardConfig{}, "", true, err
+		}
+		return cfg, ComputeVersion(raw), true, nil
+	}
+	embeddedOnce.Do(func() {
+		embeddedCfg, embeddedErr = ParseAndNormalizeConfig(embeddedConfigJSON)
+		if embeddedErr == nil {
+			embeddedVersion = ComputeVersion(embeddedConfigJSON)
+		}
+	})
+	return embeddedCfg, embeddedVersion, false, embeddedErr
 }
 
 func ParseAndNormalizeConfig(raw []byte) (DashboardConfig, error) {

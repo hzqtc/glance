@@ -274,3 +274,12 @@ func TestDecodeYahooSparkBodyFormats(t *testing.T) {
 		t.Fatalf("flat spark decode failed: %+v", m2)
 	}
 }
+
+func TestStocksHandlerRejectsInvalidAdHocSymbol(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/stocks?symbol=BAD%20SYMBOL!!&chartOnly=1", nil)
+	rec := httptest.NewRecorder()
+	StocksHandler(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for invalid ad-hoc symbol, got %d: %s", rec.Code, rec.Body.String())
+	}
+}

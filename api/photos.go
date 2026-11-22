@@ -214,6 +214,9 @@ func fetchAlbumPhotosCached(albumURL string, forceRefresh bool) ([]PhotoItem, er
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
+	if resp.Request != nil && resp.Request.URL != nil && strings.Contains(strings.ToLower(resp.Request.URL.Host), "accounts.google.") {
+		return nil, fmt.Errorf("album requires sign-in — enable link sharing")
+	}
 
 	bodyBytes, err := io.ReadAll(io.LimitReader(resp.Body, maxAlbumHTMLBytes))
 	if err != nil {

@@ -201,12 +201,14 @@ func isHTTPSRequest(r *http.Request) bool {
 }
 
 func clientIP(r *http.Request) string {
-	if xff := strings.TrimSpace(r.Header.Get("X-Forwarded-For")); xff != "" {
-		if comma := strings.IndexByte(xff, ','); comma >= 0 {
-			xff = strings.TrimSpace(xff[:comma])
-		}
-		if xff != "" {
-			return xff
+	for _, hdr := range []string{"X-Vercel-Forwarded-For", "X-Real-IP", "X-Forwarded-For"} {
+		if val := strings.TrimSpace(r.Header.Get(hdr)); val != "" {
+			if comma := strings.IndexByte(val, ','); comma >= 0 {
+				val = strings.TrimSpace(val[:comma])
+			}
+			if val != "" {
+				return val
+			}
 		}
 	}
 	host, _, err := net.SplitHostPort(strings.TrimSpace(r.RemoteAddr))
@@ -225,6 +227,15 @@ func CheckRateLimit(r *http.Request) time.Duration {
 	now := time.Now()
 	rateMu.Lock()
 	defer rateMu.Unlock()
+
+	// Periodically evict expired entries to prevent unbounded map growth
+	if len(rateEntries) >= 256 {
+		for k, entry := range rateEntries {
+			if !now.Before(entry.lockedUntil) && now.Sub(entry.firstFailAt) > failWindow {
+				delete(rateEntries, k)
+			}
+		}
+	}
 
 	st, ok := rateEntries[ip]
 	if !ok {
@@ -248,6 +259,15 @@ func RecordFailure(r *http.Request) bool {
 	now := time.Now()
 	rateMu.Lock()
 	defer rateMu.Unlock()
+
+	// Periodically evict expired entries to prevent unbounded map growth
+	if len(rateEntries) >= 256 {
+		for k, entry := range rateEntries {
+			if !now.Before(entry.lockedUntil) && now.Sub(entry.firstFailAt) > failWindow {
+				delete(rateEntries, k)
+			}
+		}
+	}
 
 	st, ok := rateEntries[ip]
 	if !ok || now.Sub(st.firstFailAt) > failWindow {

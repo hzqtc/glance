@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -38,6 +39,16 @@ var (
 	yfQuoteCache    map[string]yfQuoteMetaItem
 	yfQuoteCacheKey string
 	yfQuoteCacheExp time.Time
+
+	nyLocOnce sync.Once
+	nyLoc     *time.Location
+
+	reValidStockSymbol = regexp.MustCompile(`^[A-Za-z0-9.^=-]{1,16}$`)
+)
+
+const (
+	maxYahooBodyBytes  = 4 * 1024 * 1024
+	maxYahooCrumbBytes = 4 * 1024
 )
 
 type StockPoint struct {
@@ -198,13 +209,7 @@ func StocksHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rawConfig, isDevDisk, err := config.LoadRawConfig()
-	if err != nil {
-		writeStocksError(w, http.StatusInternalServerError, fmt.Sprintf("failed to load config: %v", err))
-		return
-	}
-
-	cfg, err := config.ParseAndNormalizeConfig(rawConfig)
+	cfg, version, isDevDisk, err := config.LoadNormalizedConfig()
 	if err != nil {
 		writeStocksError(w, http.StatusInternalServerError, fmt.Sprintf("invalid config: %v", err))
 		return
@@ -236,10 +241,15 @@ func StocksHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if !found {
+			upperSym := strings.ToUpper(reqSymbol)
+			if !reValidStockSymbol.MatchString(upperSym) {
+				writeStocksError(w, http.StatusBadRequest, "invalid stock symbol")
+				return
+			}
 			heroCfg = config.StockSymbolConfig{
-				Symbol: strings.ToUpper(reqSymbol),
-				Label:  strings.ToUpper(reqSymbol),
-				Name:   strings.ToUpper(reqSymbol),
+				Symbol: upperSym,
+				Label:  upperSym,
+				Name:   upperSym,
 				Format: "currency",
 			}
 		}
@@ -392,7 +402,7 @@ func StocksHandler(w http.ResponseWriter, r *http.Request) {
 
 	marketHours := isUSMarketHoursNow(time.Now().UTC())
 	resp := StocksResponse{
-		Version:      config.ComputeVersion(rawConfig),
+		Version:      version,
 		FetchedAt:    time.Now().UTC().Format(time.RFC3339),
 		MarketHours:  marketHours,
 		DefaultRange: cfg.Stocks.DefaultRange,
@@ -461,7 +471,7 @@ func fetchYahooChartFromURL(reqURL string) (*yfChartResult, error) {
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxYahooBodyBytes))
 	if err != nil {
 		return nil, err
 	}
@@ -532,7 +542,7 @@ func fetchYahooSparkChunk(symbols []string, spec yahooRangeSpec) map[string]*yfC
 		if err != nil {
 			continue
 		}
-		body, readErr := io.ReadAll(resp.Body)
+		body, readErr := io.ReadAll(io.LimitReader(resp.Body, maxYahooBodyBytes))
 		_ = resp.Body.Close()
 		if readErr != nil || resp.StatusCode != http.StatusOK {
 			continue
@@ -1048,17 +1058,27 @@ func applyQuoteMetaToHero(hero *StockHero, meta yfQuoteMetaItem) {
 	}
 }
 
+func loadNYLocation() *time.Location {
+	nyLocOnce.Do(func() {
+		if loc, err := time.LoadLocation("America/New_York"); err == nil {
+			nyLoc = loc
+		}
+	})
+	return nyLoc
+}
+
+func nowInET(nowUTC time.Time) time.Time {
+	if loc := loadNYLocation(); loc != nil {
+		return nowUTC.In(loc)
+	}
+	// Fallback to EST (UTC-5) if tzdata is missing
+	return nowUTC.Add(-5 * time.Hour)
+}
+
 // isUSMarketHoursNow approximates US regular + brief buffer hours (Mon-Fri 9:25-16:30 ET)
 // without requiring OS tzdata in minimal serverless containers.
 func isUSMarketHoursNow(nowUTC time.Time) bool {
-	loc, err := time.LoadLocation("America/New_York")
-	var et time.Time
-	if err == nil {
-		et = nowUTC.In(loc)
-	} else {
-		// Fallback to EST (UTC-5) if tzdata is missing
-		et = nowUTC.Add(-5 * time.Hour)
-	}
+	et := nowInET(nowUTC)
 	wd := et.Weekday()
 	if wd == time.Saturday || wd == time.Sunday {
 		return false
@@ -1106,13 +1126,7 @@ func lookupCachedQuoteMeta(symbol string) (yfQuoteMetaItem, bool) {
 }
 
 func isUSExtendedHoursNow(nowUTC time.Time) bool {
-	loc, err := time.LoadLocation("America/New_York")
-	var et time.Time
-	if err == nil {
-		et = nowUTC.In(loc)
-	} else {
-		et = nowUTC.Add(-5 * time.Hour)
-	}
+	et := nowInET(nowUTC)
 	wd := et.Weekday()
 	if wd == time.Saturday || wd == time.Sunday {
 		return false
@@ -1164,7 +1178,7 @@ func getYahooSession(forceRefresh bool) (http.CookieJar, string, error) {
 	}
 	defer crumbResp.Body.Close()
 
-	crumbBytes, err := io.ReadAll(crumbResp.Body)
+	crumbBytes, err := io.ReadAll(io.LimitReader(crumbResp.Body, maxYahooCrumbBytes))
 	if err != nil {
 		return nil, "", err
 	}
@@ -1231,7 +1245,7 @@ func fetchYahooQuoteMetaCached(symbols []string) map[string]yfQuoteMetaItem {
 			if err != nil {
 				continue
 			}
-			body, readErr := io.ReadAll(resp.Body)
+			body, readErr := io.ReadAll(io.LimitReader(resp.Body, maxYahooBodyBytes))
 			_ = resp.Body.Close()
 			if readErr != nil {
 				continue

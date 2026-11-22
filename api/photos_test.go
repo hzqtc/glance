@@ -129,3 +129,29 @@ AF_initDataCallback({key: 'ds:1', hash: '2', data:[null,[
 		t.Fatalf("expected 0 items when album only contains videos (must not fall back to regex), got %d: %+v", len(items), items)
 	}
 }
+
+func TestFetchAlbumPhotosDetectsGoogleSignInRedirect(t *testing.T) {
+	origClient := photosHTTPClient
+	photosHTTPClient = &http.Client{
+		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			redirectReq, _ := http.NewRequest(http.MethodGet, "https://accounts.google.com/v3/signin/identifier", nil)
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Request:    redirectReq,
+				Header:     http.Header{"Content-Type": []string{"text/html; charset=utf-8"}},
+				Body:       io.NopCloser(bytes.NewBufferString("<html>Sign in</html>")),
+			}, nil
+		}),
+	}
+	defer func() {
+		photosHTTPClient = origClient
+		photosCacheMu.Lock()
+		photosCache = map[string]photosCacheEntry{}
+		photosCacheMu.Unlock()
+	}()
+
+	_, err := fetchAlbumPhotosCached("https://photos.app.goo.gl/privatealbum", true)
+	if err == nil || !bytes.Contains([]byte(err.Error()), []byte("sign-in")) {
+		t.Fatalf("expected sign-in diagnostic error, got: %v", err)
+	}
+}
