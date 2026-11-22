@@ -32,6 +32,10 @@ interface StocksDashboardProps {
   preload?: boolean;
   timeFormat: TimeFormat;
   cardMetric: StockCardMetric;
+  defaultSymbol?: string;
+  defaultRange?: StockRange;
+  idleResetSeconds?: number;
+  activityTick?: number;
   onUnauthorized?: () => void;
   controls?: ComponentChildren;
 }
@@ -59,6 +63,9 @@ function writeCachedStocks(data: StocksResponse): void {
 }
 
 export function StocksDashboard(props: StocksDashboardProps) {
+  var defaultSymbol = props.defaultSymbol || 'GOOG';
+  var defaultRange: StockRange = props.defaultRange || '1d';
+
   var _heroState = useState<StockHero | null>(function () {
     var cached = readCachedStocks();
     return cached ? cached.hero : null;
@@ -75,14 +82,14 @@ export function StocksDashboard(props: StocksDashboardProps) {
 
   var _symbolState = useState<string>(function () {
     var cached = readCachedStocks();
-    return cached && cached.hero ? cached.hero.symbol : 'GOOG';
+    return cached && cached.hero ? cached.hero.symbol : defaultSymbol;
   });
   var selectedSymbol = _symbolState[0];
   var setSelectedSymbol = _symbolState[1];
 
   var _rangeState = useState<StockRange>(function () {
     var cached = readCachedStocks();
-    return cached && cached.hero && cached.hero.range ? cached.hero.range : '1d';
+    return cached && cached.hero && cached.hero.range ? cached.hero.range : defaultRange;
   });
   var selectedRange = _rangeState[0];
   var setSelectedRange = _rangeState[1];
@@ -116,8 +123,12 @@ export function StocksDashboard(props: StocksDashboardProps) {
   var heroCacheRef = useRef<{ [key: string]: { hero: StockHero; ts: number } }>({});
   var marketHoursRef = useRef<boolean>(false);
   var lastFullFetchMsRef = useRef<number>(0);
+  var isActiveRef = useRef<boolean>(props.isActive);
+  var heroRef = useRef<StockHero | null>(hero);
   selectedSymbolRef.current = selectedSymbol;
   selectedRangeRef.current = selectedRange;
+  isActiveRef.current = props.isActive;
+  heroRef.current = hero;
 
   function fetchStocks(
     symbol: string,
@@ -231,8 +242,18 @@ export function StocksDashboard(props: StocksDashboardProps) {
         );
       }
 
-      // If quietly preloaded within the last 60s, skip immediate duplicate fetch and schedule normal poll
-      if (lastFullFetchMsRef.current > 0 && Date.now() - lastFullFetchMsRef.current < 60 * 1000) {
+      // If quietly preloaded within the last 60s and hero matches current selection, skip immediate duplicate fetch
+      var curHero = heroRef.current;
+      var heroMatches = Boolean(
+        curHero &&
+          curHero.symbol === selectedSymbolRef.current &&
+          curHero.range === selectedRangeRef.current
+      );
+      if (
+        heroMatches &&
+        lastFullFetchMsRef.current > 0 &&
+        Date.now() - lastFullFetchMsRef.current < 60 * 1000
+      ) {
         scheduleNext(marketHoursRef.current, false);
       } else {
         runPoll();
@@ -247,6 +268,44 @@ export function StocksDashboard(props: StocksDashboardProps) {
       };
     },
     [props.isActive]
+  );
+
+  // Auto-return Stocks hero and timeframe to defaults after configured idle period
+  var idleResetSec =
+    typeof props.idleResetSeconds === 'number' && props.idleResetSeconds >= 5
+      ? props.idleResetSeconds
+      : 60;
+  useEffect(
+    function () {
+      if (selectedSymbol === defaultSymbol && selectedRange === defaultRange) {
+        return;
+      }
+      var id = window.setTimeout(function () {
+        setScrubPoint(null);
+        setSelectedSymbol(defaultSymbol);
+        setSelectedRange(defaultRange);
+
+        var cachedHero = heroCacheRef.current[defaultSymbol + ':' + defaultRange];
+        if (cachedHero) {
+          setHero(cachedHero.hero);
+        }
+        var cachedQuotes = rangeQuotesCacheRef.current[defaultRange];
+        if (cachedQuotes && cachedQuotes.length > 0) {
+          setQuotes(cachedQuotes);
+        }
+        if (isActiveRef.current) {
+          var needQuotes = !(cachedQuotes && cachedQuotes.length > 0);
+          if (needQuotes || !cachedHero) {
+            fetchStocks(defaultSymbol, defaultRange, !needQuotes, false);
+          }
+        }
+      }, idleResetSec * 1000);
+
+      return function () {
+        window.clearTimeout(id);
+      };
+    },
+    [selectedSymbol, selectedRange, defaultSymbol, defaultRange, idleResetSec, props.activityTick]
   );
 
   function handleSelectSymbol(sym: string) {

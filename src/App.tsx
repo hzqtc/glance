@@ -471,6 +471,10 @@ function DashboardShell(props: DashboardShellProps) {
   var pauseBump = _pauseBumpState[0];
   var setPauseBump = _pauseBumpState[1];
 
+  var _activityTickState = useState<number>(0);
+  var activityTick = _activityTickState[0];
+  var setActivityTick = _activityTickState[1];
+
   var _rotatePausedState = useState<boolean>(false);
   var isRotatePaused = _rotatePausedState[0];
   var setIsRotatePaused = _rotatePausedState[1];
@@ -489,6 +493,7 @@ function DashboardShell(props: DashboardShellProps) {
   var manualPauseUntilRef = useRef<number>(0);
   var manualPauseSecRef = useRef<number>(300);
   var lastPauseBumpMsRef = useRef<number>(0);
+  var lastActivityTickMsRef = useRef<number>(0);
   var scheduleIdxRef = useRef<number>(0);
 
   // Entrance transition trigger & quiet background preload of inactive slides after boot settles
@@ -529,12 +534,23 @@ function DashboardShell(props: DashboardShellProps) {
     }
   }
 
-  function handleManualSlideSelect(nextSlide: number) {
+  function recordUserActivity() {
+    var now = Date.now();
+    if (now - lastActivityTickMsRef.current >= 1000) {
+      lastActivityTickMsRef.current = now;
+      setActivityTick(function (n) {
+        return n + 1;
+      });
+    }
     pauseAutoRotate();
+  }
+
+  function handleManualSlideSelect(nextSlide: number) {
+    recordUserActivity();
     setActiveSlide(nextSlide);
   }
 
-  // Treat any user interaction on any dashboard (tap, click, swipe, scroll, scrub) as pausing auto-rotate
+  // Treat any user interaction on any dashboard (tap, click, swipe, scroll, scrub) as activity (pauses auto-rotate & resets idle timers)
   useEffect(function () {
     var rootEl = rootRef.current;
     if (!rootEl) return;
@@ -542,7 +558,7 @@ function DashboardShell(props: DashboardShellProps) {
 
     function handleInteraction(e: Event) {
       if (e && e.isTrusted === false) return;
-      pauseAutoRotate();
+      recordUserActivity();
     }
 
     var opts: AddEventListenerOptions = { capture: true, passive: true };
@@ -573,7 +589,7 @@ function DashboardShell(props: DashboardShellProps) {
         e.key !== 'Alt' &&
         e.key !== 'Meta'
       ) {
-        pauseAutoRotate();
+        recordUserActivity();
       }
       if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
         setActiveSlide(function (prev) {
@@ -699,7 +715,29 @@ function DashboardShell(props: DashboardShellProps) {
   var configUnits: TempUnit = data && data.config ? data.config.units : 'F';
   var units: TempUnit = unitOverride || configUnits;
   var timeFormat = data && data.config ? data.config.timeFormat : '12h';
-  var nightMode = data && data.config ? data.config.nightMode : null;
+  var nightMode =
+    data && data.config && data.config.nightMode
+      ? data.config.nightMode
+      : { enabled: true, startHour: 23, endHour: 7, dimOpacity: 0.55 };
+  var idleResetSec =
+    data &&
+    data.config &&
+    typeof data.config.idleResetSeconds === 'number' &&
+    data.config.idleResetSeconds >= 5
+      ? data.config.idleResetSeconds
+      : 60;
+  var defaultStockSymbol =
+    data &&
+    data.config &&
+    data.config.stocks &&
+    data.config.stocks.symbols &&
+    data.config.stocks.symbols.length > 0
+      ? data.config.stocks.symbols[0].symbol
+      : 'GOOG';
+  var defaultStockRange =
+    data && data.config && data.config.stocks && data.config.stocks.defaultRange
+      ? data.config.stocks.defaultRange
+      : '1d';
   var dailyReloadHour =
     data && data.config && data.config.refresh
       ? data.config.refresh.dailyReloadHour
@@ -838,7 +876,7 @@ function DashboardShell(props: DashboardShellProps) {
     timeFormat
   );
 
-  // Auto-return Weather spotlight to Home city after 5 minutes when viewing another city
+  // Auto-return Weather spotlight to Home city after configured idle period when viewing another city
   var homeCityId = homeCity ? homeCity.id : null;
   useEffect(
     function () {
@@ -847,12 +885,12 @@ function DashboardShell(props: DashboardShellProps) {
       }
       var id = window.setTimeout(function () {
         setSelectedCityId(null);
-      }, 5 * 60 * 1000);
+      }, idleResetSec * 1000);
       return function () {
         window.clearTimeout(id);
       };
     },
-    [selectedCityId, homeCityId]
+    [selectedCityId, homeCityId, idleResetSec, activityTick]
   );
 
   var demo = getDemoOverride();
@@ -1188,6 +1226,10 @@ function DashboardShell(props: DashboardShellProps) {
             preload={preloadReady}
             timeFormat={timeFormat}
             cardMetric={stockMetric}
+            defaultSymbol={defaultStockSymbol}
+            defaultRange={defaultStockRange}
+            idleResetSeconds={idleResetSec}
+            activityTick={activityTick}
             onUnauthorized={props.onUnauthorized}
             controls={
               <TopControls
@@ -1212,6 +1254,8 @@ function DashboardShell(props: DashboardShellProps) {
             preload={preloadReady}
             nowMs={nowMs}
             timeFormat={timeFormat}
+            idleResetSeconds={idleResetSec}
+            activityTick={activityTick}
             isRefreshing={isRefreshing}
             onRefresh={handleRefresh}
             onUnauthorized={props.onUnauthorized}

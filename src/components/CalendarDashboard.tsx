@@ -46,6 +46,8 @@ interface CalendarDashboardProps {
   preload?: boolean;
   nowMs: number;
   timeFormat: TimeFormat;
+  idleResetSeconds?: number;
+  activityTick?: number;
   isRefreshing: boolean;
   onRefresh: () => void;
   onUnauthorized?: () => void;
@@ -258,7 +260,45 @@ export function CalendarDashboard(props: CalendarDashboardProps) {
     setViewYear(today.year);
     setViewMonth(today.month);
     setSelectedDateKey(today.dateKey);
+    var ymKey = String(today.year) + '-' + String(today.month);
+    var cached = monthCacheRef.current[ymKey];
+    if (cached) {
+      setData(cached);
+    }
   }
+
+  // Auto-return Calendar view to Today after configured idle period
+  var idleResetSec =
+    typeof props.idleResetSeconds === 'number' && props.idleResetSeconds >= 5
+      ? props.idleResetSeconds
+      : 60;
+  var atTodayNow =
+    viewYear === today.year &&
+    viewMonth === today.month &&
+    selectedDateKey === today.dateKey;
+  useEffect(
+    function () {
+      if (atTodayNow) {
+        return;
+      }
+      var id = window.setTimeout(function () {
+        var cur = prevTodayRef.current;
+        setSlideDir('');
+        setViewYear(cur.year);
+        setViewMonth(cur.month);
+        setSelectedDateKey(cur.dateKey);
+        var ymKey = String(cur.year) + '-' + String(cur.month);
+        var cached = monthCacheRef.current[ymKey];
+        if (cached) {
+          setData(cached);
+        }
+      }, idleResetSec * 1000);
+      return function () {
+        window.clearTimeout(id);
+      };
+    },
+    [atTodayNow, viewYear, viewMonth, selectedDateKey, idleResetSec, props.activityTick]
+  );
 
   function jumpToTrip(trip: CalendarTrip) {
     var targetKey = trip.startDate < today.dateKey ? today.dateKey : trip.startDate;

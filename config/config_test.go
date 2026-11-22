@@ -32,9 +32,16 @@ func TestParseAndNormalizeCarouselSchedule(t *testing.T) {
 	if cfg.Photos.SlideIntervalSeconds != 15 {
 		t.Fatalf("expected default photos slideIntervalSeconds 15, got %d", cfg.Photos.SlideIntervalSeconds)
 	}
+	if cfg.IdleResetSeconds != 60 {
+		t.Fatalf("expected default idleResetSeconds 60, got %d", cfg.IdleResetSeconds)
+	}
+	if !cfg.NightMode.Enabled || cfg.NightMode.StartHour != 23 || cfg.NightMode.EndHour != 7 || cfg.NightMode.DimOpacity <= 0 {
+		t.Fatalf("unexpected default nightMode config: %+v", cfg.NightMode)
+	}
 
 	// Aliases ("photo", "stock"), custom durations, and invalid slide filtering
 	customJSON := []byte(`{
+		"idleResetSeconds": 90,
 		"cities": [{"id":"c1","name":"Test","region":"CA","lat":37,"lon":-122,"timezone":"America/Los_Angeles"}],
 		"carousel": {
 			"autoRotate": true,
@@ -70,5 +77,8 @@ func TestParseAndNormalizeCarouselSchedule(t *testing.T) {
 	}
 	if customCfg.Photos.SlideIntervalSeconds != 25 {
 		t.Fatalf("expected custom photos slideIntervalSeconds 25, got %d", customCfg.Photos.SlideIntervalSeconds)
+	}
+	if customCfg.IdleResetSeconds != 90 {
+		t.Fatalf("expected custom idleResetSeconds 90, got %d", customCfg.IdleResetSeconds)
 	}
 }

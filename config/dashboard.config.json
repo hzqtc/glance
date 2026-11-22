@@ -1,6 +1,7 @@
 {
   "units": "F",
   "timeFormat": "12h",
+  "idleResetSeconds": 60,
   "hero": {
     "lockFirstCity": true
   },

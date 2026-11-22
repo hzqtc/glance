@@ -63,6 +63,7 @@ export interface StocksConfig {
 export interface DashboardConfig {
   units: TempUnit;
   timeFormat: TimeFormat;
+  idleResetSeconds?: number;
   hero: HeroConfig;
   nightMode: NightModeConfig;
   refresh: RefreshConfig;

@@ -75,9 +75,10 @@ type StocksConfig struct {
 }
 
 type DashboardConfig struct {
-	Units      string          `json:"units"`
-	TimeFormat string          `json:"timeFormat"`
-	Hero       HeroConfig      `json:"hero"`
+	Units            string          `json:"units"`
+	TimeFormat       string          `json:"timeFormat"`
+	IdleResetSeconds int             `json:"idleResetSeconds"`
+	Hero             HeroConfig      `json:"hero"`
 	NightMode  NightModeConfig `json:"nightMode"`
 	Refresh    RefreshConfig   `json:"refresh"`
 	Carousel   CarouselConfig  `json:"carousel"`
@@ -137,6 +138,9 @@ func ParseAndNormalizeConfig(raw []byte) (DashboardConfig, error) {
 
 	if cfg.TimeFormat != "24h" {
 		cfg.TimeFormat = "12h"
+	}
+	if cfg.IdleResetSeconds < 5 {
+		cfg.IdleResetSeconds = 60
 	}
 	if cfg.Refresh.PollMinutes < 1 {
 		cfg.Refresh.PollMinutes = 10

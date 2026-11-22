@@ -251,6 +251,8 @@ export function PhotosDashboard(props: PhotosDashboardProps) {
   var frameIdxRef = useRef<number>(0);
   var deckRoundRef = useRef<number>(1);
   var hasPreloadedRef = useRef<boolean>(false);
+  var hasActivatedOnceRef = useRef<boolean>(props.isActive);
+  var wasActiveRef = useRef<boolean>(props.isActive);
   var lastFetchMsRef = useRef<number>(0);
   var pollTimerRef = useRef<number | null>(null);
   var fadeTimerRef = useRef<number | null>(null);
@@ -322,7 +324,7 @@ export function PhotosDashboard(props: PhotosDashboardProps) {
       });
   }
 
-  function stepFrame(delta: number, manual: boolean) {
+  function stepFrame(delta: number, manual: boolean, instant?: boolean) {
     var curDeck = deckRef.current;
     if (curDeck.length === 0) return;
 
@@ -348,13 +350,21 @@ export function PhotosDashboard(props: PhotosDashboardProps) {
             freshDeck[0] = freshDeck[1];
             freshDeck[1] = swap;
           }
-          setPrevFrame(curFrame);
+          if (instant) {
+            if (fadeTimerRef.current !== null) {
+              window.clearTimeout(fadeTimerRef.current);
+              fadeTimerRef.current = null;
+            }
+            setPrevFrame(null);
+          } else {
+            setPrevFrame(curFrame);
+            schedulePrevClear();
+          }
           setDeck(freshDeck);
           setFrameIdx(0);
           if (freshDeck.length > 1) {
             preloadFrameImages(freshDeck[1]);
           }
-          schedulePrevClear();
           if (manual) {
             setTimerResetTick(function (n) {
               return n + 1;
@@ -372,10 +382,18 @@ export function PhotosDashboard(props: PhotosDashboardProps) {
       return;
     }
 
-    setPrevFrame(curFrame);
+    if (instant) {
+      if (fadeTimerRef.current !== null) {
+        window.clearTimeout(fadeTimerRef.current);
+        fadeTimerRef.current = null;
+      }
+      setPrevFrame(null);
+    } else {
+      setPrevFrame(curFrame);
+      schedulePrevClear();
+    }
     setFrameIdx(nextIdx);
     preloadFrameImages(curDeck[(nextIdx + 1) % curDeck.length]);
-    schedulePrevClear();
 
     if (manual) {
       setTimerResetTick(function (n) {
@@ -404,6 +422,21 @@ export function PhotosDashboard(props: PhotosDashboardProps) {
       fetchPhotos(false);
     },
     [props.preload, props.isActive]
+  );
+
+  // Advance to a fresh preloaded photo/collage whenever rotating back onto the Photos slide
+  useEffect(
+    function () {
+      var prevActive = wasActiveRef.current;
+      wasActiveRef.current = props.isActive;
+      if (props.isActive) {
+        if (!prevActive && hasActivatedOnceRef.current && deckRef.current.length > 1) {
+          stepFrame(1, false, true);
+        }
+        hasActivatedOnceRef.current = true;
+      }
+    },
+    [props.isActive]
   );
 
   // Fetch when Photos slide activates (if stale) + refresh album list every 30 min
