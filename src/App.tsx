@@ -202,6 +202,12 @@ function setThemeColorMeta(hex: string): void {
     if (meta && meta.getAttribute('content') !== hex) {
       meta.setAttribute('content', hex);
     }
+    if (document.documentElement && document.documentElement.style.backgroundColor !== hex) {
+      document.documentElement.style.backgroundColor = hex;
+    }
+    if (document.body && document.body.style.backgroundColor !== hex) {
+      document.body.style.backgroundColor = hex;
+    }
   } catch (_err) {
     // Ignore DOM errors
   }

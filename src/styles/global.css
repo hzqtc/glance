@@ -185,8 +185,8 @@ body,
 .carousel-dots {
   position: fixed;
   left: 50%;
-  bottom: 4px;
-  bottom: calc(4px + env(safe-area-inset-bottom));
+  bottom: 2px;
+  bottom: calc(2px + env(safe-area-inset-bottom));
   transform: translate3d(-50%, 0, 0);
   z-index: 6;
   display: flex;
@@ -3041,20 +3041,38 @@ body,
 /* Targeted vertical fit tuning for iPad mini 6 (1133x744 + Home Indicator) without affecting iPad mini 2 (1024x768) */
 @media (max-height: 750px) {
   .dashboard-content {
-    padding: 18px 24px 18px 24px;
-    padding-top: calc(6px + env(safe-area-inset-top));
-    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+    padding: 18px 24px 20px 24px;
+    padding-top: calc(10px + env(safe-area-inset-top));
+    padding-bottom: calc(20px + env(safe-area-inset-bottom));
   }
 
-  .stocks-content,
+  .stocks-content {
+    padding-top: calc(10px + env(safe-area-inset-top));
+    padding-bottom: calc(20px + env(safe-area-inset-bottom));
+  }
+
   .cal-content {
-    padding-top: calc(6px + env(safe-area-inset-top));
-    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+    padding-top: calc(20px + env(safe-area-inset-top));
+    padding-bottom: calc(20px + env(safe-area-inset-bottom));
   }
 
+  /* Keep top-center controls below iPadOS's top status-bar blur zone */
+  .hero-top-center {
+    top: 24px;
+  }
+
+  .stocks-hero-top .hero-top-center {
+    top: 20px;
+  }
+
+  .top-controls {
+    opacity: 0.8;
+  }
+
+  /* Center carousel indicator evenly between bottom cards and iPadOS Home Indicator */
   .carousel-dots {
     bottom: 2px;
-    bottom: calc(0px + env(safe-area-inset-bottom));
+    bottom: calc(-1px + env(safe-area-inset-bottom));
   }
 
   .carousel-dot {
