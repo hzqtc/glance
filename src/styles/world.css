@@ -1,0 +1,335 @@
+/* ==========================================================================
+   World Day/Night Map & FX Dashboard (Slide 3)
+   ========================================================================== */
+.world-slide {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  --text-primary: rgba(255, 255, 255, 0.97);
+  --text-secondary: rgba(226, 236, 252, 0.84);
+  --text-muted: rgba(186, 206, 234, 0.68);
+  --surface-ribbon: rgba(24, 38, 68, 0.44);
+  --surface-card: rgba(20, 34, 62, 0.48);
+  --surface-card-active: rgba(42, 66, 112, 0.64);
+  --divider-line: rgba(196, 220, 255, 0.14);
+  --card-shadow: rgba(0, 0, 0, 0.18);
+  color: var(--text-primary);
+  background: linear-gradient(155deg, #091120 0%, #0e1a32 52%, #080f1d 100%);
+}
+
+.world-backdrop {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 24% 18%, rgba(56, 189, 248, 0.14) 0%, rgba(56, 189, 248, 0) 56%),
+    radial-gradient(circle at 80% 76%, rgba(251, 191, 36, 0.1) 0%, rgba(251, 191, 36, 0) 54%);
+}
+
+.world-content {
+  max-width: none;
+  justify-content: flex-start;
+  padding-top: 20px;
+  padding-top: calc(20px + env(safe-area-inset-top));
+  padding-right: 0;
+  padding-bottom: 20px;
+  padding-bottom: calc(20px + env(safe-area-inset-bottom));
+  padding-left: 0;
+}
+
+.world-header {
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 36px;
+  margin-bottom: 10px;
+  padding: 0 56px 0 26px;
+  padding-right: calc(56px + env(safe-area-inset-right));
+  padding-left: calc(26px + env(safe-area-inset-left));
+  flex-shrink: 0;
+}
+
+.world-header-left {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.world-title {
+  font-size: 28px;
+  font-weight: 300;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  margin-right: 12px;
+  white-space: nowrap;
+}
+
+.world-utc-tag {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.world-header-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate3d(-50%, -50%, 0);
+  z-index: 4;
+}
+
+.world-controls {
+  opacity: 0.86;
+}
+
+.world-controls .ctrl-btn-world-icon {
+  min-width: 28px;
+  width: 28px;
+  height: 24px;
+  padding: 0;
+  opacity: 0.55;
+}
+
+.world-controls .ctrl-btn-world-icon.ctrl-btn-selected {
+  opacity: 1;
+}
+
+.world-controls .world-icon-flights {
+  color: #7dd3fc;
+}
+
+.world-controls .world-icon-celestial {
+  color: #fde047;
+}
+
+.world-controls .world-icon-iss {
+  color: #e879f9;
+}
+
+.world-controls .world-icon-quakes {
+  color: #fb923c;
+}
+
+.world-controls .world-icon-aurora {
+  color: #34d399;
+}
+
+.world-controls .world-icon-storms {
+  color: #fda4af;
+}
+
+.world-controls:hover,
+.world-controls:active {
+  opacity: 1;
+}
+
+.world-header-right {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.world-map-card {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  padding: 0;
+  border-radius: 0;
+  background-color: transparent;
+  box-shadow: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.world-map-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.world-arc-group,
+.world-city-pin,
+.world-iss-marker,
+.world-quake-pin,
+.world-storm-pin,
+.world-aurora-layer,
+.world-map-popover {
+  cursor: pointer;
+}
+
+.world-pin-name,
+.world-pin-sub {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+  paint-order: stroke;
+  stroke: rgba(7, 13, 26, 0.88);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+
+.world-fx-row {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  width: 100%;
+  margin-top: 12px;
+  padding: 0 56px 0 26px;
+  padding-right: calc(56px + env(safe-area-inset-right));
+  padding-left: calc(26px + env(safe-area-inset-left));
+  flex-shrink: 0;
+  transition: opacity 0.2s ease;
+}
+
+.world-fx-loading {
+  opacity: 0.65;
+}
+
+.world-fx-card {
+  flex: 1;
+  min-width: 0;
+  padding: 12px 16px 11px 16px;
+  border-radius: 16px;
+  background-color: var(--surface-card);
+  box-shadow: 0 6px 18px var(--card-shadow);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.world-fx-card:not(:last-child) {
+  margin-right: 12px;
+}
+
+.world-fx-top {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.world-fx-pair-wrap {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  min-width: 0;
+}
+
+.world-fx-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  background-color: rgba(56, 189, 248, 0.16);
+  color: #bae6fd;
+  font-size: 11px;
+  font-weight: 700;
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+
+.world-fx-pair {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.world-fx-mid {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 3px;
+}
+
+.world-fx-rate {
+  font-size: 28px;
+  font-weight: 300;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.world-fx-spark {
+  display: block;
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+.world-fx-sub {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Compact 6-card FX strip (fits 1024px iPad mini 2 cleanly in a single row) */
+.world-fx-row-compact .world-fx-card {
+  padding: 10px 10px 9px 10px;
+  border-radius: 14px;
+}
+
+.world-fx-row-compact .world-fx-card:not(:last-child) {
+  margin-right: 8px;
+}
+
+.world-fx-row-compact .world-fx-top {
+  margin-bottom: 5px;
+}
+
+.world-fx-row-compact .world-fx-badge {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  font-size: 9.5px;
+  margin-right: 5px;
+}
+
+.world-fx-row-compact .world-fx-pair {
+  font-size: 11px;
+  letter-spacing: 0.01em;
+}
+
+.world-fx-row-compact .stock-pct-badge {
+  padding: 2px 5px;
+  font-size: 10px;
+}
+
+.world-fx-row-compact .world-fx-mid {
+  margin-bottom: 4px;
+}
+
+.world-fx-row-compact .world-fx-rate {
+  font-size: 20px;
+}
+
+.world-fx-row-compact .world-fx-spark {
+  margin-left: 4px;
+}
+
+.world-fx-row-compact .world-fx-sub {
+  font-size: 10.5px;
+}

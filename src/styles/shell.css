@@ -1,0 +1,410 @@
+/* Vertical swipe carousel (Weather <-> Stocks <-> Calendar <-> World <-> Photos) */
+.carousel-track {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 500%;
+  transition: transform 0.38s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.carousel-slide {
+  position: relative;
+  width: 100%;
+  height: 20%;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.weather-slide {
+  color: var(--text-primary);
+}
+
+/* Right-side vertical anchor for dashboard switcher rail & optional countdown pill */
+.carousel-rail-wrap {
+  position: fixed;
+  top: 50%;
+  right: 10px;
+  right: calc(10px + env(safe-area-inset-right));
+  transform: translate3d(0, -50%, 0);
+  z-index: 6;
+}
+
+/* Right-side vertical dashboard switcher pill (mirrors top-controls style) */
+.carousel-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 32px;
+  padding: 5px 0;
+  border-radius: 999px;
+  background-color: rgba(28, 46, 82, 0.38);
+  color: rgba(255, 255, 255, 0.78);
+  opacity: 0.74;
+  transition: opacity 0.3s ease, background-color 0.6s ease, color 0.4s ease;
+}
+
+.carousel-rail:hover,
+.carousel-rail:active {
+  opacity: 0.98;
+}
+
+.carousel-rail-light {
+  background-color: rgba(255, 255, 255, 0.28);
+  color: rgba(20, 38, 68, 0.8);
+}
+
+.carousel-rail-photos {
+  background-color: rgba(6, 9, 17, 0.42);
+  color: rgba(255, 255, 255, 0.84);
+  opacity: 0.45;
+}
+
+.carousel-rail-photos:hover,
+.carousel-rail-photos:active {
+  opacity: 0.95;
+}
+
+.rail-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  opacity: 0.62;
+  cursor: pointer;
+  outline: none;
+  -webkit-appearance: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.2s ease, color 0.2s ease, opacity 0.2s ease, transform 0.15s ease;
+}
+
+.rail-btn:not(:last-child) {
+  margin-bottom: 4px;
+}
+
+.rail-btn:active {
+  transform: scale(0.92);
+}
+
+.rail-btn-active {
+  opacity: 1;
+  color: rgba(255, 255, 255, 0.98);
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.carousel-rail-light .rail-btn-active {
+  color: rgba(12, 24, 46, 0.96);
+  background-color: rgba(15, 38, 74, 0.14);
+}
+
+.rail-btn-paused {
+  color: #fbbf24;
+  background-color: rgba(251, 191, 36, 0.18);
+}
+
+.carousel-rail-light .rail-btn-paused {
+  color: #b45309;
+  background-color: rgba(245, 158, 11, 0.22);
+}
+
+/* Minimalist auto-rotation countdown pill anchored cleanly below the vertical rail */
+.rotate-countdown-pill {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translate3d(-50%, 0, 0);
+  margin-top: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background-color: rgba(28, 46, 82, 0.38);
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  opacity: 0.68;
+  pointer-events: none;
+  transition: opacity 0.3s ease, background-color 0.6s ease, color 0.4s ease;
+}
+
+.rotate-countdown-light {
+  background-color: rgba(255, 255, 255, 0.28);
+  color: rgba(20, 38, 68, 0.78);
+}
+
+.rotate-countdown-photos {
+  background-color: rgba(6, 9, 17, 0.42);
+  color: rgba(255, 255, 255, 0.82);
+  opacity: 0.42;
+}
+
+.atmosphere-layer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.atmosphere-canvas {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.celestial-moon {
+  position: absolute;
+  width: 82px;
+  height: 82px;
+  margin-left: -41px;
+  margin-top: -41px;
+  pointer-events: none;
+  transition: opacity 1.4s ease, left 1.4s ease, top 1.4s ease;
+}
+
+.celestial-moon-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.dashboard-content {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 1280px;
+  height: 100%;
+  margin: 0 auto;
+  padding: 26px 56px 22px 26px;
+  padding-top: calc(26px + env(safe-area-inset-top));
+  padding-right: calc(56px + env(safe-area-inset-right));
+  padding-bottom: calc(22px + env(safe-area-inset-bottom));
+  padding-left: calc(26px + env(safe-area-inset-left));
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  opacity: 0;
+  transform: translate3d(0, 10px, 0);
+  transition: opacity 0.9s ease, transform 0.9s ease;
+}
+
+.dashboard-ready .dashboard-content {
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+}
+
+/* Subtle, understated top-center controls pill inside hero-top */
+.hero-top-center {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translate3d(-50%, 0, 0);
+  z-index: 5;
+}
+
+.top-controls {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  height: 28px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background-color: var(--surface-ribbon);
+  opacity: 0.62;
+  transition: opacity 0.3s ease, background-color 0.6s ease;
+}
+
+.top-controls:hover,
+.top-controls:active {
+  opacity: 0.96;
+}
+
+.top-controls > :not(:last-child) {
+  margin-right: 2px;
+}
+
+.ctrl-btn {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  outline: none;
+  -webkit-appearance: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 0.2s ease, opacity 0.2s ease, transform 0.15s ease;
+}
+
+.ctrl-btn:active {
+  transform: scale(0.94);
+  color: var(--text-primary);
+}
+
+.ctrl-btn-icon {
+  padding: 0 9px;
+}
+
+.ctrl-mode-group {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+}
+
+.ctrl-btn-mode {
+  min-width: 26px;
+  height: 22px;
+  padding: 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  transition: background-color 0.2s ease, color 0.2s ease, transform 0.15s ease;
+}
+
+.ctrl-btn-mode:not(:last-child) {
+  margin-right: 2px;
+}
+
+.ctrl-btn-selected {
+  background-color: rgba(255, 255, 255, 0.18);
+  color: var(--text-primary);
+}
+
+.stocks-slide .top-controls {
+  opacity: 0.82;
+}
+
+.stocks-slide .top-controls:hover,
+.stocks-slide .top-controls:active {
+  opacity: 1;
+}
+
+.ctrl-btn-on {
+  color: var(--text-primary);
+}
+
+.ctrl-btn-off {
+  opacity: 0.65;
+}
+
+.ctrl-svg {
+  display: block;
+}
+
+.ctrl-unit-active {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.ctrl-unit-slash {
+  margin: 0 2px;
+  opacity: 0.45;
+}
+
+.ctrl-unit-alt {
+  opacity: 0.55;
+}
+
+.ctrl-spinning {
+  animation: ctrlSpin 0.65s linear infinite;
+}
+
+@keyframes ctrlSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.anim-paused .hero-clock-colon {
+  animation: none;
+  opacity: 0.82;
+}
+
+.active-stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  animation: stageFadeIn 0.42s ease;
+}
+
+@keyframes stageFadeIn {
+  0% {
+    opacity: 0.25;
+    transform: translate3d(0, 6px, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.night-veil {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 100;
+  background-color: #02050c;
+  pointer-events: none;
+  transform: translate3d(0, 0, 0);
+  transition: opacity 4s ease;
+}
+
+/* Boot / loading state */
+.boot-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.boot-title {
+  font-size: 46px;
+  font-weight: 200;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+
+.boot-sub {
+  font-size: 16px;
+  color: var(--text-secondary);
+}

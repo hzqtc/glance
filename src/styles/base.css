@@ -1,0 +1,161 @@
+/* Safari 12 / iPad mini 2 (1024x768 Landscape) safe global styles.
+   Deliberately avoids flex gap, inset, dvh, oklch, aspect-ratio, and heavy animated backdrop-filter. */
+
+:root {
+  --text-primary: rgba(255, 255, 255, 0.97);
+  --text-secondary: rgba(255, 255, 255, 0.84);
+  --text-muted: rgba(214, 228, 250, 0.72);
+  --surface-ribbon: rgba(28, 46, 82, 0.26);
+  --surface-card: rgba(24, 42, 76, 0.3);
+  --surface-card-active: rgba(46, 74, 124, 0.46);
+  --divider-line: rgba(196, 220, 255, 0.16);
+  --card-shadow: rgba(0, 0, 0, 0.12);
+  --card-shadow-active: rgba(0, 0, 0, 0.18);
+  --badge-bg: rgba(255, 255, 255, 0.14);
+  --track-bg: rgba(255, 255, 255, 0.2);
+  --precip-color: #bae6fd;
+  --active-dot-color: #93c5fd;
+  --hero-shadow: 0 4px 26px rgba(0, 0, 0, 0.24);
+  --hero-sub-shadow: 0 2px 12px rgba(0, 0, 0, 0.22);
+  /* WeatherIcon colors (dark/twilight default) */
+  --wi-sun-core: #fcd34d;
+  --wi-sun-rays: #fde68a;
+  --wi-moon: #e2ecff;
+  --wi-star: #fde68a;
+  --wi-cloud: rgba(241, 245, 249, 0.96);
+  --wi-cloud-back: rgba(203, 213, 225, 0.68);
+  --wi-fog: rgba(226, 232, 240, 0.84);
+  --wi-rain: #7dd3fc;
+  --wi-snow: #e0f2fe;
+  --wi-bolt: #fde047;
+}
+
+/* Adaptive surface contrast across Night / Twilight / Day skies */
+.theme-night {
+  --text-primary: rgba(255, 255, 255, 0.97);
+  --text-secondary: rgba(255, 255, 255, 0.84);
+  --text-muted: rgba(210, 226, 252, 0.72);
+  --surface-ribbon: rgba(28, 46, 82, 0.26);
+  --surface-card: rgba(24, 42, 76, 0.3);
+  --surface-card-active: rgba(46, 74, 124, 0.46);
+  --divider-line: rgba(196, 220, 255, 0.16);
+  --card-shadow: rgba(0, 0, 0, 0.12);
+  --card-shadow-active: rgba(0, 0, 0, 0.18);
+  --badge-bg: rgba(255, 255, 255, 0.14);
+  --track-bg: rgba(255, 255, 255, 0.2);
+}
+
+.theme-twilight {
+  --text-primary: rgba(255, 255, 255, 0.97);
+  --text-secondary: rgba(255, 255, 255, 0.86);
+  --text-muted: rgba(255, 240, 232, 0.74);
+  --surface-ribbon: rgba(42, 34, 70, 0.24);
+  --surface-card: rgba(38, 30, 64, 0.28);
+  --surface-card-active: rgba(62, 48, 96, 0.44);
+  --divider-line: rgba(255, 236, 224, 0.18);
+  --card-shadow: rgba(14, 10, 28, 0.12);
+  --badge-bg: rgba(255, 255, 255, 0.16);
+  --track-bg: rgba(255, 255, 255, 0.22);
+}
+
+/* Bright, airy light frosted glass during daytime */
+.theme-day {
+  --text-primary: rgba(12, 24, 46, 0.95);
+  --text-secondary: rgba(20, 38, 68, 0.86);
+  --text-muted: rgba(36, 58, 92, 0.78);
+  --surface-ribbon: rgba(255, 255, 255, 0.18);
+  --surface-card: rgba(255, 255, 255, 0.18);
+  --surface-card-active: rgba(255, 255, 255, 0.48);
+  --divider-line: rgba(15, 38, 74, 0.12);
+  --card-shadow: rgba(18, 54, 102, 0.07);
+  --card-shadow-active: rgba(18, 54, 102, 0.15);
+  --badge-bg: rgba(15, 42, 84, 0.1);
+  --track-bg: rgba(15, 42, 84, 0.14);
+  --precip-color: #0369a1;
+  --active-dot-color: #2563eb;
+  --hero-shadow: 0 2px 18px rgba(255, 255, 255, 0.55);
+  --hero-sub-shadow: 0 1px 10px rgba(255, 255, 255, 0.45);
+  /* Light-mode weather icon palette */
+  --wi-sun-core: #f59e0b;
+  --wi-sun-rays: #d97706;
+  --wi-moon: #475569;
+  --wi-star: #d97706;
+  --wi-cloud: #475569;
+  --wi-cloud-back: #64748b;
+  --wi-fog: #475569;
+  --wi-rain: #0284c7;
+  --wi-snow: #2563eb;
+  --wi-bolt: #d97706;
+}
+
+.theme-day .badge-home {
+  color: #065f46;
+  background-color: rgba(16, 185, 129, 0.16);
+  border-color: rgba(16, 185, 129, 0.38);
+}
+
+.theme-day .badge-day {
+  color: #92400e;
+  background-color: rgba(245, 158, 11, 0.18);
+  border-color: rgba(217, 119, 6, 0.38);
+}
+
+.theme-day .headsup-rain {
+  color: #075985;
+  background-color: rgba(255, 255, 255, 0.72);
+  border-color: rgba(2, 132, 199, 0.42);
+}
+
+.theme-day .headsup-aqi {
+  color: #92400e;
+  background-color: rgba(255, 255, 255, 0.75);
+  border-color: rgba(217, 119, 6, 0.45);
+}
+
+.theme-day .status-dot {
+  background-color: #10b981;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.55);
+}
+
+*,
+*:before,
+*:after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#app {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: manipulation;
+  background-color: #0b1221;
+  color: var(--text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.dashboard-root {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  color: var(--text-primary);
+}
