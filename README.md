@@ -105,7 +105,7 @@ npm run build && npm run preview
 Append `?demo=<mode>` to preview any condition immediately:
 `?demo=night`, `?demo=day`, `?demo=sunset`, `?demo=rain`, `?demo=snow`, `?demo=storm`, `?demo=fog`, `?demo=cloudy`, `?demo=wind`.
 
-`?demo=calendar` shows three sample calendars (Work, Personal, Family) on the Calendar slide instead of your private feeds: recurring events, a busy "today", and an upcoming trip countdown, all generated relative to the current date by [`api/calendar_demo.go`](./api/calendar_demo.go) and parsed by the real `.ics` pipeline.
+`?demo=calendar` shows three sample calendars (Work, Personal, Family) on the Calendar slide instead of your private feeds: recurring events, a busy "today", and an upcoming trip countdown, all generated relative to the current date by [`api/calendar.go`](./api/calendar.go) and parsed by the real `.ics` pipeline.
 
 `?demo=photos` fills the Photos slide with 15 bundled stock photos (from [`public/demo/photos/`](./public/demo/photos/), Unsplash License; see [CREDITS](./public/demo/photos/CREDITS.md)) instead of your Google Photos albums — handy for screenshots or trying the collage layouts without configuring `PHOTOS_ALBUM_URLS`.
 
