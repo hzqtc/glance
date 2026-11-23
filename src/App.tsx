@@ -527,6 +527,10 @@ function DashboardShell(props: DashboardShellProps) {
   var touchStartRef = useRef<{ x: number; y: number; ignore: boolean } | null>(null);
   var autoRotateRef = useRef<boolean>(true);
   var manualPauseUntilRef = useRef<number>(0);
+  var gestureActiveRef = useRef<boolean>(false);
+  var gestureStartMsRef = useRef<number>(0);
+  var gesturePendingRef = useRef<boolean>(false);
+  var gestureFlushTimerRef = useRef<number | null>(null);
   var manualPauseSecRef = useRef<number>(300);
   var lastPauseBumpMsRef = useRef<number>(0);
   var lastActivityTickMsRef = useRef<number>(0);
@@ -570,8 +574,23 @@ function DashboardShell(props: DashboardShellProps) {
     }
   }
 
+  // While a finger is down, only refresh the pause/idle refs (which the rotation
+  // timer reads) and defer the state updates until shortly after release: a
+  // dashboard-wide re-render mid-gesture stalls finger-following drags (e.g. the
+  // calendar month strip) on the iPad mini 2.
   function recordUserActivity() {
     var now = Date.now();
+    // Safety: a gesture whose touchend never arrived stops deferring after 10s
+    if (gestureActiveRef.current && now - gestureStartMsRef.current > 10000) {
+      gestureActiveRef.current = false;
+    }
+    if (gestureActiveRef.current) {
+      if (autoRotateRef.current && manualPauseSecRef.current > 0) {
+        manualPauseUntilRef.current = now + manualPauseSecRef.current * 1000;
+      }
+      gesturePendingRef.current = true;
+      return;
+    }
     if (now - lastActivityTickMsRef.current >= 1000) {
       lastActivityTickMsRef.current = now;
       setActivityTick(function (n) {
@@ -594,12 +613,44 @@ function DashboardShell(props: DashboardShellProps) {
 
     function handleInteraction(e: Event) {
       if (e && e.isTrusted === false) return;
+      if (e.type === 'touchstart') {
+        gestureActiveRef.current = true;
+        gestureStartMsRef.current = Date.now();
+        if (gestureFlushTimerRef.current !== null) {
+          window.clearTimeout(gestureFlushTimerRef.current);
+          gestureFlushTimerRef.current = null;
+        }
+      }
       recordUserActivity();
+    }
+
+    // Apply the deferred activity once the gesture (and its ~300ms snap) is over
+    function handleGestureEnd(e: Event) {
+      if (e && e.isTrusted === false) return;
+      if (e.type === 'touchend' && (e as TouchEvent).touches && (e as TouchEvent).touches.length > 0) {
+        return;
+      }
+      if (gestureFlushTimerRef.current !== null) {
+        window.clearTimeout(gestureFlushTimerRef.current);
+      }
+      gestureFlushTimerRef.current = window.setTimeout(function () {
+        gestureFlushTimerRef.current = null;
+        gestureActiveRef.current = false;
+        if (gesturePendingRef.current) {
+          gesturePendingRef.current = false;
+          // Re-arm the visible pause state: the ref was already extended mid-gesture
+          manualPauseUntilRef.current = 0;
+          lastActivityTickMsRef.current = 0;
+          recordUserActivity();
+        }
+      }, 420); // after the ~380ms month/slide transition
     }
 
     var opts: AddEventListenerOptions = { capture: true, passive: true };
     target.addEventListener('touchstart', handleInteraction, opts);
     target.addEventListener('touchmove', handleInteraction, opts);
+    target.addEventListener('touchend', handleGestureEnd, opts);
+    target.addEventListener('touchcancel', handleGestureEnd, opts);
     target.addEventListener('mousedown', handleInteraction, opts);
     target.addEventListener('wheel', handleInteraction, opts);
     target.addEventListener('scroll', handleInteraction, opts);
@@ -608,6 +659,11 @@ function DashboardShell(props: DashboardShellProps) {
     return function () {
       target.removeEventListener('touchstart', handleInteraction, true);
       target.removeEventListener('touchmove', handleInteraction, true);
+      target.removeEventListener('touchend', handleGestureEnd, true);
+      target.removeEventListener('touchcancel', handleGestureEnd, true);
+      if (gestureFlushTimerRef.current !== null) {
+        window.clearTimeout(gestureFlushTimerRef.current);
+      }
       target.removeEventListener('mousedown', handleInteraction, true);
       target.removeEventListener('wheel', handleInteraction, true);
       target.removeEventListener('scroll', handleInteraction, true);

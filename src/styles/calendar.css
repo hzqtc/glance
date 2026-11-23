@@ -399,8 +399,8 @@
 }
 
 /* Draggable month strip: prev | current | next, resting on the middle panel.
-   During a drag the track's transform is set inline (px); at rest it falls back
-   to this percentage offset. */
+   A swipe animates the track's inline transform (px) one month over; at rest it
+   falls back to this percentage offset. */
 .cal-weeks-viewport {
   position: relative;
   flex: 1;

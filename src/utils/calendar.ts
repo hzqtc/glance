@@ -333,7 +333,25 @@ export interface LunarDateInfo {
   isSolarTerm: boolean;
 }
 
+// Each date is computed once: the 3-month calendar strip asks for 126 dates
+// per render, and the computation walks lunar years from 1900.
+var lunarDateCache: { [key: number]: LunarDateInfo | null } = {};
+
 export function getChineseLunarDate(
+  year: number,
+  month: number,
+  day: number
+): LunarDateInfo | null {
+  var cacheKey = year * 10000 + month * 100 + day;
+  if (cacheKey in lunarDateCache) {
+    return lunarDateCache[cacheKey];
+  }
+  var result = computeChineseLunarDate(year, month, day);
+  lunarDateCache[cacheKey] = result;
+  return result;
+}
+
+function computeChineseLunarDate(
   year: number,
   month: number,
   day: number
