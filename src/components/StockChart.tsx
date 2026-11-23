@@ -66,12 +66,6 @@ export function StockChart(props: StockChartProps) {
     if (props.baseline > maxV) maxV = props.baseline;
   }
 
-  var span = maxV - minV;
-  var pad = span > 0 ? span * 0.1 : Math.max(0.5, Math.abs(maxV) * 0.01);
-  var yMin = minV - pad;
-  var yMax = maxV + pad;
-  var ySpan = Math.max(0.0001, yMax - yMin);
-
   var vbW = 800;
   var vbH = 200;
 
@@ -88,6 +82,31 @@ export function StockChart(props: StockChartProps) {
     pts[0].t <= sessionEnd;
   var sessionSpan = useProportional1D ? sessionEnd - sessionStart : 1;
 
+  // Detect Pre-Market (t < regularStart) and After Hours (t > regularEnd) zones on 1D
+  var hasPreMarket =
+    useProportional1D &&
+    regularStart > sessionStart &&
+    regularStart < sessionEnd &&
+    pts[0].t < regularStart;
+  var hasAfterHours =
+    useProportional1D &&
+    regularEnd > sessionStart &&
+    regularEnd < sessionEnd &&
+    pts[pts.length - 1].t > regularEnd;
+
+  var span = maxV - minV;
+  var basePad = span > 0 ? span * 0.1 : Math.max(0.5, Math.abs(maxV) * 0.01);
+  // Extra top headroom when Pre-Market / After Hours badges are shown so high peaks stay clear of them
+  var topPad =
+    hasPreMarket || hasAfterHours
+      ? span > 0
+        ? span * 0.22
+        : basePad * 2
+      : basePad;
+  var yMin = minV - basePad;
+  var yMax = maxV + topPad;
+  var ySpan = Math.max(0.0001, yMax - yMin);
+
   function pointX(idx: number): number {
     if (useProportional1D) {
       var ratio = (pts[idx].t - sessionStart) / sessionSpan;
@@ -101,18 +120,6 @@ export function StockChart(props: StockChartProps) {
   function pointY(val: number): number {
     return vbH - ((val - yMin) / ySpan) * vbH;
   }
-
-  // Detect Pre-Market (t < regularStart) and After Hours (t > regularEnd) zones on 1D
-  var hasPreMarket =
-    useProportional1D &&
-    regularStart > sessionStart &&
-    regularStart < sessionEnd &&
-    pts[0].t < regularStart;
-  var hasAfterHours =
-    useProportional1D &&
-    regularEnd > sessionStart &&
-    regularEnd < sessionEnd &&
-    pts[pts.length - 1].t > regularEnd;
 
   var regStartPct = hasPreMarket
     ? ((regularStart - sessionStart) / sessionSpan) * 100
@@ -155,9 +162,20 @@ export function StockChart(props: StockChartProps) {
         if (j > 0 && regLineParts.length > 0) {
           var prevX = pointX(j - 1);
           var prevY = pointY(pts[j - 1].v);
-          ahFirstX = prevX;
-          ahLineParts.push('M ' + prevX.toFixed(1) + ' ' + prevY.toFixed(1));
-          ahLineParts.push('L ' + px.toFixed(1) + ' ' + py.toFixed(1));
+          if (regEndX > prevX && px > regEndX) {
+            // Split cleanly at the exact Regular -> After Hours divider so strokes and fills never overlap
+            var ahFrac = (regEndX - prevX) / (px - prevX);
+            var ahSplitY = prevY + (py - prevY) * ahFrac;
+            regLineParts.push('L ' + regEndX.toFixed(1) + ' ' + ahSplitY.toFixed(1));
+            regLastX = regEndX;
+            ahFirstX = regEndX;
+            ahLineParts.push('M ' + regEndX.toFixed(1) + ' ' + ahSplitY.toFixed(1));
+            ahLineParts.push('L ' + px.toFixed(1) + ' ' + py.toFixed(1));
+          } else {
+            ahFirstX = prevX;
+            ahLineParts.push('M ' + prevX.toFixed(1) + ' ' + prevY.toFixed(1));
+            ahLineParts.push('L ' + px.toFixed(1) + ' ' + py.toFixed(1));
+          }
         } else {
           ahFirstX = px;
           ahLineParts.push('M ' + px.toFixed(1) + ' ' + py.toFixed(1));
@@ -169,12 +187,27 @@ export function StockChart(props: StockChartProps) {
     } else {
       if (regLineParts.length === 0) {
         if (j > 0 && pmLineParts.length > 0) {
-          // Connect smoothly from last Pre-Market point into first Regular point
+          // Split cleanly at the exact Pre-Market -> Regular divider so Regular stroke/fill never bleeds into Pre-Market
           var pmPrevX = pointX(j - 1);
           var pmPrevY = pointY(pts[j - 1].v);
-          regFirstX = pmPrevX;
-          regLineParts.push('M ' + pmPrevX.toFixed(1) + ' ' + pmPrevY.toFixed(1));
-          regLineParts.push('L ' + px.toFixed(1) + ' ' + py.toFixed(1));
+          if (regStartX > pmPrevX && px > regStartX) {
+            var pmFrac = (regStartX - pmPrevX) / (px - pmPrevX);
+            var pmSplitY = pmPrevY + (py - pmPrevY) * pmFrac;
+            pmLineParts.push('L ' + regStartX.toFixed(1) + ' ' + pmSplitY.toFixed(1));
+            pmLastX = regStartX;
+            regFirstX = regStartX;
+            regLineParts.push('M ' + regStartX.toFixed(1) + ' ' + pmSplitY.toFixed(1));
+            regLineParts.push('L ' + px.toFixed(1) + ' ' + py.toFixed(1));
+          } else if (px === regStartX) {
+            pmLineParts.push('L ' + px.toFixed(1) + ' ' + py.toFixed(1));
+            pmLastX = px;
+            regFirstX = px;
+            regLineParts.push('M ' + px.toFixed(1) + ' ' + py.toFixed(1));
+          } else {
+            regFirstX = pmPrevX;
+            regLineParts.push('M ' + pmPrevX.toFixed(1) + ' ' + pmPrevY.toFixed(1));
+            regLineParts.push('L ' + px.toFixed(1) + ' ' + py.toFixed(1));
+          }
         } else {
           regFirstX = px;
           regLineParts.push('M ' + px.toFixed(1) + ' ' + py.toFixed(1));
