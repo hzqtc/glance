@@ -1,4 +1,5 @@
-import type { TempUnit, WeatherKind } from '../types';
+import type { DailyForecast, TempUnit, WeatherKind } from '../types';
+import { formatWeekdayFromISO } from './time';
 
 export interface WeatherDescriptor {
   label: string;
@@ -121,6 +122,60 @@ export function formatDailySummary(
     var hrs = Math.round((sunshineSeconds / 3600) * 2) / 2;
     var hrStr = hrs % 1 === 0 ? String(hrs) : hrs.toFixed(1);
     return hrStr + 'h sun today';
+  }
+  return null;
+}
+
+/**
+ * One-line outlook for the days after today (today's own rain/sun total is
+ * shown on the Air & Conditions card). Priority: the next wet spell, then a
+ * notable temperature swing, then a dry stretch; null when nothing stands out.
+ */
+export function formatWeekOutlook(daily: DailyForecast[], units: TempUnit): string | null {
+  if (!daily || daily.length < 2) return null;
+  var ahead = daily.slice(1);
+
+  function dayName(idx: number): string {
+    return idx === 0 ? 'tomorrow' : formatWeekdayFromISO(ahead[idx].date, false);
+  }
+
+  // 1. Next wet spell (>= 50% chance), named by its weather (rain, snow, storms)
+  for (var i = 0; i < ahead.length; i++) {
+    if (ahead[i].precipProbMax >= 50) {
+      var end = i;
+      while (end + 1 < ahead.length && ahead[end + 1].precipProbMax >= 50) end++;
+      var kind = describeWMO(ahead[i].weatherCode).kind;
+      var noun = kind === 'snow' ? 'Snow' : kind === 'storm' ? 'Storms' : 'Rain';
+      var when = end > i ? dayName(i) + '–' + dayName(end) : dayName(i);
+      if (i === 0 && end > i) when = 'from tomorrow';
+      return noun + ' likely ' + when;
+    }
+  }
+
+  // 2. Notable warm-up or cool-down (>= 5°C / 9°F) versus today's high
+  var todayHigh = daily[0].highC;
+  var warmIdx = 0;
+  var coolIdx = 0;
+  for (var j = 1; j < ahead.length; j++) {
+    if (ahead[j].highC > ahead[warmIdx].highC) warmIdx = j;
+    if (ahead[j].highC < ahead[coolIdx].highC) coolIdx = j;
+  }
+  var warmDelta = ahead[warmIdx].highC - todayHigh;
+  var coolDelta = todayHigh - ahead[coolIdx].highC;
+  if (warmDelta >= 5 && warmDelta >= coolDelta) {
+    return 'Warming to ' + formatTemp(ahead[warmIdx].highC, units) + ' by ' + dayName(warmIdx);
+  }
+  if (coolDelta >= 5) {
+    return 'Cooling to ' + formatTemp(ahead[coolIdx].highC, units) + ' by ' + dayName(coolIdx);
+  }
+
+  // 3. A dry stretch (every remaining day under 20%)
+  var allDry = true;
+  for (var k = 0; k < ahead.length; k++) {
+    if (ahead[k].precipProbMax >= 20) allDry = false;
+  }
+  if (allDry) {
+    return 'Dry through ' + dayName(ahead.length - 1);
   }
   return null;
 }

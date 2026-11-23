@@ -8,6 +8,7 @@ import {
   formatDailySummary,
   formatLowVisibility,
   formatTemp,
+  formatWeekOutlook,
   formatWind,
 } from '../utils/weather';
 import { WeatherIcon } from './WeatherIcon';
@@ -52,20 +53,24 @@ export function InsightsBand(props: InsightsBandProps) {
         : null;
   var uvDesc = uvVal !== null ? describeUV(uvVal) : null;
 
-  var lowVis = formatLowVisibility(weather.visibilityM, props.units);
-
-  var dailySummary = formatDailySummary(
+  // Today's rain total / sunshine hours and any low-visibility note sit on the
+  // Air & Conditions card; the forecast card gets a look at the days ahead.
+  var todaySummary = formatDailySummary(
     weather.precipSumMm,
     weather.sunshineSeconds,
     props.units
   );
+  var lowVis = formatLowVisibility(weather.visibilityM, props.units);
+  var conditionsSub =
+    todaySummary && lowVis ? todaySummary + ' · ' + lowVis : todaySummary || lowVis;
+  var weekOutlook = formatWeekOutlook(daily, props.units);
 
   return (
     <section class="insights-band" aria-label="5-day forecast and air conditions">
       <div class="insights-card insights-forecast">
         <div class="insights-header">
           <span class="insights-title">5-Day Forecast</span>
-          {dailySummary ? <span class="insights-sub">{dailySummary}</span> : null}
+          {weekOutlook ? <span class="insights-sub">{weekOutlook}</span> : null}
         </div>
 
         <div class="daily-grid">
@@ -119,7 +124,7 @@ export function InsightsBand(props: InsightsBandProps) {
       >
         <div class="insights-header">
           <span class="insights-title">Air &amp; Conditions</span>
-          {lowVis ? <span class="insights-sub">{lowVis}</span> : null}
+          {conditionsSub ? <span class="insights-sub">{conditionsSub}</span> : null}
         </div>
 
         <div class="atmos-metrics">
