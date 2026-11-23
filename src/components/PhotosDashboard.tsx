@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
-import type { PhotoItem, PhotosResponse } from '../types';
+import type { PhotoItem, PhotoLocationsResponse, PhotosResponse } from '../types';
 import { buildCollageDeck } from '../utils/collage';
 import type { CollageFrame } from '../utils/collage';
 import { getDemoPhotosResponse, isPhotosDemoMode } from '../data/demoPhotos';
@@ -31,7 +31,41 @@ function preloadFrameImages(frame: CollageFrame | null): void {
   }
 }
 
-function renderCollageFrame(frame: CollageFrame) {
+function renderPhotoMeta(
+  item: PhotoItem,
+  locationsById: { [id: string]: string },
+  isSingle: boolean
+) {
+  var loc = item.location || locationsById[item.id] || '';
+  var date = item.takenDate || '';
+  if (!loc && !date) {
+    return null;
+  }
+  return (
+    <div
+      class={
+        isSingle
+          ? 'photo-meta-overlay photo-meta-overlay-single'
+          : 'photo-meta-overlay'
+      }
+    >
+      <div class="photo-meta-line">
+        {loc ? <span class="photo-meta-loc">{loc}</span> : null}
+        {loc && date ? (
+          <span class="photo-meta-sep" aria-hidden="true">
+            ·
+          </span>
+        ) : null}
+        {date ? <span class="photo-meta-date">{date}</span> : null}
+      </div>
+    </div>
+  );
+}
+
+function renderCollageFrame(
+  frame: CollageFrame,
+  locationsById: { [id: string]: string }
+) {
   var items = frame.items;
 
   if (frame.layout === 'single' && items.length >= 1) {
@@ -44,6 +78,7 @@ function renderCollageFrame(frame: CollageFrame) {
           draggable={false}
           referrerPolicy="no-referrer"
         />
+        {renderPhotoMeta(items[0], locationsById, true)}
       </div>
     );
   }
@@ -66,6 +101,7 @@ function renderCollageFrame(frame: CollageFrame) {
           draggable={false}
           referrerPolicy="no-referrer"
         />
+        {renderPhotoMeta(items[0], locationsById, true)}
       </div>
     );
   }
@@ -81,6 +117,7 @@ function renderCollageFrame(frame: CollageFrame) {
             draggable={false}
             referrerPolicy="no-referrer"
           />
+          {renderPhotoMeta(items[0], locationsById, false)}
         </div>
         <div class="collage-tile collage-tile-half collage-tile-last">
           <img
@@ -90,6 +127,7 @@ function renderCollageFrame(frame: CollageFrame) {
             draggable={false}
             referrerPolicy="no-referrer"
           />
+          {renderPhotoMeta(items[1], locationsById, false)}
         </div>
       </div>
     );
@@ -106,6 +144,7 @@ function renderCollageFrame(frame: CollageFrame) {
             draggable={false}
             referrerPolicy="no-referrer"
           />
+          {renderPhotoMeta(items[0], locationsById, false)}
         </div>
         <div class="collage-tile collage-tile-third">
           <img
@@ -115,6 +154,7 @@ function renderCollageFrame(frame: CollageFrame) {
             draggable={false}
             referrerPolicy="no-referrer"
           />
+          {renderPhotoMeta(items[1], locationsById, false)}
         </div>
         <div class="collage-tile collage-tile-third collage-tile-last">
           <img
@@ -124,6 +164,7 @@ function renderCollageFrame(frame: CollageFrame) {
             draggable={false}
             referrerPolicy="no-referrer"
           />
+          {renderPhotoMeta(items[2], locationsById, false)}
         </div>
       </div>
     );
@@ -140,6 +181,7 @@ function renderCollageFrame(frame: CollageFrame) {
             draggable={false}
             referrerPolicy="no-referrer"
           />
+          {renderPhotoMeta(items[0], locationsById, false)}
         </div>
         <div class="collage-bento-stack collage-tile-last">
           <div class="collage-tile collage-bento-cell">
@@ -150,6 +192,7 @@ function renderCollageFrame(frame: CollageFrame) {
               draggable={false}
               referrerPolicy="no-referrer"
             />
+            {renderPhotoMeta(items[1], locationsById, false)}
           </div>
           <div class="collage-tile collage-bento-cell collage-bento-cell-last">
             <img
@@ -159,6 +202,7 @@ function renderCollageFrame(frame: CollageFrame) {
               draggable={false}
               referrerPolicy="no-referrer"
             />
+            {renderPhotoMeta(items[2], locationsById, false)}
           </div>
         </div>
       </div>
@@ -177,6 +221,7 @@ function renderCollageFrame(frame: CollageFrame) {
               draggable={false}
               referrerPolicy="no-referrer"
             />
+            {renderPhotoMeta(items[1], locationsById, false)}
           </div>
           <div class="collage-tile collage-bento-cell collage-bento-cell-last">
             <img
@@ -186,6 +231,7 @@ function renderCollageFrame(frame: CollageFrame) {
               draggable={false}
               referrerPolicy="no-referrer"
             />
+            {renderPhotoMeta(items[2], locationsById, false)}
           </div>
         </div>
         <div class="collage-tile collage-bento-hero collage-tile-last">
@@ -196,6 +242,7 @@ function renderCollageFrame(frame: CollageFrame) {
             draggable={false}
             referrerPolicy="no-referrer"
           />
+          {renderPhotoMeta(items[0], locationsById, false)}
         </div>
       </div>
     );
@@ -212,6 +259,7 @@ function renderCollageFrame(frame: CollageFrame) {
           draggable={false}
           referrerPolicy="no-referrer"
         />
+        {renderPhotoMeta(items[0], locationsById, true)}
       </div>
     );
   }
@@ -247,6 +295,10 @@ export function PhotosDashboard(props: PhotosDashboardProps) {
   var timerResetTick = _timerResetState[0];
   var setTimerResetTick = _timerResetState[1];
 
+  var _locState = useState<{ [id: string]: string }>({});
+  var locationsById = _locState[0];
+  var setLocationsById = _locState[1];
+
   var photosRef = useRef<PhotoItem[]>([]);
   var deckRef = useRef<CollageFrame[]>([]);
   var frameIdxRef = useRef<number>(0);
@@ -261,9 +313,68 @@ export function PhotosDashboard(props: PhotosDashboardProps) {
   var mouseStartRef = useRef<{ x: number; y: number } | null>(null);
   var suppressTapUntilRef = useRef<number>(0);
   var wheelCooldownRef = useRef<number>(0);
+  var requestedLocIdsRef = useRef<{ [id: string]: boolean }>({});
+  var unmountedRef = useRef<boolean>(false);
 
   deckRef.current = deck;
   frameIdxRef.current = frameIdx;
+
+  function fetchLocationsForFrames(frames: Array<CollageFrame | null>) {
+    if (isPhotosDemoMode()) return;
+    var pendingIds: string[] = [];
+    for (var f = 0; f < frames.length; f++) {
+      var frame = frames[f];
+      if (!frame) continue;
+      for (var i = 0; i < frame.items.length; i++) {
+        var item = frame.items[i];
+        if (!item || !item.id || item.location) continue;
+        if (item.id.indexOf('demo-') === 0) continue;
+        if (requestedLocIdsRef.current[item.id]) continue;
+        requestedLocIdsRef.current[item.id] = true;
+        pendingIds.push(item.id);
+        if (pendingIds.length >= 6) break;
+      }
+      if (pendingIds.length >= 6) break;
+    }
+    if (pendingIds.length === 0) return;
+
+    fetch('/api/photos?locate=' + encodeURIComponent(pendingIds.join(',')), {
+      cache: 'no-cache',
+      credentials: 'same-origin',
+    })
+      .then(function (r) {
+        if (r.status === 401) {
+          if (props.onUnauthorized) props.onUnauthorized();
+          return null;
+        }
+        if (!r.ok) return null;
+        return r.json();
+      })
+      .then(function (json: PhotoLocationsResponse | null) {
+        if (unmountedRef.current || !json || !json.locations) return;
+        var keys = Object.keys(json.locations);
+        if (keys.length === 0) return;
+        setLocationsById(function (prev) {
+          var next: { [id: string]: string } = {};
+          var prevKeys = Object.keys(prev);
+          for (var p = 0; p < prevKeys.length; p++) {
+            next[prevKeys[p]] = prev[prevKeys[p]];
+          }
+          for (var k = 0; k < keys.length; k++) {
+            if (json.locations[keys[k]]) {
+              next[keys[k]] = json.locations[keys[k]];
+            }
+          }
+          return next;
+        });
+      })
+      .catch(function () {
+        // Allow retry on transient network failure
+        for (var r = 0; r < pendingIds.length; r++) {
+          delete requestedLocIdsRef.current[pendingIds[r]];
+        }
+      });
+  }
 
   function applyPhotoList(photos: PhotoItem[]) {
     var prevIds = '';
@@ -285,6 +396,7 @@ export function PhotosDashboard(props: PhotosDashboardProps) {
       setPrevFrame(null);
       if (nextDeck.length > 0) {
         preloadFrameImages(nextDeck[0]);
+        fetchLocationsForFrames([nextDeck[0]]);
       }
       if (nextDeck.length > 1) {
         preloadFrameImages(nextDeck[1]);
@@ -514,9 +626,24 @@ export function PhotosDashboard(props: PhotosDashboardProps) {
     [props.isActive, deck, frameIdx, timerResetTick, photoIntervalMs]
   );
 
+  // Fetch EXIF locations lazily for the current & upcoming collage frames
+  useEffect(
+    function () {
+      if (!props.isActive || deck.length === 0) {
+        return;
+      }
+      var cur = deck[frameIdx] || deck[0] || null;
+      var upcoming = deck.length > 1 ? deck[(frameIdx + 1) % deck.length] : null;
+      fetchLocationsForFrames([cur, upcoming]);
+    },
+    [props.isActive, deck, frameIdx]
+  );
+
   // Clean up crossfade timer on unmount
   useEffect(function () {
+    unmountedRef.current = false;
     return function () {
+      unmountedRef.current = true;
       if (fadeTimerRef.current !== null) {
         window.clearTimeout(fadeTimerRef.current);
       }
@@ -619,7 +746,7 @@ export function PhotosDashboard(props: PhotosDashboardProps) {
               class="photos-frame photos-frame-out"
               aria-hidden="true"
             >
-              {renderCollageFrame(prevFrame)}
+              {renderCollageFrame(prevFrame, locationsById)}
             </div>
           ) : null}
           <div
@@ -630,7 +757,7 @@ export function PhotosDashboard(props: PhotosDashboardProps) {
                 : 'photos-frame'
             }
           >
-            {renderCollageFrame(currentFrame)}
+            {renderCollageFrame(currentFrame, locationsById)}
           </div>
         </div>
       ) : (

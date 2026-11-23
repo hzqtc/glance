@@ -2,10 +2,13 @@ package handler
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/json"
 	"io"
+	"math"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -112,8 +115,14 @@ AF_initDataCallback({key: 'ds:1', hash: '2', data:[null,[
 	if items[0].FullURL != "https://lh3.googleusercontent.com/pw/AP1GczStillPhoto001=w1600-h1200" {
 		t.Fatalf("unexpected first photo: %+v", items[0])
 	}
+	if items[0].TakenAt != 1766453864790 || items[0].TakenDate != "Dec 23, 2025" {
+		t.Fatalf("expected Dec 23, 2025 from UTC+10 timestamp, got takenAt=%d takenDate=%q", items[0].TakenAt, items[0].TakenDate)
+	}
 	if items[1].FullURL != "https://lh3.googleusercontent.com/pw/AP1GczStillPhoto002=w1600-h1200" {
 		t.Fatalf("unexpected second photo: %+v", items[1])
+	}
+	if items[1].TakenAt != 1766507638000 || items[1].TakenDate != "Dec 24, 2025" {
+		t.Fatalf("expected Dec 24, 2025 from UTC+10 timestamp crossing midnight, got takenAt=%d takenDate=%q", items[1].TakenAt, items[1].TakenDate)
 	}
 }
 
@@ -153,5 +162,239 @@ func TestFetchAlbumPhotosDetectsGoogleSignInRedirect(t *testing.T) {
 	_, err := fetchAlbumPhotosCached("https://photos.app.goo.gl/privatealbum", true)
 	if err == nil || !bytes.Contains([]byte(err.Error()), []byte("sign-in")) {
 		t.Fatalf("expected sign-in diagnostic error, got: %v", err)
+	}
+}
+
+func buildMockExifGPSPayload(order binary.ByteOrder, latRef string, latDeg, latMin, latSec uint32, lonRef string, lonDeg, lonMin, lonSec uint32) []byte {
+	var tiff bytes.Buffer
+	if order == binary.LittleEndian {
+		tiff.Write([]byte{'I', 'I'})
+	} else {
+		tiff.Write([]byte{'M', 'M'})
+	}
+	_ = binary.Write(&tiff, order, uint16(0x002a))
+	_ = binary.Write(&tiff, order, uint32(8)) // IFD0 offset
+
+	// IFD0: 1 entry (GPSInfoIFDPointer = 0x8825)
+	// IFD0 starts at 8, size = 2 + 12 + 4 = 18 -> GPS IFD starts at 26
+	gpsIFDOffset := uint32(26)
+	_ = binary.Write(&tiff, order, uint16(1))
+	_ = binary.Write(&tiff, order, uint16(0x8825))
+	_ = binary.Write(&tiff, order, uint16(4)) // LONG
+	_ = binary.Write(&tiff, order, uint32(1))
+	_ = binary.Write(&tiff, order, gpsIFDOffset)
+	_ = binary.Write(&tiff, order, uint32(0)) // next IFD
+
+	// GPS IFD at 26: 4 entries -> size = 2 + 4*12 + 4 = 54 -> rationals start at 80
+	latRatOff := uint32(80)
+	lonRatOff := uint32(104)
+	_ = binary.Write(&tiff, order, uint16(4))
+
+	// Tag 1: GPSLatitudeRef
+	_ = binary.Write(&tiff, order, uint16(0x0001))
+	_ = binary.Write(&tiff, order, uint16(2))
+	_ = binary.Write(&tiff, order, uint32(2))
+	refBytes := [4]byte{}
+	copy(refBytes[:], latRef)
+	tiff.Write(refBytes[:])
+
+	// Tag 2: GPSLatitude
+	_ = binary.Write(&tiff, order, uint16(0x0002))
+	_ = binary.Write(&tiff, order, uint16(5))
+	_ = binary.Write(&tiff, order, uint32(3))
+	_ = binary.Write(&tiff, order, latRatOff)
+
+	// Tag 3: GPSLongitudeRef
+	_ = binary.Write(&tiff, order, uint16(0x0003))
+	_ = binary.Write(&tiff, order, uint16(2))
+	_ = binary.Write(&tiff, order, uint32(2))
+	lonRefBytes := [4]byte{}
+	copy(lonRefBytes[:], lonRef)
+	tiff.Write(lonRefBytes[:])
+
+	// Tag 4: GPSLongitude
+	_ = binary.Write(&tiff, order, uint16(0x0004))
+	_ = binary.Write(&tiff, order, uint16(5))
+	_ = binary.Write(&tiff, order, uint32(3))
+	_ = binary.Write(&tiff, order, lonRatOff)
+
+	_ = binary.Write(&tiff, order, uint32(0)) // next IFD
+
+	// Rationals (deg/1, min/1, sec*100/100)
+	for _, pair := range [][2]uint32{
+		{latDeg, 1}, {latMin, 1}, {latSec, 100},
+		{lonDeg, 1}, {lonMin, 1}, {lonSec, 100},
+	} {
+		_ = binary.Write(&tiff, order, pair[0])
+		_ = binary.Write(&tiff, order, pair[1])
+	}
+
+	var full bytes.Buffer
+	// Prefix with a HEIC-style iinf false-positive "Exif\x00\x00" box name before real EXIF
+	full.WriteString("ftypheic....iinfExif\x00\x00not_tiff....")
+	full.Write([]byte{'E', 'x', 'i', 'f', 0, 0})
+	full.Write(tiff.Bytes())
+	return full.Bytes()
+}
+
+func TestExtractEXIFGPS(t *testing.T) {
+	// Big-endian: 37° 17' 28.00" N, 121° 59' 17.00" W (Campbell/San Jose, CA)
+	be := buildMockExifGPSPayload(binary.BigEndian, "N", 37, 17, 2800, "W", 121, 59, 1700)
+	lat, lon, ok := extractEXIFGPS(be)
+	if !ok {
+		t.Fatalf("expected big-endian GPS extraction to succeed")
+	}
+	if math.Abs(lat-37.291111) > 0.001 || math.Abs(lon-(-121.988055)) > 0.001 {
+		t.Fatalf("unexpected big-endian coords: lat=%f lon=%f", lat, lon)
+	}
+
+	// Little-endian: 33° 52' 08.00" S, 151° 12' 33.00" E (Sydney)
+	le := buildMockExifGPSPayload(binary.LittleEndian, "S", 33, 52, 800, "E", 151, 12, 3300)
+	lat2, lon2, ok2 := extractEXIFGPS(le)
+	if !ok2 {
+		t.Fatalf("expected little-endian GPS extraction to succeed")
+	}
+	if math.Abs(lat2-(-33.868888)) > 0.001 || math.Abs(lon2-151.209166) > 0.001 {
+		t.Fatalf("unexpected little-endian coords: lat=%f lon=%f", lat2, lon2)
+	}
+
+	// Reject Null Island (0, 0)
+	zero := buildMockExifGPSPayload(binary.BigEndian, "N", 0, 0, 0, "E", 0, 0, 0)
+	if _, _, ok3 := extractEXIFGPS(zero); ok3 {
+		t.Fatalf("expected Null Island (0,0) to be rejected")
+	}
+}
+
+func TestFormatReverseGeocodeLabel(t *testing.T) {
+	cases := []struct {
+		in   bigDataCloudReverseResp
+		want string
+	}{
+		{
+			in:   bigDataCloudReverseResp{City: "San Francisco", PrincipalSubdivision: "California", PrincipalSubdivisionCode: "US-CA", CountryCode: "US", CountryName: "United States of America"},
+			want: "San Francisco, CA",
+		},
+		{
+			in:   bigDataCloudReverseResp{City: "Vancouver", PrincipalSubdivision: "British Columbia", PrincipalSubdivisionCode: "CA-BC", CountryCode: "CA", CountryName: "Canada"},
+			want: "Vancouver, BC",
+		},
+		{
+			in:   bigDataCloudReverseResp{City: "London", CountryCode: "GB", CountryName: "United Kingdom of Great Britain and Northern Ireland"},
+			want: "London, UK",
+		},
+		{
+			in:   bigDataCloudReverseResp{City: "Shimukappu", PrincipalSubdivision: "Hokkaido", CountryCode: "JP", CountryName: "Japan"},
+			want: "Shimukappu, Japan",
+		},
+		{
+			in:   bigDataCloudReverseResp{City: "Singapore", CountryCode: "SG", CountryName: "Singapore"},
+			want: "Singapore",
+		},
+		{
+			in:   bigDataCloudReverseResp{Locality: "Big Sur", PrincipalSubdivision: "California", PrincipalSubdivisionCode: "US-CA", CountryCode: "US"},
+			want: "Big Sur, CA",
+		},
+	}
+	for _, tc := range cases {
+		if got := formatReverseGeocodeLabel(tc.in); got != tc.want {
+			t.Fatalf("formatReverseGeocodeLabel(%+v) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+func TestPhotosHandlerLocateEndpoint(t *testing.T) {
+	mockHTML := `<!doctype html><html><body><script>
+AF_initDataCallback({key: 'ds:1', hash: '2', data:[null,[
+  ["photo1",["https://lh3.googleusercontent.com/pw/AP1GczGeoPhoto001",4032,3024,null,null],1766453864790,"k1",-28800000,1795323524027,["owner"],[[2]],2,{"15":152499}],
+  ["photo2",["https://lh3.googleusercontent.com/pw/AP1GczNoGpsPhoto002",4032,3024,null,null],1766453864790,"k2",-28800000,1795323524027,["owner"],[[2]],2,{"15":152499}]
+]], sideChannel: {}});
+</script></body></html>`
+
+	exifPayload := buildMockExifGPSPayload(binary.BigEndian, "N", 37, 17, 2800, "W", 121, 59, 1700)
+	var rangeSeen string
+
+	origPhotosClient := photosHTTPClient
+	origGeoClient := geoHTTPClient
+	photosHTTPClient = &http.Client{
+		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			if strings.Contains(r.URL.Host, "photos.app.goo.gl") {
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Header:     http.Header{"Content-Type": []string{"text/html; charset=utf-8"}},
+					Body:       io.NopCloser(bytes.NewBufferString(mockHTML)),
+				}, nil
+			}
+			rangeSeen = r.Header.Get("Range")
+			if strings.Contains(r.URL.Path, "AP1GczGeoPhoto001") {
+				return &http.Response{
+					StatusCode: http.StatusPartialContent,
+					Header:     http.Header{"Content-Type": []string{"image/heic"}},
+					Body:       io.NopCloser(bytes.NewReader(exifPayload)),
+				}, nil
+			}
+			return &http.Response{
+				StatusCode: http.StatusPartialContent,
+				Header:     http.Header{"Content-Type": []string{"image/jpeg"}},
+				Body:       io.NopCloser(bytes.NewBufferString("not-gps-exif-data-padding-01234567890123456789")),
+			}, nil
+		}),
+	}
+	geoHTTPClient = &http.Client{
+		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+				Body:       io.NopCloser(bytes.NewBufferString(`{"city":"San Jose","principalSubdivision":"California","principalSubdivisionCode":"US-CA","countryCode":"US","countryName":"United States of America"}`)),
+			}, nil
+		}),
+	}
+	defer func() {
+		photosHTTPClient = origPhotosClient
+		geoHTTPClient = origGeoClient
+		photosCacheMu.Lock()
+		photosCache = map[string]photosCacheEntry{}
+		photoBaseURLByID = map[string]string{}
+		photoLocationCache = map[string]photoLocationEntry{}
+		geoLabelCache = map[string]string{}
+		photosCacheMu.Unlock()
+	}()
+
+	t.Setenv("PHOTOS_ALBUM_URLS", "")
+	t.Setenv("PHOTOS_ALBUM_URL", "https://photos.app.goo.gl/geotest")
+
+	// First fetch album to get IDs
+	rec := httptest.NewRecorder()
+	PhotosHandler(rec, httptest.NewRequest(http.MethodGet, "/api/photos", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	var listResp PhotosResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &listResp); err != nil {
+		t.Fatalf("invalid json: %v", err)
+	}
+	if len(listResp.Photos) != 2 {
+		t.Fatalf("expected 2 photos, got %d", len(listResp.Photos))
+	}
+
+	// Now query ?locate=id1,id2
+	locateURL := "/api/photos?locate=" + listResp.Photos[0].ID + "," + listResp.Photos[1].ID
+	rec2 := httptest.NewRecorder()
+	PhotosHandler(rec2, httptest.NewRequest(http.MethodGet, locateURL, nil))
+	if rec2.Code != http.StatusOK {
+		t.Fatalf("expected 200 on locate, got %d: %s", rec2.Code, rec2.Body.String())
+	}
+	if !strings.HasPrefix(rangeSeen, "bytes=0-") {
+		t.Fatalf("expected Range header on =d request, got %q", rangeSeen)
+	}
+
+	var locResp PhotoLocationsResponse
+	if err := json.Unmarshal(rec2.Body.Bytes(), &locResp); err != nil {
+		t.Fatalf("invalid locate json: %v", err)
+	}
+	if got := locResp.Locations[listResp.Photos[0].ID]; got != "San Jose, CA" {
+		t.Fatalf("expected San Jose, CA for GPS photo, got %q (all: %+v)", got, locResp.Locations)
+	}
+	if got := locResp.Locations[listResp.Photos[1].ID]; got != "" {
+		t.Fatalf("expected empty location for non-GPS photo, got %q", got)
 	}
 }

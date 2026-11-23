@@ -255,6 +255,9 @@ export interface PhotoItem {
   width: number;
   height: number;
   aspect: number;
+  takenAt?: number;
+  takenDate?: string;
+  location?: string;
 }
 
 export interface PhotosResponse {
@@ -264,6 +267,10 @@ export interface PhotosResponse {
   photoCount: number;
   photos: PhotoItem[];
   warnings?: string[];
+}
+
+export interface PhotoLocationsResponse {
+  locations: { [id: string]: string };
 }
 
 export interface FXQuote {
