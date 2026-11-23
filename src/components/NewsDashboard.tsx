@@ -26,6 +26,7 @@ interface Tldr {
   url: string;
   status: 'loading' | 'ok' | 'none';
   text?: string;
+  reason?: string; // why there is no TL;DR (server error or HTTP status)
 }
 
 // What the QR popover shows for a tapped item
@@ -131,16 +132,26 @@ export function NewsDashboard(props: NewsDashboardProps) {
       setTldr({ url: url, status: 'loading' });
       fetch('/api/summary?url=' + encodeURIComponent(url), { credentials: 'same-origin' })
         .then(function (resp) {
-          return resp.ok ? resp.json() : null;
+          // Error responses also carry a JSON {error}; keep it to explain the failure
+          return resp.json().then(
+            function (json: { tldr?: string; error?: string }) {
+              return json;
+            },
+            function () {
+              return { error: 'HTTP ' + String(resp.status) };
+            }
+          );
         })
-        .then(function (json: { tldr?: string } | null) {
-          var result: Tldr =
-            json && json.tldr ? { url: url, status: 'ok', text: json.tldr } : { url: url, status: 'none' };
+        .then(function (json: { tldr?: string; error?: string }) {
+          var result: Tldr = json.tldr
+            ? { url: url, status: 'ok', text: json.tldr }
+            : { url: url, status: 'none', reason: json.error || 'no summary returned' };
           tldrCacheRef.current[url] = result;
           if (!cancelled) setTldr(result);
         })
         .catch(function () {
-          if (!cancelled) setTldr({ url: url, status: 'none' });
+          // Network failure: don't cache, so reopening the item retries
+          if (!cancelled) setTldr({ url: url, status: 'none', reason: 'network error' });
         });
       return function () {
         cancelled = true;
@@ -404,6 +415,10 @@ export function NewsDashboard(props: NewsDashboardProps) {
                     <span />
                     <span />
                   </div>
+                </div>
+              ) : tldr && tldr.url === detail.item.url && tldr.status === 'none' ? (
+                <div class="news-tldr-unavailable">
+                  AI summary unavailable{tldr.reason ? ' · ' + tldr.reason : ''}
                 </div>
               ) : null}
               <div class="news-popover-meta">

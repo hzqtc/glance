@@ -346,9 +346,21 @@
   border-left: 3px solid rgba(125, 211, 252, 0.55);
 }
 
+/* The AI TL;DR is short by design (2-3 sentences); never truncate it */
 .news-tldr .news-popover-body {
   margin-top: 4px;
   color: var(--text-primary);
+  display: block;
+  -webkit-line-clamp: none;
+  overflow: visible;
+}
+
+/* Shown when a TL;DR couldn't be made, with the server's reason */
+.news-tldr-unavailable {
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+  opacity: 0.8;
 }
 
 .news-tldr-label {
