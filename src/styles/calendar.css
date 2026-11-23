@@ -398,6 +398,40 @@
   width: 100%;
 }
 
+/* Draggable month strip: prev | current | next, resting on the middle panel.
+   During a drag the track's transform is set inline (px); at rest it falls back
+   to this percentage offset. */
+.cal-weeks-viewport {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  /* Extend into the card padding so panels can carry a gutter between months
+     while the resting grid stays aligned with the weekday labels */
+  margin: 0 -8px;
+}
+
+.cal-weeks-track {
+  display: flex;
+  flex-direction: row;
+  width: 300%;
+  height: 100%;
+  transform: translate3d(-33.3333%, 0, 0);
+  will-change: transform;
+}
+
+.cal-weeks-panel {
+  flex: 0 0 33.3333%;
+  width: 33.3333%;
+  height: 100%;
+  padding: 0 8px;
+}
+
+/* Neighbouring months are only for dragging into view */
+.cal-weeks-side {
+  pointer-events: none;
+}
+
 .cal-weeks-slide-next {
   animation: calSlideNext 0.2s cubic-bezier(0.22, 1, 0.36, 1);
 }

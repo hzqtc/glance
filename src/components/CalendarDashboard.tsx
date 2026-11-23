@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import type { CalendarEvent, CalendarResponse, CalendarTrip, TimeFormat } from '../types';
 import {
   MONTHS_FULL,
@@ -104,8 +104,21 @@ export function CalendarDashboard(props: CalendarDashboardProps) {
   var pollTimerRef = useRef<number | null>(null);
   var hasPreloadedRef = useRef<boolean>(false);
   var lastFetchMsRef = useRef<{ [ym: string]: number }>({});
-  var monthTouchRef = useRef<{ x: number; y: number } | null>(null);
-  var monthMouseRef = useRef<{ x: number; y: number } | null>(null);
+  // Horizontal month drag: the 3-panel strip (prev | current | next) follows the finger
+  var weeksViewportRef = useRef<HTMLDivElement | null>(null);
+  var weeksTrackRef = useRef<HTMLDivElement | null>(null);
+  var dragRef = useRef<{
+    x: number;
+    y: number;
+    t: number;
+    width: number;
+    axis: '' | 'x' | 'y';
+    dx: number;
+  } | null>(null);
+  var isAnimatingRef = useRef<boolean>(false);
+  var snapTimerRef = useRef<number | null>(null);
+  var _cacheTickState = useState<number>(0);
+  var setCacheTick = _cacheTickState[1];
   var suppressClickUntilRef = useRef<number>(0);
   var wheelCooldownRef = useRef<number>(0);
   var viewYearRef = useRef<number>(viewYear);
@@ -242,12 +255,147 @@ export function CalendarDashboard(props: CalendarDashboardProps) {
     [props.isActive, viewYear, viewMonth]
   );
 
-  function shiftMonth(delta: number) {
+  // Quietly prefetch the neighbouring months so a dragged-in month already shows its events
+  function prefetchMonth(year: number, month: number) {
+    if (year < 1900 || year > 2100) return;
+    var ymKey = String(year) + '-' + String(month);
+    var last = lastFetchMsRef.current[ymKey] || 0;
+    if (monthCacheRef.current[ymKey] && Date.now() - last < 5 * 60 * 1000) return;
+    lastFetchMsRef.current[ymKey] = Date.now(); // de-dupe concurrent prefetches
+    var qs =
+      '?year=' + String(year) + '&month=' + String(month) + (isCalendarDemoMode() ? '&demo=1' : '');
+    fetch('/api/calendar' + qs, { cache: 'no-cache', credentials: 'same-origin' })
+      .then(function (resp) {
+        return resp.ok ? resp.json() : null;
+      })
+      .then(function (json: CalendarResponse | null) {
+        if (!json) return;
+        monthCacheRef.current[ymKey] = json;
+        setCacheTick(function (n) {
+          return n + 1;
+        });
+      })
+      .catch(function () {
+        lastFetchMsRef.current[ymKey] = 0;
+      });
+  }
+
+  useEffect(
+    function () {
+      if (!props.isActive) return;
+      var prev = new Date(viewYear, viewMonth - 2, 1);
+      var next = new Date(viewYear, viewMonth, 1);
+      var id = window.setTimeout(function () {
+        prefetchMonth(prev.getFullYear(), prev.getMonth() + 1);
+        prefetchMonth(next.getFullYear(), next.getMonth() + 1);
+      }, 400);
+      return function () {
+        window.clearTimeout(id);
+      };
+    },
+    [props.isActive, viewYear, viewMonth]
+  );
+
+  // After the viewed month changes, re-center the strip on the (new) middle
+  // panel before the browser paints, so a committed drag never flickers.
+  useLayoutEffect(
+    function () {
+      var track = weeksTrackRef.current;
+      if (track) {
+        track.style.transition = 'none';
+        track.style.webkitTransition = 'none';
+        track.style.transform = '';
+        track.style.webkitTransform = '';
+      }
+      isAnimatingRef.current = false;
+    },
+    [viewYear, viewMonth]
+  );
+
+  useEffect(function () {
+    return function () {
+      if (snapTimerRef.current !== null) window.clearTimeout(snapTimerRef.current);
+    };
+  }, []);
+
+  function setTrackOffset(px: number, animate: boolean) {
+    var track = weeksTrackRef.current;
+    if (!track) return;
+    var transition = animate ? 'transform 0.3s cubic-bezier(0.22, 1, 0.36, 1)' : 'none';
+    track.style.transition = transition;
+    track.style.webkitTransition = animate ? '-webkit-transform 0.3s cubic-bezier(0.22, 1, 0.36, 1)' : 'none';
+    var t = 'translate3d(' + String(px) + 'px, 0, 0)';
+    track.style.transform = t;
+    track.style.webkitTransform = t;
+  }
+
+  // Slide the strip one month over (delta = +1 next, -1 previous), then commit
+  function animateMonthShift(delta: number) {
+    var viewport = weeksViewportRef.current;
+    var target = new Date(viewYearRef.current, viewMonthRef.current - 1 + delta, 1);
+    if (target.getFullYear() < 1900 || target.getFullYear() > 2100) return;
+    if (!viewport || !weeksTrackRef.current || isAnimatingRef.current) {
+      shiftMonth(delta, true);
+      return;
+    }
+    isAnimatingRef.current = true;
+    var width = viewport.offsetWidth;
+    setTrackOffset(-width - delta * width, true);
+    if (snapTimerRef.current !== null) window.clearTimeout(snapTimerRef.current);
+    snapTimerRef.current = window.setTimeout(function () {
+      snapTimerRef.current = null;
+      shiftMonth(delta, true);
+    }, 300);
+  }
+
+  function dragStart(x: number, y: number) {
+    var viewport = weeksViewportRef.current;
+    if (!viewport || isAnimatingRef.current) {
+      dragRef.current = null;
+      return;
+    }
+    dragRef.current = { x: x, y: y, t: Date.now(), width: viewport.offsetWidth, axis: '', dx: 0 };
+  }
+
+  // Returns true once the gesture is a horizontal month drag (caller then
+  // prevents default so the page doesn't scroll or bounce).
+  function dragMove(x: number, y: number): boolean {
+    var d = dragRef.current;
+    if (!d) return false;
+    var dx = x - d.x;
+    var dy = y - d.y;
+    if (d.axis === '') {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return false;
+      d.axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+    }
+    if (d.axis !== 'x') return false;
+    d.dx = dx;
+    setTrackOffset(-d.width + dx, false);
+    return true;
+  }
+
+  function dragEnd() {
+    var d = dragRef.current;
+    dragRef.current = null;
+    if (!d || d.axis !== 'x') return;
+    suppressClickUntilRef.current = Date.now() + 350;
+    var velocity = d.dx / Math.max(1, Date.now() - d.t); // px per ms
+    var commit =
+      Math.abs(d.dx) > d.width * 0.25 || (Math.abs(d.dx) > 24 && Math.abs(velocity) > 0.35);
+    if (commit) {
+      animateMonthShift(d.dx < 0 ? 1 : -1);
+    } else {
+      setTrackOffset(-d.width, true);
+    }
+  }
+
+  function shiftMonth(delta: number, fromStrip?: boolean) {
     var d = new Date(viewYear, viewMonth - 1 + delta, 1);
     var ny = d.getFullYear();
     var nm = d.getMonth() + 1;
     if (ny < 1900 || ny > 2100) return;
-    setSlideDir(delta > 0 ? 'next' : 'prev');
+    // The strip already slid the new month in; otherwise play the small nudge
+    setSlideDir(fromStrip ? '' : delta > 0 ? 'next' : 'prev');
     setViewYear(ny);
     setViewMonth(nm);
     if (ny === today.year && nm === today.month) {
@@ -337,54 +485,42 @@ export function CalendarDashboard(props: CalendarDashboardProps) {
 
   function handleMonthTouchStart(e: TouchEvent) {
     if (!e.touches || e.touches.length !== 1) {
-      monthTouchRef.current = null;
+      dragRef.current = null;
       return;
     }
-    monthTouchRef.current = {
-      x: e.touches[0].clientX,
-      y: e.touches[0].clientY,
-    };
+    dragStart(e.touches[0].clientX, e.touches[0].clientY);
+  }
+
+  function handleMonthTouchMove(e: TouchEvent) {
+    if (!e.touches || e.touches.length !== 1) return;
+    if (dragMove(e.touches[0].clientX, e.touches[0].clientY)) {
+      e.preventDefault();
+    }
+  }
+
+  function handleMonthTouchEnd() {
+    dragEnd();
   }
 
   function handleMonthTouchCancel() {
-    monthTouchRef.current = null;
-  }
-
-  function handleMonthTouchEnd(e: TouchEvent) {
-    var start = monthTouchRef.current;
-    monthTouchRef.current = null;
-    if (!start || !e.changedTouches || e.changedTouches.length === 0) {
-      return;
-    }
-    var dx = e.changedTouches[0].clientX - start.x;
-    var dy = e.changedTouches[0].clientY - start.y;
-    if (Math.abs(dx) < 48 || Math.abs(dx) < Math.abs(dy) * 1.25) {
-      return;
-    }
-    suppressClickUntilRef.current = Date.now() + 350;
-    shiftMonth(dx < 0 ? 1 : -1);
+    var d = dragRef.current;
+    dragRef.current = null;
+    if (d && d.axis === 'x') setTrackOffset(-d.width, true);
   }
 
   function handleMonthMouseDown(e: MouseEvent) {
     if (e.button !== 0) return;
-    monthMouseRef.current = { x: e.clientX, y: e.clientY };
+    dragStart(e.clientX, e.clientY);
   }
 
-  function handleMonthMouseUp(e: MouseEvent) {
-    var start = monthMouseRef.current;
-    monthMouseRef.current = null;
-    if (!start) return;
-    var dx = e.clientX - start.x;
-    var dy = e.clientY - start.y;
-    if (Math.abs(dx) < 48 || Math.abs(dx) < Math.abs(dy) * 1.25) {
-      return;
+  function handleMonthMouseMove(e: MouseEvent) {
+    if (dragRef.current && dragMove(e.clientX, e.clientY)) {
+      e.preventDefault();
     }
-    suppressClickUntilRef.current = Date.now() + 350;
-    shiftMonth(dx < 0 ? 1 : -1);
   }
 
-  function handleMonthMouseLeave() {
-    monthMouseRef.current = null;
+  function handleMonthMouseUp() {
+    dragEnd();
   }
 
   function handleMonthWheel(e: WheelEvent) {
@@ -396,7 +532,7 @@ export function CalendarDashboard(props: CalendarDashboardProps) {
       return;
     }
     wheelCooldownRef.current = now + 420;
-    shiftMonth(e.deltaX > 0 ? 1 : -1);
+    animateMonthShift(e.deltaX > 0 ? 1 : -1);
   }
 
   function handleToggleCalendar(calId: string) {
@@ -416,66 +552,79 @@ export function CalendarDashboard(props: CalendarDashboardProps) {
     writeHiddenCalendars(next);
   }
 
-  // Build 42-day Monday-to-Sunday grid
-  var gridCells = buildMonthGridMonday(viewYear, viewMonth, today.dateKey);
-  var weekRows = [
-    gridCells.slice(0, 7),
-    gridCells.slice(7, 14),
-    gridCells.slice(14, 21),
-    gridCells.slice(21, 28),
-    gridCells.slice(28, 35),
-    gridCells.slice(35, 42),
-  ];
-
-  // Built-in US holidays across years spanned by the 42-day grid (handles Dec/Jan overlap)
-  var holidaysByDate: { [dateKey: string]: USHolidayInfo } = {};
-  var yearsInGrid: { [y: number]: boolean } = {};
-  for (var c = 0; c < gridCells.length; c++) {
-    yearsInGrid[gridCells[c].year] = true;
-  }
-  var yearKeys = Object.keys(yearsInGrid);
-  for (var yk = 0; yk < yearKeys.length; yk++) {
-    var yNum = parseInt(yearKeys[yk], 10);
-    var hMap = getUSHolidaysForYear(yNum);
-    var hDates = Object.keys(hMap);
-    for (var hd = 0; hd < hDates.length; hd++) {
-      holidaysByDate[hDates[hd]] = hMap[hDates[hd]];
-    }
-  }
-
-  // Index fetched events + US holidays by dateKey
-  var eventsByDate: { [dateKey: string]: CalendarEvent[] } = {};
-  var allHolidayKeys = Object.keys(holidaysByDate);
-  for (var hk = 0; hk < allHolidayKeys.length; hk++) {
-    var hDate = allHolidayKeys[hk];
-    var hInfo = holidaysByDate[hDate];
-    eventsByDate[hDate] = [
-      {
-        id: 'us-holiday-' + hDate,
-        calendarId: 'us-holidays',
-        calendarName: hInfo.isDayOff ? 'US Holiday' : 'Observance',
-        color: '#fbbf24',
-        title: hInfo.title,
-        date: hDate,
-        allDay: true,
-        startMs: 0,
-        endMs: 0,
-        isHoliday: true,
-      },
+  // Grid cells, holidays, and visible events for one month's 42-day grid
+  function buildMonthModel(year: number, month: number, monthData: CalendarResponse | null) {
+    var gridCells = buildMonthGridMonday(year, month, today.dateKey);
+    var weekRows = [
+      gridCells.slice(0, 7),
+      gridCells.slice(7, 14),
+      gridCells.slice(14, 21),
+      gridCells.slice(21, 28),
+      gridCells.slice(28, 35),
+      gridCells.slice(35, 42),
     ];
+
+    // Built-in US holidays across years spanned by the grid (handles Dec/Jan overlap)
+    var holidaysByDate: { [dateKey: string]: USHolidayInfo } = {};
+    var yearsInGrid: { [y: number]: boolean } = {};
+    for (var c = 0; c < gridCells.length; c++) {
+      yearsInGrid[gridCells[c].year] = true;
+    }
+    var yearKeys = Object.keys(yearsInGrid);
+    for (var yk = 0; yk < yearKeys.length; yk++) {
+      var hMap = getUSHolidaysForYear(parseInt(yearKeys[yk], 10));
+      var hDates = Object.keys(hMap);
+      for (var hd = 0; hd < hDates.length; hd++) {
+        holidaysByDate[hDates[hd]] = hMap[hDates[hd]];
+      }
+    }
+
+    // Index fetched events + US holidays by dateKey
+    var eventsByDate: { [dateKey: string]: CalendarEvent[] } = {};
+    var allHolidayKeys = Object.keys(holidaysByDate);
+    for (var hk = 0; hk < allHolidayKeys.length; hk++) {
+      var hDate = allHolidayKeys[hk];
+      var hInfo = holidaysByDate[hDate];
+      eventsByDate[hDate] = [
+        {
+          id: 'us-holiday-' + hDate,
+          calendarId: 'us-holidays',
+          calendarName: hInfo.isDayOff ? 'US Holiday' : 'Observance',
+          color: '#fbbf24',
+          title: hInfo.title,
+          date: hDate,
+          allDay: true,
+          startMs: 0,
+          endMs: 0,
+          isHoliday: true,
+        },
+      ];
+    }
+    var fetchedEvents = monthData && monthData.events ? monthData.events : [];
+    for (var fe = 0; fe < fetchedEvents.length; fe++) {
+      var fev = fetchedEvents[fe];
+      if (hiddenCals[fev.calendarId]) {
+        continue;
+      }
+      if (!eventsByDate[fev.date]) {
+        eventsByDate[fev.date] = [];
+      }
+      eventsByDate[fev.date].push(fev);
+    }
+    return { year: year, month: month, weekRows: weekRows, holidaysByDate: holidaysByDate, eventsByDate: eventsByDate };
   }
 
-  var fetchedEvents = data && data.events ? data.events : [];
-  for (var e = 0; e < fetchedEvents.length; e++) {
-    var ev = fetchedEvents[e];
-    if (hiddenCals[ev.calendarId]) {
-      continue;
-    }
-    if (!eventsByDate[ev.date]) {
-      eventsByDate[ev.date] = [];
-    }
-    eventsByDate[ev.date].push(ev);
-  }
+  var centerModel = buildMonthModel(viewYear, viewMonth, data);
+  var eventsByDate = centerModel.eventsByDate;
+  var prevDate = new Date(viewYear, viewMonth - 2, 1);
+  var nextDate = new Date(viewYear, viewMonth, 1);
+  var prevYM = { y: prevDate.getFullYear(), m: prevDate.getMonth() + 1 };
+  var nextYM = { y: nextDate.getFullYear(), m: nextDate.getMonth() + 1 };
+  var monthModels = [
+    buildMonthModel(prevYM.y, prevYM.m, monthCacheRef.current[String(prevYM.y) + '-' + String(prevYM.m)] || null),
+    centerModel,
+    buildMonthModel(nextYM.y, nextYM.m, monthCacheRef.current[String(nextYM.y) + '-' + String(nextYM.m)] || null),
+  ];
 
   // Selected day details
   var selParts = parseDateKey(selectedDateKey);
@@ -565,7 +714,7 @@ export function CalendarDashboard(props: CalendarDashboardProps) {
                 type="button"
                 class="cal-nav-btn"
                 onClick={function () {
-                  shiftMonth(-1);
+                  animateMonthShift(-1);
                 }}
                 title="Previous month"
                 aria-label="Previous month"
@@ -602,7 +751,7 @@ export function CalendarDashboard(props: CalendarDashboardProps) {
                 type="button"
                 class="cal-nav-btn"
                 onClick={function () {
-                  shiftMonth(1);
+                  animateMonthShift(1);
                 }}
                 title="Next month"
                 aria-label="Next month"
@@ -737,11 +886,13 @@ export function CalendarDashboard(props: CalendarDashboardProps) {
             class={isLoading ? 'cal-month-card cal-loading' : 'cal-month-card'}
             aria-label="Month view"
             onTouchStart={handleMonthTouchStart}
+            onTouchMove={handleMonthTouchMove}
             onTouchEnd={handleMonthTouchEnd}
             onTouchCancel={handleMonthTouchCancel}
             onMouseDown={handleMonthMouseDown}
+            onMouseMove={handleMonthMouseMove}
             onMouseUp={handleMonthMouseUp}
-            onMouseLeave={handleMonthMouseLeave}
+            onMouseLeave={handleMonthMouseUp}
             onWheel={handleMonthWheel}
           >
             <div class="cal-weekdays-row">
@@ -761,107 +912,115 @@ export function CalendarDashboard(props: CalendarDashboardProps) {
               })}
             </div>
 
-            <div
-              key={String(viewYear) + '-' + String(viewMonth)}
-              class={
-                slideDir === 'next'
-                  ? 'cal-weeks-wrap cal-weeks-slide-next'
-                  : slideDir === 'prev'
-                    ? 'cal-weeks-wrap cal-weeks-slide-prev'
-                    : 'cal-weeks-wrap'
-              }
-            >
-              {weekRows.map(function (week, wIdx) {
-                return (
-                  <div class="cal-week-row" key={wIdx}>
-                    {week.map(function (cell) {
-                      var isSel = cell.dateKey === selectedDateKey;
-                      var cellEvents = eventsByDate[cell.dateKey] || [];
-                      var holidayInfo = holidaysByDate[cell.dateKey];
-                      var isDayOff = Boolean(holidayInfo && holidayInfo.isDayOff);
-                      var lunar = getChineseLunarDate(cell.year, cell.month, cell.day);
-                      var visibleChips = cellEvents.slice(0, 2);
-                      var extraCount = cellEvents.length - visibleChips.length;
-
-                      var cellClass = 'cal-cell';
-                      if (!cell.inCurrentMonth) cellClass += ' cal-cell-muted';
-                      if (cell.isWeekend) cellClass += ' cal-cell-weekend';
-                      if (isDayOff) cellClass += ' cal-cell-dayoff';
-                      if (cell.isToday) cellClass += ' cal-cell-today';
-                      if (isSel) cellClass += ' cal-cell-selected';
-
+            <div class="cal-weeks-viewport" ref={weeksViewportRef}>
+              <div class="cal-weeks-track" ref={weeksTrackRef}>
+                {monthModels.map(function (model, panelIdx) {
+                  var isCenter = panelIdx === 1;
+                  var panelClass = 'cal-weeks-wrap cal-weeks-panel';
+                  if (isCenter && slideDir === 'next') panelClass += ' cal-weeks-slide-next';
+                  if (isCenter && slideDir === 'prev') panelClass += ' cal-weeks-slide-prev';
+                  if (!isCenter) panelClass += ' cal-weeks-side';
+                  return (
+                    <div
+                      key={String(model.year) + '-' + String(model.month)}
+                      class={panelClass}
+                      aria-hidden={!isCenter}
+                    >
+                    {model.weekRows.map(function (week, wIdx) {
                       return (
-                        <div
-                          key={cell.dateKey}
-                          role="button"
-                          tabIndex={0}
-                          class={cellClass}
-                          aria-pressed={isSel}
-                          onClick={function () {
-                            handleSelectDay(cell.year, cell.month, cell.dateKey);
-                          }}
-                          onKeyDown={function (evKey: KeyboardEvent) {
-                            if (evKey.key === 'Enter' || evKey.key === ' ') {
-                              evKey.preventDefault();
-                              handleSelectDay(cell.year, cell.month, cell.dateKey);
-                            }
-                          }}
-                        >
-                          <div class="cal-cell-top">
-                            <span
-                              class={
-                                cell.isToday
-                                  ? 'cal-day-num cal-day-num-today'
-                                  : 'cal-day-num'
-                              }
-                            >
-                              {cell.day}
-                            </span>
-                            {lunar ? (
-                              <span
-                                class={
-                                  lunar.isFestival
-                                    ? 'cal-lunar-tag cal-lunar-fest'
-                                    : lunar.isSolarTerm
-                                      ? 'cal-lunar-tag cal-lunar-term'
-                                      : 'cal-lunar-tag'
-                                }
-                              >
-                                {lunar.label}
-                              </span>
-                            ) : null}
-                          </div>
+                        <div class="cal-week-row" key={wIdx}>
+                          {week.map(function (cell) {
+                            var isSel = cell.dateKey === selectedDateKey;
+                            var cellEvents = model.eventsByDate[cell.dateKey] || [];
+                            var holidayInfo = model.holidaysByDate[cell.dateKey];
+                            var isDayOff = Boolean(holidayInfo && holidayInfo.isDayOff);
+                            var lunar = getChineseLunarDate(cell.year, cell.month, cell.day);
+                            var visibleChips = cellEvents.slice(0, 2);
+                            var extraCount = cellEvents.length - visibleChips.length;
 
-                          <div class="cal-cell-events">
-                            {visibleChips.map(function (item) {
-                              return (
-                                <div
-                                  key={item.id}
-                                  class={
-                                    item.isHoliday
-                                      ? 'cal-chip cal-chip-holiday'
-                                      : 'cal-chip'
+                            var cellClass = 'cal-cell';
+                            if (!cell.inCurrentMonth) cellClass += ' cal-cell-muted';
+                            if (cell.isWeekend) cellClass += ' cal-cell-weekend';
+                            if (isDayOff) cellClass += ' cal-cell-dayoff';
+                            if (cell.isToday) cellClass += ' cal-cell-today';
+                            if (isSel) cellClass += ' cal-cell-selected';
+
+                            return (
+                              <div
+                                key={cell.dateKey}
+                                role="button"
+                                tabIndex={0}
+                                class={cellClass}
+                                aria-pressed={isSel}
+                                onClick={function () {
+                                  handleSelectDay(cell.year, cell.month, cell.dateKey);
+                                }}
+                                onKeyDown={function (evKey: KeyboardEvent) {
+                                  if (evKey.key === 'Enter' || evKey.key === ' ') {
+                                    evKey.preventDefault();
+                                    handleSelectDay(cell.year, cell.month, cell.dateKey);
                                   }
-                                  style={
-                                    item.isHoliday
-                                      ? undefined
-                                      : { borderLeftColor: item.color || '#38bdf8' }
-                                  }
-                                >
-                                  <span class="cal-chip-text">{item.title}</span>
+                                }}
+                              >
+                                <div class="cal-cell-top">
+                                  <span
+                                    class={
+                                      cell.isToday
+                                        ? 'cal-day-num cal-day-num-today'
+                                        : 'cal-day-num'
+                                    }
+                                  >
+                                    {cell.day}
+                                  </span>
+                                  {lunar ? (
+                                    <span
+                                      class={
+                                        lunar.isFestival
+                                          ? 'cal-lunar-tag cal-lunar-fest'
+                                          : lunar.isSolarTerm
+                                            ? 'cal-lunar-tag cal-lunar-term'
+                                            : 'cal-lunar-tag'
+                                      }
+                                    >
+                                      {lunar.label}
+                                    </span>
+                                  ) : null}
                                 </div>
-                              );
-                            })}
-                            {extraCount > 0 ? (
-                              <div class="cal-chip-more">+{extraCount} more</div>
-                            ) : null}
-                          </div>
+
+                                <div class="cal-cell-events">
+                                  {visibleChips.map(function (item) {
+                                    return (
+                                      <div
+                                        key={item.id}
+                                        class={
+                                          item.isHoliday
+                                            ? 'cal-chip cal-chip-holiday'
+                                            : 'cal-chip'
+                                        }
+                                        style={
+                                          item.isHoliday
+                                            ? undefined
+                                            : { borderLeftColor: item.color || '#38bdf8' }
+                                        }
+                                      >
+                                        <span class="cal-chip-text">{item.title}</span>
+                                      </div>
+                                    );
+                                  })}
+                                  {extraCount > 0 ? (
+                                    <div class="cal-chip-more">+{extraCount} more</div>
+                                  ) : null}
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
                       );
                     })}
-                  </div>
-                );
-              })}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </section>
 
