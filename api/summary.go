@@ -55,12 +55,15 @@ var (
 	summaryCache   = map[string]summaryCacheEntry{}
 
 	articleCommentRe = regexp.MustCompile(`(?s)<!--.*?-->`)
-	articleDropRe    = regexp.MustCompile(`(?is)<(script|style|noscript|svg|nav|header|footer|aside|form|figure|button)\b[^>]*>.*?</(script|style|noscript|svg|nav|header|footer|aside|form|figure|button)>`)
-	articleRegionRe  = regexp.MustCompile(`(?is)<article\b[^>]*>(.*?)</article>`)
-	articlePRe       = regexp.MustCompile(`(?is)<p\b[^>]*>(.*?)</p>`)
-	articleMetaRe    = regexp.MustCompile(`(?is)<meta\b[^>]*>`)
-	articleAttrRe    = regexp.MustCompile(`(?is)\b(name|property|content|charset)\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)`)
-	contentCharsetRe = regexp.MustCompile(`(?i)charset=["']?([\w-]+)`)
+	articleTitleRe   = regexp.MustCompile(`(?is)<title[^>]*>(.*?)</title>`)
+	// "articleBody": "..." inside JSON-LD; the capture keeps the JSON string quotes
+	articleJSONBodyRe = regexp.MustCompile(`"articleBody"\s*:\s*("(?:[^"\\]|\\.)*")`)
+	articleDropRe     = regexp.MustCompile(`(?is)<(script|style|noscript|svg|nav|header|footer|aside|form|figure|button)\b[^>]*>.*?</(script|style|noscript|svg|nav|header|footer|aside|form|figure|button)>`)
+	articleRegionRe   = regexp.MustCompile(`(?is)<article\b[^>]*>(.*?)</article>`)
+	articlePRe        = regexp.MustCompile(`(?is)<p\b[^>]*>(.*?)</p>`)
+	articleMetaRe     = regexp.MustCompile(`(?is)<meta\b[^>]*>`)
+	articleAttrRe     = regexp.MustCompile(`(?is)\b(name|property|content|charset)\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)`)
+	contentCharsetRe  = regexp.MustCompile(`(?i)charset=["']?([\w-]+)`)
 )
 
 type summaryCacheEntry struct {
@@ -196,9 +199,31 @@ func fetchArticleText(articleURL string) (string, string, error) {
 	}
 	title, text := extractArticle(string(body))
 	if text == "" {
-		return "", "", fmt.Errorf("no article text found")
+		// Describe what came back (e.g. a bot-check page served with HTTP 200)
+		return "", "", fmt.Errorf("no article text found (HTTP %d, %s, page title %q)",
+			res.StatusCode, formatByteSize(len(body)), pageTitle(string(body)))
 	}
 	return title, text, nil
+}
+
+func formatByteSize(n int) string {
+	if n < 1024 {
+		return fmt.Sprintf("%d B", n)
+	}
+	return fmt.Sprintf("%d KB", (n+512)/1024)
+}
+
+// pageTitle returns the page's <title>, shortened, for error messages.
+func pageTitle(page string) string {
+	m := articleTitleRe.FindStringSubmatch(page)
+	if m == nil {
+		return ""
+	}
+	t := cleanFeedText(m[1])
+	if r := []rune(t); len(r) > 60 {
+		t = string(r[:60]) + "…"
+	}
+	return t
 }
 
 func declaredCharset(contentType string, body []byte) string {
@@ -237,9 +262,32 @@ func extractArticle(page string) (string, string) {
 	}
 	text := strings.TrimSpace(b.String())
 	if text == "" {
+		text = jsonLDArticleBody(page)
+	}
+	if text == "" {
 		text = description
 	}
 	return title, text
+}
+
+// jsonLDArticleBody returns schema.org "articleBody" text from JSON-LD, which
+// many news sites embed for search engines (a generic fallback when the
+// visible paragraphs can't be found).
+func jsonLDArticleBody(page string) string {
+	for _, m := range articleJSONBodyRe.FindAllStringSubmatch(page, -1) {
+		var body string
+		if json.Unmarshal([]byte(m[1]), &body) != nil {
+			continue
+		}
+		body = cleanFeedText(body)
+		if utf8.RuneCountInString(body) >= minParagraphRunes {
+			if r := []rune(body); len(r) > articleMaxTextRunes {
+				body = string(r[:articleMaxTextRunes])
+			}
+			return body
+		}
+	}
+	return ""
 }
 
 func articleParagraphs(fragment string) []string {

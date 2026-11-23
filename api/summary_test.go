@@ -51,6 +51,14 @@ func TestExtractArticlePrefersArticleParagraphs(t *testing.T) {
 	if text != want {
 		t.Fatalf("article text:\n got %q\nwant %q", text, want)
 	}
+	// No paragraphs: fall back to JSON-LD articleBody, then the meta description
+	jsonLD := `<html><head><title>Bot check</title><script type="application/ld+json">{"@type":"NewsArticle","articleBody":"Officials said the bridge \"will reopen\" Monday after repairs.\nTraffic is expected to be heavy."}</script></head><body><div id="app"></div></body></html>`
+	if _, text := extractArticle(jsonLD); text != `Officials said the bridge "will reopen" Monday after repairs. Traffic is expected to be heavy.` {
+		t.Fatalf("expected JSON-LD articleBody fallback, got %q", text)
+	}
+	if got := pageTitle(jsonLD); got != "Bot check" {
+		t.Fatalf("pageTitle: %q", got)
+	}
 	// No paragraphs: fall back to the meta description
 	if _, text := extractArticle(`<html><head><meta name="description" content="Only a description."></head><body><div>JS app</div></body></html>`); text != "Only a description." {
 		t.Fatalf("expected meta description fallback, got %q", text)
@@ -160,7 +168,8 @@ func TestSummaryRejectsAndReportsFailures(t *testing.T) {
 	if _, resp := getSummary(t, "https://gbk.example.cn/a"); resp.TLDR != "" || !strings.Contains(resp.Error, "charset") {
 		t.Fatalf("expected unsupported-charset error, got %+v", resp)
 	}
-	if _, resp := getSummary(t, "https://app.example.com/post"); resp.TLDR != "" || resp.Error != "no article text found" {
+	if _, resp := getSummary(t, "https://app.example.com/post"); resp.TLDR != "" ||
+		resp.Error != `no article text found (HTTP 200, 72 B, page title "")` {
 		t.Fatalf("expected no-text error for a JavaScript-only page, got %+v", resp)
 	}
 	if m.geminiCalls != 0 {
