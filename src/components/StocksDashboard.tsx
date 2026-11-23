@@ -40,6 +40,31 @@ interface StocksDashboardProps {
   controls?: ComponentChildren;
 }
 
+var STOCK_RANGE_STORAGE_KEY = 'glance:stockRange:v1';
+
+// The chart timeframe is a per-device setting (unlike the selected symbol)
+function readStoredRange(): StockRange | null {
+  try {
+    var saved = window.localStorage.getItem(STOCK_RANGE_STORAGE_KEY) as StockRange | null;
+    if (saved) {
+      for (var i = 0; i < STOCK_RANGES.length; i++) {
+        if (STOCK_RANGES[i].id === saved) return saved;
+      }
+    }
+  } catch (_err) {
+    // Ignore storage errors
+  }
+  return null;
+}
+
+function writeStoredRange(rng: StockRange): void {
+  try {
+    window.localStorage.setItem(STOCK_RANGE_STORAGE_KEY, rng);
+  } catch (_err) {
+    // Ignore storage errors
+  }
+}
+
 function readCachedStocks(): StocksResponse | null {
   try {
     var raw = window.localStorage.getItem(STOCKS_STORAGE_KEY);
@@ -89,6 +114,8 @@ export function StocksDashboard(props: StocksDashboardProps) {
 
   var _rangeState = useState<StockRange>(function () {
     var cached = readCachedStocks();
+    var stored = readStoredRange();
+    if (stored) return stored;
     return cached && cached.hero && cached.hero.range ? cached.hero.range : defaultRange;
   });
   var selectedRange = _rangeState[0];
@@ -270,34 +297,28 @@ export function StocksDashboard(props: StocksDashboardProps) {
     [props.isActive]
   );
 
-  // Auto-return Stocks hero and timeframe to defaults after configured idle period
+  // Auto-return the Stocks hero to the default symbol after the idle period
+  // (the timeframe is a saved setting and stays as chosen)
   var idleResetSec =
     typeof props.idleResetSeconds === 'number' && props.idleResetSeconds >= 5
       ? props.idleResetSeconds
       : 60;
   useEffect(
     function () {
-      if (selectedSymbol === defaultSymbol && selectedRange === defaultRange) {
+      if (selectedSymbol === defaultSymbol) {
         return;
       }
       var id = window.setTimeout(function () {
+        var rng = selectedRangeRef.current;
         setScrubPoint(null);
         setSelectedSymbol(defaultSymbol);
-        setSelectedRange(defaultRange);
 
-        var cachedHero = heroCacheRef.current[defaultSymbol + ':' + defaultRange];
+        var cachedHero = heroCacheRef.current[defaultSymbol + ':' + rng];
         if (cachedHero) {
           setHero(cachedHero.hero);
         }
-        var cachedQuotes = rangeQuotesCacheRef.current[defaultRange];
-        if (cachedQuotes && cachedQuotes.length > 0) {
-          setQuotes(cachedQuotes);
-        }
-        if (isActiveRef.current) {
-          var needQuotes = !(cachedQuotes && cachedQuotes.length > 0);
-          if (needQuotes || !cachedHero) {
-            fetchStocks(defaultSymbol, defaultRange, !needQuotes, false);
-          }
+        if (isActiveRef.current && !cachedHero) {
+          fetchStocks(defaultSymbol, rng, true, false);
         }
       }, idleResetSec * 1000);
 
@@ -305,7 +326,7 @@ export function StocksDashboard(props: StocksDashboardProps) {
         window.clearTimeout(id);
       };
     },
-    [selectedSymbol, selectedRange, defaultSymbol, defaultRange, idleResetSec, props.activityTick]
+    [selectedSymbol, defaultSymbol, idleResetSec, props.activityTick]
   );
 
   function handleSelectSymbol(sym: string) {
@@ -332,6 +353,7 @@ export function StocksDashboard(props: StocksDashboardProps) {
     if (rng === selectedRange) return;
     setScrubPoint(null);
     setSelectedRange(rng);
+    writeStoredRange(rng);
 
     var cachedHero = heroCacheRef.current[selectedSymbol + ':' + rng];
     if (cachedHero) {
