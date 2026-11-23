@@ -39,7 +39,7 @@ Captured at the iPad mini 2's 1024×768 landscape resolution (Retina 2×).
 - **Headlines Dashboard (Slide 5):**
   - **Your RSS feeds, one column each:** Reads up to 4 RSS 2.0, RSS 1.0/RDF, or Atom feeds from `NEWS_FEEDS` (Vercel Environment Variables or gitignored `.env.local`) and lays them out as equal-width columns in order. No per-site parsing: each item shows its title, age, and publisher. Each feed is cached for 15 minutes server-side, backs off for 5 minutes after a failure, and fails independently.
     ```
-    NEWS_FEEDS=[{"name":"Hacker News","url":"https://news.ycombinator.com/rss"},{"name":"Bay Area","url":"https://news.google.com/rss/headlines/section/geo/San%20Francisco%20Bay%20Area?hl=en-US&gl=US&ceid=US:en"},{"name":"中国要闻","url":"https://www.chinanews.com.cn/rss/importnews.xml"}]
+    NEWS_FEEDS=[{"name":"Hacker News","url":"https://news.ycombinator.com/rss"},{"name":"Bay Area","url":"https://www.sfgate.com/bayarea/feed/Bay-Area-News-429.php"},{"name":"中国要闻","url":"https://www.chinanews.com.cn/rss/importnews.xml"}]
     ```
     Local news for any city: `https://news.google.com/rss/headlines/section/geo/<City>%2C%20<Region>?hl=en-US&gl=US&ceid=US:en`. Chinese-language feeds that work: 中新网 要闻 (`chinanews.com.cn/rss/importnews.xml`) or 滚动 (`…/scroll-news.xml`), 纽约时报中文网 (`cn.nytimes.com/rss/`), DW 中文 (`rss.dw.com/rdf/rss-chi-all`), RFI 中文 (`rfi.fr/cn/rss`), 人民网 时政 (`people.com.cn/rss/politics.xml`).
   - **Tap for a QR code:** Tapping any headline opens a popover with its summary and a QR code to open it on your phone, so the wall display never leaves the dashboard.

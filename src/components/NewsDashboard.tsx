@@ -340,19 +340,14 @@ export function NewsDashboard(props: NewsDashboardProps) {
               <div class="news-popover-url">{shortURL(detail.item.url)}</div>
             </div>
             <div class="news-popover-qr">
-              <QRCode value={detail.item.url} size={168} />
+              <QRCode
+                value={detail.item.url}
+                size={184}
+                logoText={(detail.feedName || '?').charAt(0).toUpperCase()}
+                logoColor={detail.accent}
+              />
               <div class="news-popover-hint">Scan to open on your phone</div>
             </div>
-            <button
-              type="button"
-              class="news-popover-close"
-              aria-label="Close"
-              onClick={function () {
-                setDetail(null);
-              }}
-            >
-              ×
-            </button>
           </div>
         </div>
       ) : null}
