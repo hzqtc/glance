@@ -1,0 +1,235 @@
+/* ==========================================================================
+   Night ambient mode: analog clock (left ~65%) + current weather (right).
+   Shown during night-mode hours; a tap wakes the dashboards (see config
+   "ambient"). Colors stay dim and low-contrast for a dark room.
+   ========================================================================== */
+.ambient-screen {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 90; /* above the dashboards, below the night veil */
+  background-color: #020409;
+  background-image: radial-gradient(circle at 32% 50%, rgba(30, 41, 70, 0.32) 0%, rgba(2, 4, 9, 0) 55%);
+  color: rgba(203, 213, 225, 0.78);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-animation: ambientFadeIn 1.2s ease both;
+  animation: ambientFadeIn 1.2s ease both;
+}
+
+.ambient-layout {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  transition: transform 2s ease;
+}
+
+/* Left: the clock gets ~65% of the width */
+.ambient-left {
+  width: 65%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ambient-dial {
+  display: block;
+  width: 600px;
+  height: 600px;
+}
+
+.ambient-ring {
+  fill: none;
+  stroke: rgba(148, 163, 184, 0.16);
+  stroke-width: 0.6;
+}
+
+.ambient-mark {
+  stroke: rgba(148, 163, 184, 0.45);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+
+.ambient-mark-major {
+  stroke: rgba(226, 232, 240, 0.72);
+  stroke-width: 2.4;
+}
+
+.ambient-dot {
+  fill: rgba(148, 163, 184, 0.28);
+}
+
+.ambient-hand {
+  stroke-linecap: round;
+}
+
+.ambient-hand-hour {
+  stroke: rgba(226, 232, 240, 0.86);
+  stroke-width: 5.5;
+}
+
+.ambient-hand-minute {
+  stroke: rgba(203, 213, 225, 0.74);
+  stroke-width: 3;
+}
+
+/* Ticking second hand: thin amber needle with a small counterweight */
+.ambient-hand-second {
+  stroke: rgba(251, 191, 36, 0.78);
+  stroke-width: 1;
+  stroke-linecap: round;
+}
+
+.ambient-second-weight {
+  fill: rgba(251, 191, 36, 0.78);
+}
+
+/* City printed on the dial below 12, like a watch face */
+.ambient-dial-label {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+  font-size: 6.4px;
+  font-weight: 600;
+  letter-spacing: 1.6px;
+  fill: rgba(148, 163, 184, 0.5);
+}
+
+.ambient-cap {
+  fill: #020409;
+  stroke: rgba(251, 191, 36, 0.8);
+  stroke-width: 1.6;
+}
+
+.ambient-cap-dot {
+  fill: rgba(251, 191, 36, 0.85);
+}
+
+
+/* Right: date, weather, sunrise */
+.ambient-right {
+  width: 35%;
+  padding-right: 64px;
+  padding-right: calc(64px + env(safe-area-inset-right));
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.ambient-weekday {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(148, 163, 184, 0.62);
+}
+
+.ambient-day {
+  margin-top: 4px;
+  font-size: 26px;
+  font-weight: 300;
+  color: rgba(226, 232, 240, 0.8);
+}
+
+.ambient-weather {
+  margin-top: 40px;
+  padding-top: 36px;
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.ambient-temp-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  opacity: 0.85;
+}
+
+.ambient-temp {
+  margin-right: 16px;
+  font-size: 76px;
+  font-weight: 200;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: rgba(226, 232, 240, 0.86);
+  font-variant-numeric: tabular-nums;
+}
+
+.ambient-cond {
+  margin-top: 12px;
+  font-size: 22px;
+  font-weight: 400;
+  color: rgba(203, 213, 225, 0.72);
+}
+
+
+.ambient-sunrise {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  margin-top: 36px;
+}
+
+.ambient-sunrise-dot {
+  flex-shrink: 0;
+  width: 9px;
+  height: 9px;
+  margin: 7px 12px 0 2px;
+  border-radius: 50%;
+  background-color: rgba(251, 191, 36, 0.75);
+  box-shadow: 0 0 10px rgba(251, 191, 36, 0.35);
+}
+
+.ambient-sunrise-time {
+  font-size: 18px;
+  color: rgba(251, 191, 36, 0.72);
+}
+
+.ambient-sunrise-in {
+  margin-top: 2px;
+  font-size: 15px;
+  color: rgba(148, 163, 184, 0.6);
+}
+
+
+.ambient-hint {
+  position: absolute;
+  bottom: 22px;
+  bottom: calc(22px + env(safe-area-inset-bottom));
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 13px;
+  color: rgba(100, 116, 139, 0.4);
+}
+
+@media (max-height: 700px) {
+  .ambient-dial {
+    width: 520px;
+    height: 520px;
+  }
+  .ambient-weather {
+    margin-top: 28px;
+    padding-top: 26px;
+  }
+}
+
+@-webkit-keyframes ambientFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes ambientFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}

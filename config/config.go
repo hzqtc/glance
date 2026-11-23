@@ -28,6 +28,14 @@ type NightModeConfig struct {
 	DimOpacity float64 `json:"dimOpacity"`
 }
 
+// AmbientConfig controls the night ambient screen (large clock, weather, time
+// to sunrise), shown during nightMode hours. A tap wakes the dashboards; after
+// ResumeAfterSeconds without activity the ambient screen returns.
+type AmbientConfig struct {
+	Enabled            *bool `json:"enabled"` // default true when omitted
+	ResumeAfterSeconds int   `json:"resumeAfterSeconds"`
+}
+
 type RefreshConfig struct {
 	PollMinutes     int `json:"pollMinutes"`
 	DailyReloadHour int `json:"dailyReloadHour"`
@@ -88,6 +96,7 @@ type DashboardConfig struct {
 	TimeFormat       string          `json:"timeFormat"`
 	IdleResetSeconds int             `json:"idleResetSeconds"`
 	NightMode        NightModeConfig `json:"nightMode"`
+	Ambient          AmbientConfig   `json:"ambient"`
 	Refresh          RefreshConfig   `json:"refresh"`
 	Carousel         CarouselConfig  `json:"carousel"`
 	Photos           PhotosConfig    `json:"photos"`
@@ -154,6 +163,13 @@ func ParseAndNormalizeConfig(raw []byte) (DashboardConfig, error) {
 		cfg.Photos.SlideIntervalSeconds = 15
 	}
 	cfg.World.FXPairs = normalizeFXPairs(cfg.World.FXPairs, cfg.Cities)
+	if cfg.Ambient.Enabled == nil {
+		enabled := true
+		cfg.Ambient.Enabled = &enabled
+	}
+	if cfg.Ambient.ResumeAfterSeconds < 10 {
+		cfg.Ambient.ResumeAfterSeconds = 60
+	}
 	if cfg.NightMode.DimOpacity <= 0 || cfg.NightMode.DimOpacity > 0.9 {
 		cfg.NightMode.DimOpacity = 0.55
 	}

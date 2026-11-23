@@ -28,6 +28,7 @@ import { PhotosDashboard } from './components/PhotosDashboard';
 import { WORLD_STORAGE_KEY, WorldDashboard } from './components/WorldDashboard';
 import { PasscodeGate } from './components/PasscodeGate';
 import { RotateCountdown } from './components/RotateCountdown';
+import { AmbientScreen } from './components/AmbientScreen';
 
 var WEATHER_STORAGE_KEY = 'glance:lastDashboard:v1';
 var ANIM_STORAGE_KEY = 'glance:animEnabled:v1';
@@ -38,6 +39,7 @@ var UNITS_STORAGE_KEY = 'glance:units:v1';
 var NEWS_SLIDE = 4;
 var PHOTOS_SLIDE = 5;
 var TOTAL_SLIDES = 6;
+
 
 interface ResolvedRotationStep {
   slide: number;
@@ -96,6 +98,7 @@ interface DemoOverride {
   windKmh?: number;
   minutesSinceMidnight?: number;
   disableNightQuiet?: boolean;
+  forceAmbient?: boolean; // ?demo=ambient shows the night ambient screen any time
 }
 
 function getDemoOverride(): DemoOverride | null {
@@ -139,6 +142,9 @@ function getDemoOverride(): DemoOverride | null {
         minutesSinceMidnight: 16 * 60 + 45,
         disableNightQuiet: true,
       };
+    }
+    if (mode === 'ambient') {
+      return { forceAmbient: true };
     }
     if (mode === 'night') {
       return {
@@ -527,6 +533,15 @@ function DashboardShell(props: DashboardShellProps) {
   var touchStartRef = useRef<{ x: number; y: number; ignore: boolean } | null>(null);
   var autoRotateRef = useRef<boolean>(true);
   var manualPauseUntilRef = useRef<number>(0);
+  // Night ambient mode: 0 = asleep (ambient screen shows during night hours);
+  // otherwise the time until which the woken dashboards stay up
+  var _ambientWakeState = useState<number>(0);
+  var ambientWakeUntil = _ambientWakeState[0];
+  var setAmbientWakeUntil = _ambientWakeState[1];
+  var ambientWakeUntilRef = useRef<number>(0);
+  var ambientVisibleRef = useRef<boolean>(false);
+  var ambientResumeMsRef = useRef<number>(60 * 1000);
+
   var gestureActiveRef = useRef<boolean>(false);
   var gestureStartMsRef = useRef<number>(0);
   var gesturePendingRef = useRef<boolean>(false);
@@ -580,6 +595,10 @@ function DashboardShell(props: DashboardShellProps) {
   // calendar month strip) on the iPad mini 2.
   function recordUserActivity() {
     var now = Date.now();
+    // Any activity while the dashboards are woken at night keeps them up
+    if (ambientWakeUntilRef.current > now) {
+      ambientWakeUntilRef.current = now + ambientResumeMsRef.current;
+    }
     // Safety: a gesture whose touchend never arrived stops deferring after 10s
     if (gestureActiveRef.current && now - gestureStartMsRef.current > 10000) {
       gestureActiveRef.current = false;
@@ -916,7 +935,8 @@ function DashboardShell(props: DashboardShellProps) {
         var delayMs = paused ? pauseLeft : currentStepSeconds * 1000;
         setRotateTargetMs(paused ? 0 : now + delayMs);
         timerId = window.setTimeout(function () {
-          if (document.hidden) {
+          // Hold rotation while hidden or behind the night ambient screen
+          if (document.hidden || ambientVisibleRef.current) {
             scheduleNext();
             return;
           }
@@ -997,6 +1017,46 @@ function DashboardShell(props: DashboardShellProps) {
       nightMode &&
       nightMode.enabled &&
       isNightQuietHours(homeClock.hour24, nightMode.startHour, nightMode.endHour)
+  );
+
+  // Night ambient mode (config "ambient"): during night hours show the calm clock
+  // screen unless the dashboards were woken by a tap within resumeAfterSeconds
+  // (any activity while awake extends that).
+  var ambientCfg = data && data.config ? data.config.ambient : undefined;
+  var ambientEnabled = !ambientCfg || ambientCfg.enabled !== false;
+  ambientResumeMsRef.current =
+    ambientCfg && ambientCfg.resumeAfterSeconds >= 10 ? ambientCfg.resumeAfterSeconds * 1000 : 60 * 1000;
+  var ambientVisible = Boolean(
+    ((ambientEnabled && isNightQuiet) || (demo && demo.forceAmbient)) && ambientWakeUntil === 0
+  );
+  ambientVisibleRef.current = ambientVisible;
+
+  function wakeFromAmbient() {
+    var until = Date.now() + ambientResumeMsRef.current;
+    ambientWakeUntilRef.current = until;
+    setAmbientWakeUntil(until);
+  }
+
+  // Return to the ambient screen once the woken dashboards go untouched
+  useEffect(
+    function () {
+      if (ambientWakeUntil === 0) return;
+      var timerId: number | null = null;
+      function check() {
+        var left = ambientWakeUntilRef.current - Date.now();
+        if (left <= 0) {
+          ambientWakeUntilRef.current = 0;
+          setAmbientWakeUntil(0);
+          return;
+        }
+        timerId = window.setTimeout(check, left + 50);
+      }
+      check();
+      return function () {
+        if (timerId !== null) window.clearTimeout(timerId);
+      };
+    },
+    [ambientWakeUntil]
   );
 
   // Daily silent reload for long-term 1 GB RAM Safari 12 stability
@@ -1251,7 +1311,7 @@ function DashboardShell(props: DashboardShellProps) {
             windKmh={canvasWindKmh}
             moonPhase={moonPhase}
             isNightQuiet={isNightQuiet}
-            animated={animEnabled && activeSlide === 0}
+            animated={animEnabled && activeSlide === 0 && !ambientVisible}
           />
 
           <main class="dashboard-content">
@@ -1682,9 +1742,21 @@ function DashboardShell(props: DashboardShellProps) {
         />
       </div>
 
+      {ambientVisible ? (
+        <AmbientScreen
+          clock={homeClock}
+          cityName={homeCity ? homeCity.name : ''}
+          weather={homeWeather}
+          units={units}
+          timeFormat={timeFormat}
+          onWake={wakeFromAmbient}
+        />
+      ) : null}
+
+      {/* The ambient screen is already dark, so the dim veil only covers woken dashboards */}
       <div
         class="night-veil"
-        style={{ opacity: dimOpacity }}
+        style={{ opacity: ambientVisible ? 0 : dimOpacity }}
         aria-hidden="true"
       />
     </div>

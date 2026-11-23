@@ -12,6 +12,11 @@ export interface NightModeConfig {
   dimOpacity: number;
 }
 
+export interface AmbientConfig {
+  enabled: boolean;
+  resumeAfterSeconds: number;
+}
+
 export interface RefreshConfig {
   pollMinutes: number;
   dailyReloadHour: number;
@@ -72,6 +77,7 @@ export interface DashboardConfig {
   timeFormat: TimeFormat;
   idleResetSeconds?: number;
   nightMode: NightModeConfig;
+  ambient?: AmbientConfig;
   refresh: RefreshConfig;
   carousel?: CarouselConfig;
   photos?: PhotosConfig;

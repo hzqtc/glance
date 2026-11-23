@@ -4,9 +4,13 @@
   "idleResetSeconds": 60,
   "nightMode": {
     "enabled": true,
-    "startHour": 23,
+    "startHour": 22,
     "endHour": 7,
     "dimOpacity": 0.55
+  },
+  "ambient": {
+    "enabled": true,
+    "resumeAfterSeconds": 60
   },
   "refresh": {
     "pollMinutes": 10,

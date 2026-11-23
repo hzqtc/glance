@@ -12,4 +12,5 @@
 @import './photos.css';     /* Photos collage slide */
 @import './world.css';      /* World map & FX slide */
 @import './news.css';       /* Headlines slide: Hacker News, local news, 百度热搜 */
+@import './ambient.css';    /* Night ambient mode: analog clock + weather + time to sunrise */
 @import './responsive.css'; /* Cross-slide max-height overrides (iPad mini 6, short landscapes) */

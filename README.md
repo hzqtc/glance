@@ -50,6 +50,9 @@ Captured at the iPad mini 2's 1024×768 landscape resolution (Retina 2×).
   - **Motion / Static icon toggle:** Switch between animated sky and 0-FPS static sky (saved per-device in `localStorage` so older iPad mini 2 hardware stays cool 24/7 while newer devices stay animated).
   - **°F / °C toggle:** Instant temperature & wind unit switching.
   - **Hard Refresh button:** Clears cached weather, unregisters Service Workers, purges Cache Storage, and performs a cache-busted full reload (ideal for Home Screen PWA mode).
+- **Night Ambient Mode:**
+  - During night-mode hours (`nightMode.startHour`–`endHour`, 11 PM–7 AM by default) the dashboards give way to a calm, dimmed screen: a minimal analog clock with a ticking second hand on the left (~65% of the width) and, on the right, the date, the Home city's current temperature and conditions, and the time until sunrise. Auto-rotation and the animated sky pause behind it, and the layout drifts a few pixels each minute so it doesn't sit on the same pixels all night.
+  - Tap anywhere to bring the rotating dashboards back; after `ambient.resumeAfterSeconds` (60s) without any activity the ambient screen returns, as long as it's still night. Turn it off with `"ambient": { "enabled": false }` in `config/dashboard.config.json` (night dimming alone still applies). Preview it any time with `?demo=ambient`.
 - **Built for 24/7 iPad mini 2 (iOS 12) Stability:**
   - Preact + Vite with a classic ES5 Safari 12 production bundle (~110 KB gzipped, plus ~21 KB of legacy polyfills) and zero `<script type="module">` traps.
   - Minute-aligned clock updates, auto night-dimming (`11 PM – 7 AM`), offline `localStorage`/Service Worker resilience, zero-touch auto-reload on new Vercel deployments, and a silent daily 3:30 AM reload.
@@ -64,6 +67,7 @@ Edit [`config/dashboard.config.json`](./config/dashboard.config.json) to customi
   "units": "F",
   "timeFormat": "12h",
   "nightMode": { "enabled": true, "startHour": 23, "endHour": 7, "dimOpacity": 0.55 },
+  "ambient": { "enabled": true, "resumeAfterSeconds": 60 },
   "cities": [
     { "id": "sunnyvale", "name": "Sunnyvale", "region": "CA", "lat": 37.3688, "lon": -122.0363, "timezone": "America/Los_Angeles" },
     { "id": "paris", "name": "Paris", "region": "France", "lat": 48.8566, "lon": 2.3522, "timezone": "Europe/Paris" },
@@ -113,7 +117,7 @@ npm run build && npm run preview
 
 ### Preview & Demo Modes
 Append `?demo=<mode>` to preview any condition immediately:
-`?demo=night`, `?demo=day`, `?demo=sunset`, `?demo=rain`, `?demo=snow`, `?demo=storm`, `?demo=fog`, `?demo=cloudy`, `?demo=wind`.
+`?demo=night`, `?demo=day`, `?demo=sunset`, `?demo=rain`, `?demo=snow`, `?demo=storm`, `?demo=fog`, `?demo=cloudy`, `?demo=wind`. `?demo=ambient` shows the night ambient screen regardless of the time.
 
 `?demo=calendar` shows three sample calendars (Work, Personal, Family) on the Calendar slide instead of your private feeds: recurring events, a busy "today", and an upcoming trip countdown, all generated relative to the current date by [`api/calendar.go`](./api/calendar.go) and parsed by the real `.ics` pipeline.
 

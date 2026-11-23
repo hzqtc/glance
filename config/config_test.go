@@ -39,13 +39,16 @@ func TestParseAndNormalizeCarouselSchedule(t *testing.T) {
 			t.Fatalf("derived FX pair %d: got %+v, want %s", i, cfg.World.FXPairs[i], sym)
 		}
 	}
+	if cfg.Ambient.Enabled == nil || !*cfg.Ambient.Enabled || cfg.Ambient.ResumeAfterSeconds != 60 {
+		t.Fatalf("unexpected ambient config: %+v", cfg.Ambient)
+	}
 	if cfg.Photos.SlideIntervalSeconds != 15 {
 		t.Fatalf("expected default photos slideIntervalSeconds 15, got %d", cfg.Photos.SlideIntervalSeconds)
 	}
 	if cfg.IdleResetSeconds != 60 {
 		t.Fatalf("expected default idleResetSeconds 60, got %d", cfg.IdleResetSeconds)
 	}
-	if !cfg.NightMode.Enabled || cfg.NightMode.StartHour != 23 || cfg.NightMode.EndHour != 7 || cfg.NightMode.DimOpacity <= 0 {
+	if !cfg.NightMode.Enabled || cfg.NightMode.StartHour != 22 || cfg.NightMode.EndHour != 7 || cfg.NightMode.DimOpacity <= 0 {
 		t.Fatalf("unexpected default nightMode config: %+v", cfg.NightMode)
 	}
 
@@ -87,6 +90,14 @@ func TestParseAndNormalizeCarouselSchedule(t *testing.T) {
 	}
 	if customCfg.Photos.SlideIntervalSeconds != 25 {
 		t.Fatalf("expected custom photos slideIntervalSeconds 25, got %d", customCfg.Photos.SlideIntervalSeconds)
+	}
+	// Omitted ambient section: enabled with the 60s default
+	if customCfg.Ambient.Enabled == nil || !*customCfg.Ambient.Enabled || customCfg.Ambient.ResumeAfterSeconds != 60 {
+		t.Fatalf("expected ambient defaults when omitted, got %+v", customCfg.Ambient)
+	}
+	offCfg, err := ParseAndNormalizeConfig([]byte(`{"cities":[{"id":"a","name":"A","timezone":"UTC"}],"ambient":{"enabled":false,"resumeAfterSeconds":120}}`))
+	if err != nil || *offCfg.Ambient.Enabled || offCfg.Ambient.ResumeAfterSeconds != 120 {
+		t.Fatalf("expected ambient disabled with 120s, got %+v %v", offCfg.Ambient, err)
 	}
 	if customCfg.IdleResetSeconds != 90 {
 		t.Fatalf("expected custom idleResetSeconds 90, got %d", customCfg.IdleResetSeconds)
