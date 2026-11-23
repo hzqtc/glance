@@ -29,7 +29,7 @@
       { "slide": "photos", "seconds": 60 },
       { "slide": "world", "seconds": 15 },
       { "slide": "photos", "seconds": 60 },
-      { "slide": "news", "seconds": 15 }
+      { "slide": "news", "seconds": 30 }
     ]
   },
   "photos": {
