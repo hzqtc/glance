@@ -81,18 +81,6 @@ function formatHeaderDate(dateKey: string): string {
   return months[m - 1] + ' ' + String(d);
 }
 
-// Readable link text (decodes percent-encoded non-ASCII paths);
-// the QR code keeps the encoded URL.
-function shortURL(url: string): string {
-  var text = url;
-  try {
-    text = decodeURIComponent(url);
-  } catch (_err) {
-    // Leave malformed escapes as-is
-  }
-  return text.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '');
-}
-
 export function NewsDashboard(props: NewsDashboardProps) {
   var _dataState = useState<NewsResponse | null>(function () {
     return readCachedNews();
@@ -389,7 +377,19 @@ export function NewsDashboard(props: NewsDashboardProps) {
           >
             <div class="news-popover-text">
               <div class="news-popover-source">{detail.feedName}</div>
-              <div class="news-popover-title">{detail.item.title}</div>
+              {/* Tapping the title opens the article in Safari / the default browser */}
+              <a
+                class="news-popover-title"
+                href={detail.item.url}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {detail.item.title}
+                <span class="news-popover-title-arrow" aria-hidden="true">
+                  {' '}
+                  ↗
+                </span>
+              </a>
               {/* The feed's own summary always shows; the AI TL;DR goes below it */}
               {detail.item.summary ? (
                 <div class="news-popover-body">{detail.item.summary}</div>
@@ -426,7 +426,6 @@ export function NewsDashboard(props: NewsDashboardProps) {
                   (detail.item.source && detail.item.publishedMs ? ' · ' : '') +
                   (detail.item.publishedMs ? formatAgo(detail.item.publishedMs, nowMs) : '')}
               </div>
-              <div class="news-popover-url">{shortURL(detail.item.url)}</div>
             </div>
             <div class="news-popover-qr">
               <QRCode
