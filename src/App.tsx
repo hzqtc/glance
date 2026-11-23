@@ -1350,7 +1350,7 @@ function DashboardShell(props: DashboardShellProps) {
             onUnauthorized={props.onUnauthorized}
           />
         </section>
-        {/* Slide 4: Headlines (HN, BBC 中文, GitHub Trending, On This Day) */}
+        {/* Slide 4: Headlines (HN, BBC 中文, GitHub Trending) */}
         <section class="carousel-slide" aria-hidden={activeSlide !== NEWS_SLIDE}>
           <NewsDashboard
             isActive={activeSlide === NEWS_SLIDE}

@@ -51,11 +51,6 @@ const testGitHubTrending = `<html><body>
 </article>
 </body></html>`
 
-const testOnThisDay = `{"selected":[
-  {"year":1963,"text":"John F. Kennedy was assassinated in Dallas.","pages":[{"titles":{"normalized":"Assassination of John F. Kennedy"},"extract":"On November 22, 1963...","content_urls":{"desktop":{"page":"https://en.wikipedia.org/wiki/Assassination_of_John_F._Kennedy"}}}]},
-  {"year":1995,"text":"Toy Story was released in theaters.","pages":[{"titles":{"normalized":"Toy Story"},"content_urls":{"desktop":{"page":"https://en.wikipedia.org/wiki/Toy_Story"}}}]}
-]}`
-
 func resetNewsCache() {
 	newsCacheMu.Lock()
 	newsCache = map[string]newsCacheEntry{}
@@ -87,8 +82,6 @@ func TestNewsHandlerAggregatesSources(t *testing.T) {
 				return newsTestResponse(200, testBBCRSS), nil
 			case u == githubTrendingURL:
 				return newsTestResponse(200, testGitHubTrending), nil
-			case strings.Contains(u, "/feed/onthisday/selected/"):
-				return newsTestResponse(200, testOnThisDay), nil
 			}
 			t.Errorf("unexpected request %s", u)
 			return newsTestResponse(404, ""), nil
@@ -151,10 +144,6 @@ func TestNewsHandlerAggregatesSources(t *testing.T) {
 		t.Fatalf("unexpected second repo: %+v", resp.GitHub[1])
 	}
 
-	// Wikipedia: most recent first, with article link
-	if len(resp.OnThisDay) != 2 || resp.OnThisDay[0].Year != 1995 || resp.OnThisDay[1].URL != "https://en.wikipedia.org/wiki/Assassination_of_John_F._Kennedy" {
-		t.Fatalf("unexpected on-this-day events: %+v", resp.OnThisDay)
-	}
 }
 
 func TestNewsHandlerPartialFailure(t *testing.T) {
@@ -164,8 +153,8 @@ func TestNewsHandlerPartialFailure(t *testing.T) {
 			if r.URL.String() == githubTrendingURL {
 				return newsTestResponse(200, `<html>redesigned page</html>`), nil
 			}
-			if strings.Contains(r.URL.String(), "onthisday") {
-				return newsTestResponse(200, testOnThisDay), nil
+			if r.URL.String() == bbcChineseRSSURL {
+				return newsTestResponse(200, testBBCRSS), nil
 			}
 			return newsTestResponse(503, ""), nil
 		}),
@@ -185,11 +174,11 @@ func TestNewsHandlerPartialFailure(t *testing.T) {
 	}
 	var resp NewsResponse
 	_ = json.Unmarshal(rec.Body.Bytes(), &resp)
-	if len(resp.OnThisDay) != 2 || resp.HN == nil || len(resp.HN) != 0 || len(resp.BBC) != 0 || len(resp.GitHub) != 0 {
-		t.Fatalf("expected only Wikipedia data, got %+v", resp)
+	if len(resp.BBC) != 2 || resp.HN == nil || len(resp.HN) != 0 || resp.GitHub == nil || len(resp.GitHub) != 0 {
+		t.Fatalf("expected only BBC data, got %+v", resp)
 	}
-	if len(resp.Warnings) != 3 {
-		t.Fatalf("expected 3 warnings (BBC, GitHub, Hacker News), got %v", resp.Warnings)
+	if len(resp.Warnings) != 2 {
+		t.Fatalf("expected 2 warnings (GitHub, Hacker News), got %v", resp.Warnings)
 	}
 }
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
-import type { BBCStory, GitHubRepo, HNStory, NewsResponse, OnThisDayEvent } from '../types';
+import type { BBCStory, GitHubRepo, HNStory, NewsResponse } from '../types';
 import { QRCode } from './QRCode';
 
 export var NEWS_STORAGE_KEY = 'glance:lastNews:v1';
@@ -17,7 +17,7 @@ interface NewsDashboardProps {
 
 // What the QR popover shows for a tapped headline, repo, or event.
 interface NewsDetail {
-  source: 'hn' | 'bbc' | 'github' | 'wiki';
+  source: 'hn' | 'bbc' | 'github';
   sourceLabel: string;
   title: string;
   body?: string;
@@ -30,7 +30,7 @@ function readCachedNews(): NewsResponse | null {
     var raw = window.localStorage.getItem(NEWS_STORAGE_KEY);
     if (!raw) return null;
     var parsed = JSON.parse(raw) as NewsResponse;
-    if (parsed && parsed.hn && parsed.bbc && parsed.github && parsed.onThisDay) {
+    if (parsed && parsed.hn && parsed.bbc && parsed.github) {
       return parsed;
     }
   } catch (_err) {
@@ -198,7 +198,6 @@ export function NewsDashboard(props: NewsDashboardProps) {
   var hn: HNStory[] = data ? data.hn : [];
   var bbc: BBCStory[] = data ? data.bbc : [];
   var github: GitHubRepo[] = data ? data.github : [];
-  var onThisDay: OnThisDayEvent[] = data ? data.onThisDay : [];
   var nowMs = props.nowMs;
   var dateLabel = data ? formatHeaderDate(data.date) : '';
   var emptyHint = loadError ? 'Unavailable · ' + loadError : 'Loading…';
@@ -286,14 +285,14 @@ export function NewsDashboard(props: NewsDashboardProps) {
                   >
                     <span class="news-rank">{String(i + 1)}</span>
                     <div class="news-item-main">
-                      <div class="news-item-title news-clamp-1">{s.title}</div>
+                      <div class="news-item-title news-clamp-2">{s.title}</div>
                       <div class="news-item-meta">
-                        {s.domain ? <span class="news-domain">{s.domain}</span> : null}
                         <span>{String(s.score)} pts</span>
                         <span>
                           {String(s.comments)} {s.comments === 1 ? 'comment' : 'comments'}
                         </span>
                         <span>{formatAgo(s.timeMs, nowMs)}</span>
+                        {s.domain ? <span class="news-domain">{s.domain}</span> : null}
                       </div>
                     </div>
                   </li>
@@ -327,11 +326,12 @@ export function NewsDashboard(props: NewsDashboardProps) {
                     }}
                   >
                     <div class="news-item-main">
-                      <div class="news-item-title news-clamp-1">{s.title}</div>
-                      <div class="news-item-meta">
-                        {s.publishedMs ? <span>{formatAgoZh(s.publishedMs, nowMs)}</span> : null}
-                        {s.summary ? <span class="news-summary">{s.summary}</span> : null}
-                      </div>
+                      <div class="news-item-title news-clamp-2">{s.title}</div>
+                      {s.publishedMs ? (
+                        <div class="news-item-meta">
+                          <span>{formatAgoZh(s.publishedMs, nowMs)}</span>
+                        </div>
+                      ) : null}
                     </div>
                   </li>
                 );
@@ -391,8 +391,10 @@ export function NewsDashboard(props: NewsDashboardProps) {
                         ) : null}
                         <span>★ {formatCount(g.stars)}</span>
                         <span class="news-stars-today">+{formatCount(g.starsToday)} today</span>
-                        {g.description ? <span class="news-summary">{g.description}</span> : null}
                       </div>
+                      {g.description ? (
+                        <div class="news-item-desc news-clamp-2">{g.description}</div>
+                      ) : null}
                     </div>
                   </li>
                 );
@@ -400,39 +402,6 @@ export function NewsDashboard(props: NewsDashboardProps) {
             </ol>
           </section>
 
-          {/* Wikipedia: On this day */}
-          <section class="news-card news-card-wiki" aria-label="On this day in history">
-            <div class="news-card-head">
-              <span class="news-badge news-badge-wiki">W</span>
-              <span class="news-card-title">On This Day</span>
-            </div>
-            <ol class="news-list">
-              {onThisDay.length === 0 ? <li class="news-empty">{emptyHint}</li> : null}
-              {onThisDay.map(function (e, i) {
-                return (
-                  <li
-                    key={'otd-' + String(e.year) + '-' + String(i)}
-                    class={e.url ? 'news-item news-item-otd' : 'news-item news-item-otd news-item-static'}
-                    onClick={function () {
-                      if (!e.url) return;
-                      openDetail({
-                        source: 'wiki',
-                        sourceLabel: 'Wikipedia · On this day',
-                        title: String(e.year) + (e.title ? ' · ' + e.title : ''),
-                        body: e.text,
-                        url: e.url,
-                      });
-                    }}
-                  >
-                    <span class="news-year">{String(e.year)}</span>
-                    <div class="news-item-main">
-                      <div class="news-otd-text news-clamp-2">{e.text}</div>
-                    </div>
-                  </li>
-                );
-              })}
-            </ol>
-          </section>
         </div>
       </div>
 

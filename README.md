@@ -12,7 +12,7 @@ Captured at the iPad mini 2's 1024×768 landscape resolution (Retina 2×).
 | **Calendar** (demo mode) | **World** |
 | ![Calendar dashboard: month grid of color-coded Work, Personal, and Family events with Chinese lunar dates and US holidays, today's agenda, and a trip countdown](docs/screenshots/calendar.jpg) | ![World dashboard: day/night map with city arcs, ISS orbit, earthquakes, and FX currency cards](docs/screenshots/world.jpg) |
 | **Headlines** | **Photos** (demo mode) |
-| ![Headlines dashboard: Hacker News, BBC Chinese, GitHub Trending, and Wikipedia On This Day cards](docs/screenshots/news.jpg) | ![Photos frame: auto-collage of one portrait and two landscape stock photos](docs/screenshots/photos.jpg) |
+| ![Headlines dashboard: three columns of Hacker News, BBC Chinese, and GitHub Trending](docs/screenshots/news.jpg) | ![Photos frame: auto-collage of one portrait and two landscape stock photos](docs/screenshots/photos.jpg) |
 
 ## Features
 
@@ -37,8 +37,8 @@ Captured at the iPad mini 2's 1024×768 landscape resolution (Retina 2×).
   - **Live World Map:** Seamless equirectangular map centered horizontally on the Home city, with the real-time day/night terminator, live ISS position and orbit track (propagated from TLEs via wheretheiss.at with a CelesTrak fallback), M4.5+ earthquakes from the past day (USGS), NOAA SWPC Kp-index aurora ovals, and active tropical storms (NHC + GDACS). Tap any marker for an inline popover with details.
   - **FX Currency Cards:** Live exchange rates derived automatically from your cities: the first (Home) city's currency is the base, and each other city adds its local currency (looked up from its `timezone`, deduplicated, in city order). The default cities give USD → EUR, CNY, JPY, GBP, SGD, AUD; a non-USD Home uses cross rates (e.g. `GBPJPY=X`). Cities whose timezone isn't in [`config/currency.go`](./config/currency.go) get no card. To pick pairs by hand instead, set `world.fxPairs` (e.g. `[{ "symbol": "KRW=X" }]`).
 - **Headlines Dashboard (Slide 5):**
-  - **Four sources at a glance:** Hacker News top stories (points, comments, domain), BBC News 中文 (the official Traditional-Chinese RSS feed converted to Simplified with the [OpenCC](https://github.com/BYVoid/OpenCC) character table), GitHub Trending (language, total stars, stars today), and Wikipedia's "On this day" selected events. Each source is cached for 15 minutes server-side and fails independently.
-  - **Tap for a QR code:** Tapping any headline, repo, or event opens a popover with its summary and a QR code to open it on your phone, so the wall display never leaves the dashboard.
+  - **Three columns at a glance:** Hacker News top stories (points, comments, domain), BBC News 中文 (the official Traditional-Chinese RSS feed converted to Simplified with the [OpenCC](https://github.com/BYVoid/OpenCC) character table), and GitHub Trending (language, total stars, stars today). Each source is cached for 15 minutes server-side and fails independently.
+  - **Tap for a QR code:** Tapping any headline or repo opens a popover with its summary and a QR code to open it on your phone, so the wall display never leaves the dashboard.
 - **Photos Frame (Slide 6):**
   - **Pure Edge-to-Edge Smart Auto-Collage:** Reads one or more Google Photos link-shared album URLs from `PHOTOS_ALBUM_URL` / `PHOTOS_ALBUM_URLS` (stored in Vercel Environment Variables or gitignored `.env.local`). Automatically composes aspect-ratio-aware full-screen layouts (1 landscape hero, 2–3 side-by-side portraits, or 1 portrait + 2 stacked landscape bento grids), shuffles & crossfades every 15s, and supports tap or left/right swipe to jump between collages.
 - **Minimalist Top-Center Controls:**
@@ -86,7 +86,7 @@ Edit [`config/dashboard.config.json`](./config/dashboard.config.json) to customi
 - **Serverless Calendar API (`api/calendar.go`):** Fetches and parses the private `.ics` feeds from `CALENDAR_ICS_URLS` (including recurring events), served `private, no-store`.
 - **Serverless Photos API (`api/photos.go`):** Resolves Google Photos shared-album links from `PHOTOS_ALBUM_URLS` into image URLs and dimensions for the collage layout, served `private, no-store`.
 - **Serverless World API (`api/world.go`):** Concurrently fetches FX quotes (Yahoo Finance), ISS TLEs, USGS earthquakes, NOAA aurora Kp index, and tropical storms, each with its own in-memory cache (`?refresh=1` bypasses it).
-- **Serverless News API (`api/news.go`):** Concurrently fetches Hacker News, BBC 中文 RSS (converted by the stdlib-only `zhconv/` package), GitHub Trending (scraped; no official API), and Wikipedia On This Day, each with its own in-memory cache.
+- **Serverless News API (`api/news.go`):** Concurrently fetches Hacker News, BBC 中文 RSS (converted by the stdlib-only `zhconv/` package), and GitHub Trending (scraped; no official API), each with its own in-memory cache.
 - **Auth API (`api/auth.go` + `auth/`):** `GET /api/auth` reports lock status; `POST /api/auth` verifies the PIN (per-IP rate limited) and issues the signed session cookie.
 - **Local Dev Server (`cmd/devserver/main.go`):** Mounts `/api/auth`, `/api/weather`, `/api/stocks`, `/api/calendar`, `/api/world`, `/api/news`, and `/api/photos` on `127.0.0.1:8080`, loads secrets from `.env.local`/`.env`, and reads `config/dashboard.config.json` live from disk on every request.
 

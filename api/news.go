@@ -54,37 +54,26 @@ type GitHubRepo struct {
 	URL           string `json:"url"`
 }
 
-type OnThisDayEvent struct {
-	Year    int    `json:"year"`
-	Text    string `json:"text"`
-	Title   string `json:"title,omitempty"`
-	URL     string `json:"url,omitempty"`
-	Extract string `json:"extract,omitempty"`
-}
-
 type NewsResponse struct {
-	FetchedAt string           `json:"fetchedAt"`
-	Date      string           `json:"date"` // YYYY-MM-DD in the Home city's timezone
-	HN        []HNStory        `json:"hn"`
-	BBC       []BBCStory       `json:"bbc"`
-	GitHub    []GitHubRepo     `json:"github"`
-	OnThisDay []OnThisDayEvent `json:"onThisDay"`
-	Warnings  []string         `json:"warnings,omitempty"`
+	FetchedAt string       `json:"fetchedAt"`
+	Date      string       `json:"date"` // YYYY-MM-DD in the Home city's timezone
+	HN        []HNStory    `json:"hn"`
+	BBC       []BBCStory   `json:"bbc"`
+	GitHub    []GitHubRepo `json:"github"`
+	Warnings  []string     `json:"warnings,omitempty"`
 }
 
 const (
-	hnTopStoriesURL     = "https://hacker-news.firebaseio.com/v0/topstories.json"
-	hnItemURLFmt        = "https://hacker-news.firebaseio.com/v0/item/%d.json"
-	bbcChineseRSSURL    = "https://feeds.bbci.co.uk/zhongwen/trad/rss.xml"
-	githubTrendingURL   = "https://github.com/trending"
-	wikiOnThisDayURLFmt = "https://en.wikipedia.org/api/rest_v1/feed/onthisday/selected/%02d/%02d"
-	newsUserAgent       = "glance-dashboard/1.0 (personal wall dashboard)"
+	hnTopStoriesURL   = "https://hacker-news.firebaseio.com/v0/topstories.json"
+	hnItemURLFmt      = "https://hacker-news.firebaseio.com/v0/item/%d.json"
+	bbcChineseRSSURL  = "https://feeds.bbci.co.uk/zhongwen/trad/rss.xml"
+	githubTrendingURL = "https://github.com/trending"
+	newsUserAgent     = "glance-dashboard/1.0 (personal wall dashboard)"
 
-	newsCacheTTL      = 15 * time.Minute
-	onThisDayCacheTTL = 6 * time.Hour
-	hnStoryCount      = 12
-	bbcStoryCount     = 12
-	githubRepoCount   = 12
+	newsCacheTTL    = 15 * time.Minute
+	hnStoryCount    = 12
+	bbcStoryCount   = 12
+	githubRepoCount = 12
 )
 
 var (
@@ -127,7 +116,6 @@ func NewsHandler(w http.ResponseWriter, r *http.Request) {
 		HN:        []HNStory{},
 		BBC:       []BBCStory{},
 		GitHub:    []GitHubRepo{},
-		OnThisDay: []OnThisDayEvent{},
 	}
 
 	var (
@@ -139,7 +127,7 @@ func NewsHandler(w http.ResponseWriter, r *http.Request) {
 		resp.Warnings = append(resp.Warnings, fmt.Sprintf("%s: %v", source, err))
 		mu.Unlock()
 	}
-	wg.Add(4)
+	wg.Add(3)
 	go func() {
 		defer wg.Done()
 		v, err := cachedNews("hn", newsCacheTTL, forceRefresh, func() (interface{}, error) { return fetchHNStories() })
@@ -166,18 +154,6 @@ func NewsHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		resp.GitHub = v.([]GitHubRepo)
-	}()
-	go func() {
-		defer wg.Done()
-		key := "otd:" + today.Format("01-02")
-		v, err := cachedNews(key, onThisDayCacheTTL, forceRefresh, func() (interface{}, error) {
-			return fetchOnThisDay(int(today.Month()), today.Day())
-		})
-		if err != nil {
-			warn("Wikipedia", err)
-			return
-		}
-		resp.OnThisDay = v.([]OnThisDayEvent)
 	}()
 	wg.Wait()
 	sort.Strings(resp.Warnings)
@@ -460,56 +436,6 @@ func cleanHTMLText(s string) string {
 func parseCommaInt(s string) int {
 	n, _ := strconv.Atoi(strings.ReplaceAll(strings.TrimSpace(s), ",", ""))
 	return n
-}
-
-// --- Wikipedia: On this day ----------------------------------------------------
-
-func fetchOnThisDay(month, day int) ([]OnThisDayEvent, error) {
-	body, err := newsGet(fmt.Sprintf(wikiOnThisDayURLFmt, month, day), "application/json")
-	if err != nil {
-		return nil, err
-	}
-	var feed struct {
-		Selected []struct {
-			Year  int    `json:"year"`
-			Text  string `json:"text"`
-			Pages []struct {
-				Titles struct {
-					Normalized string `json:"normalized"`
-				} `json:"titles"`
-				Extract     string `json:"extract"`
-				ContentURLs struct {
-					Desktop struct {
-						Page string `json:"page"`
-					} `json:"desktop"`
-				} `json:"content_urls"`
-			} `json:"pages"`
-		} `json:"selected"`
-	}
-	if err := json.Unmarshal(body, &feed); err != nil {
-		return nil, err
-	}
-	out := make([]OnThisDayEvent, 0, len(feed.Selected))
-	for _, e := range feed.Selected {
-		text := strings.TrimSpace(e.Text)
-		if text == "" {
-			continue
-		}
-		ev := OnThisDayEvent{Year: e.Year, Text: text}
-		if len(e.Pages) > 0 {
-			p := e.Pages[0]
-			ev.Title = p.Titles.Normalized
-			ev.URL = p.ContentURLs.Desktop.Page
-			ev.Extract = p.Extract
-		}
-		out = append(out, ev)
-	}
-	if len(out) == 0 {
-		return nil, fmt.Errorf("no events")
-	}
-	// Most recent first
-	sort.SliceStable(out, func(i, j int) bool { return out[i].Year > out[j].Year })
-	return out, nil
 }
 
 func writeNewsError(w http.ResponseWriter, status int, message string) {

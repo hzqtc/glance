@@ -370,20 +370,11 @@ export interface GitHubRepo {
   url: string;
 }
 
-export interface OnThisDayEvent {
-  year: number;
-  text: string;
-  title?: string;
-  url?: string;
-  extract?: string;
-}
-
 export interface NewsResponse {
   fetchedAt: string;
   date: string; // YYYY-MM-DD in the Home city's timezone
   hn: HNStory[];
   bbc: BBCStory[];
   github: GitHubRepo[];
-  onThisDay: OnThisDayEvent[];
   warnings?: string[];
 }
