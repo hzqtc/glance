@@ -1,5 +1,5 @@
 /* ==========================================================================
-   Headlines Dashboard (Slide 4: Hacker News, BBC 中文, GitHub Trending)
+   Headlines Dashboard (Slide 4): one column per RSS feed in NEWS_FEEDS
    Safari 12-safe: no flex gap, uses -webkit- line clamp and mask.
    ========================================================================== */
 .news-slide {
@@ -95,7 +95,7 @@
   white-space: nowrap;
 }
 
-/* Three full-height columns */
+/* One full-height column per feed (width set inline from the feed count) */
 .news-grid {
   flex: 1;
   min-height: 0;
@@ -118,8 +118,7 @@
   overflow: hidden;
 }
 
-.news-card::before {
-  content: '';
+.news-card-accent {
   position: absolute;
   top: 0;
   left: 18px;
@@ -128,19 +127,6 @@
   border-radius: 0 0 2px 2px;
   opacity: 0.75;
 }
-
-.news-card-hn::before {
-  background-color: #ff6600;
-}
-
-.news-card-bbc::before {
-  background-color: #dc2626;
-}
-
-.news-card-gh::before {
-  background-color: #e2e8f0;
-}
-
 .news-card-head {
   display: flex;
   flex-direction: row;
@@ -171,22 +157,6 @@
   color: #ffffff;
 }
 
-.news-badge-hn {
-  background-color: #ff6600;
-}
-
-.news-badge-bbc {
-  background-color: #b80000;
-  font-size: 9px;
-  letter-spacing: 0.04em;
-}
-
-.news-gh-mark {
-  margin-right: 9px;
-  color: #e2e8f0;
-  flex-shrink: 0;
-}
-
 /* Lists fade out at the bottom instead of cutting an item in half */
 .news-list {
   list-style: none;
@@ -215,10 +185,6 @@
   opacity: 0.7;
 }
 
-.news-item-static {
-  cursor: default;
-}
-
 .news-item-main {
   flex: 1;
   min-width: 0;
@@ -234,12 +200,6 @@
 .news-item-zh .news-item-title {
   font-size: 16.5px;
   letter-spacing: 0.01em;
-}
-
-.news-clamp-1 {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .news-clamp-2 {
@@ -265,14 +225,6 @@
   margin-right: 10px;
 }
 
-.news-item-meta > .news-summary {
-  flex-shrink: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  margin-right: 0;
-}
-
 /* The domain goes last and is the only part allowed to truncate */
 .news-item-meta > .news-domain {
   flex-shrink: 1;
@@ -283,43 +235,38 @@
   color: var(--text-secondary);
 }
 
-.news-rank {
-  width: 22px;
-  flex-shrink: 0;
-  padding-top: 1px;
-  font-size: 15px;
-  font-weight: 600;
-  color: rgba(255, 140, 64, 0.85);
-  font-variant-numeric: tabular-nums;
-}
 
-.news-gh-owner {
-  color: var(--text-secondary);
-  font-weight: 400;
-}
 
-.news-lang {
-  display: inline-flex;
+
+
+
+/* Shown when NEWS_FEEDS is unset, or before the first load */
+.news-setup {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
   align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 0 60px;
 }
 
-.news-lang-dot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  margin-right: 5px;
+.news-setup-title {
+  font-size: 22px;
+  font-weight: 500;
+  margin-bottom: 10px;
 }
 
-.news-stars-today {
-  color: #34d399;
-}
-
-.news-item-desc {
-  margin-top: 4px;
-  font-size: 13px;
-  line-height: 1.4;
+.news-setup-hint {
+  max-width: 640px;
+  font-size: 14px;
+  line-height: 1.6;
   color: var(--text-secondary);
+}
+
+.news-setup-hint code {
+  font-size: 13px;
+  color: #7dd3fc;
 }
 
 .news-empty {
@@ -356,18 +303,6 @@
   background-color: rgba(18, 30, 54, 0.97);
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
   border-top: 3px solid #38bdf8;
-}
-
-.news-popover-hn {
-  border-top-color: #ff6600;
-}
-
-.news-popover-bbc {
-  border-top-color: #dc2626;
-}
-
-.news-popover-github {
-  border-top-color: #e2e8f0;
 }
 
 .news-popover-text {

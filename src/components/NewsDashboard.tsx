@@ -1,10 +1,15 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
-import type { BBCStory, GitHubRepo, HNStory, NewsResponse } from '../types';
+import type { NewsFeed, NewsItem, NewsResponse } from '../types';
 import { QRCode } from './QRCode';
 
-export var NEWS_STORAGE_KEY = 'glance:lastNews:v1';
+export var NEWS_STORAGE_KEY = 'glance:lastNews:v2';
 var NEWS_POLL_MS = 15 * 60 * 1000;
 var POPOVER_AUTO_CLOSE_MS = 90 * 1000;
+
+// Column accent colors, cycled by feed position
+var FEED_ACCENTS = ['#ff6600', '#38bdf8', '#818cf8', '#34d399'];
+
+var CJK_RE = /[㐀-鿿]/;
 
 interface NewsDashboardProps {
   isActive: boolean;
@@ -15,14 +20,11 @@ interface NewsDashboardProps {
   onUnauthorized?: () => void;
 }
 
-// What the QR popover shows for a tapped headline, repo, or event.
+// What the QR popover shows for a tapped item
 interface NewsDetail {
-  source: 'hn' | 'bbc' | 'github';
-  sourceLabel: string;
-  title: string;
-  body?: string;
-  meta?: string;
-  url: string;
+  feedName: string;
+  accent: string;
+  item: NewsItem;
 }
 
 function readCachedNews(): NewsResponse | null {
@@ -30,7 +32,7 @@ function readCachedNews(): NewsResponse | null {
     var raw = window.localStorage.getItem(NEWS_STORAGE_KEY);
     if (!raw) return null;
     var parsed = JSON.parse(raw) as NewsResponse;
-    if (parsed && parsed.hn && parsed.bbc && parsed.github) {
+    if (parsed && parsed.feeds && parsed.feeds.length > 0) {
       return parsed;
     }
   } catch (_err) {
@@ -55,20 +57,6 @@ function formatAgo(timeMs: number, nowMs: number): string {
   return String(Math.floor(hrs / 24)) + 'd ago';
 }
 
-function formatAgoZh(timeMs: number, nowMs: number): string {
-  var mins = Math.max(0, Math.round((nowMs - timeMs) / 60000));
-  if (mins < 60) return String(Math.max(1, mins)) + '分钟前';
-  var hrs = Math.floor(mins / 60);
-  if (hrs < 24) return String(hrs) + '小时前';
-  return String(Math.floor(hrs / 24)) + '天前';
-}
-
-function formatCount(n: number): string {
-  if (n >= 100000) return String(Math.round(n / 1000)) + 'k';
-  if (n >= 10000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
-  return n.toLocaleString('en-US');
-}
-
 function formatHeaderDate(dateKey: string): string {
   var parts = (dateKey || '').split('-');
   if (parts.length !== 3) return '';
@@ -82,8 +70,16 @@ function formatHeaderDate(dateKey: string): string {
   return months[m - 1] + ' ' + String(d);
 }
 
+// Readable link text (decodes percent-encoded non-ASCII paths);
+// the QR code keeps the encoded URL.
 function shortURL(url: string): string {
-  return url.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '');
+  var text = url;
+  try {
+    text = decodeURIComponent(url);
+  } catch (_err) {
+    // Leave malformed escapes as-is
+  }
+  return text.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '');
 }
 
 export function NewsDashboard(props: NewsDashboardProps) {
@@ -195,16 +191,12 @@ export function NewsDashboard(props: NewsDashboardProps) {
     [detail, props.isActive]
   );
 
-  var hn: HNStory[] = data ? data.hn : [];
-  var bbc: BBCStory[] = data ? data.bbc : [];
-  var github: GitHubRepo[] = data ? data.github : [];
+  var feeds: NewsFeed[] = data ? data.feeds : [];
   var nowMs = props.nowMs;
   var dateLabel = data ? formatHeaderDate(data.date) : '';
-  var emptyHint = loadError ? 'Unavailable · ' + loadError : 'Loading…';
-
-  function openDetail(d: NewsDetail) {
-    setDetail(d);
-  }
+  var notConfigured = Boolean(data && !data.configured);
+  // One equal-width column per feed
+  var columnWidth = 'calc(' + String(100 / Math.max(1, feeds.length)) + '% - 12px)';
 
   return (
     <div class="news-slide">
@@ -253,156 +245,67 @@ export function NewsDashboard(props: NewsDashboardProps) {
           </div>
         </header>
 
-        <div class="news-grid">
-          {/* Hacker News */}
-          <section class="news-card news-card-hn" aria-label="Hacker News top stories">
-            <div class="news-card-head">
-              <span class="news-badge news-badge-hn">Y</span>
-              <span class="news-card-title">Hacker News</span>
+        {notConfigured ? (
+          <div class="news-setup">
+            <div class="news-setup-title">No news feeds configured</div>
+            <div class="news-setup-hint">
+              Set <code>NEWS_FEEDS</code> in Vercel Env Vars (or .env.local) to a JSON list of RSS
+              feeds, e.g. <code>[{'{'}"name":"Hacker News","url":"https://news.ycombinator.com/rss"{'}'}]</code>
             </div>
-            <ol class="news-list">
-              {hn.length === 0 ? <li class="news-empty">{emptyHint}</li> : null}
-              {hn.map(function (s, i) {
-                return (
-                  <li
-                    key={'hn-' + String(s.id)}
-                    class="news-item"
-                    onClick={function () {
-                      openDetail({
-                        source: 'hn',
-                        sourceLabel: 'Hacker News',
-                        title: s.title,
-                        meta:
-                          String(s.score) +
-                          ' points · ' +
-                          String(s.comments) +
-                          (s.comments === 1 ? ' comment' : ' comments') +
-                          ' · by ' +
-                          s.by,
-                        url: s.url,
-                      });
-                    }}
-                  >
-                    <span class="news-rank">{String(i + 1)}</span>
-                    <div class="news-item-main">
-                      <div class="news-item-title news-clamp-2">{s.title}</div>
-                      <div class="news-item-meta">
-                        <span>{String(s.score)} pts</span>
-                        <span>
-                          {String(s.comments)} {s.comments === 1 ? 'comment' : 'comments'}
-                        </span>
-                        <span>{formatAgo(s.timeMs, nowMs)}</span>
-                        {s.domain ? <span class="news-domain">{s.domain}</span> : null}
-                      </div>
-                    </div>
-                  </li>
-                );
-              })}
-            </ol>
-          </section>
-
-          {/* BBC News 中文 */}
-          <section class="news-card news-card-bbc" aria-label="BBC News Chinese headlines">
-            <div class="news-card-head">
-              <span class="news-badge news-badge-bbc">BBC</span>
-              <span class="news-card-title">BBC 中文</span>
-            </div>
-            <ol class="news-list">
-              {bbc.length === 0 ? <li class="news-empty">{emptyHint}</li> : null}
-              {bbc.map(function (s, i) {
-                return (
-                  <li
-                    key={'bbc-' + String(i) + '-' + s.url}
-                    class="news-item news-item-zh"
-                    onClick={function () {
-                      openDetail({
-                        source: 'bbc',
-                        sourceLabel: 'BBC 中文',
-                        title: s.title,
-                        body: s.summary,
-                        meta: s.publishedMs ? formatAgoZh(s.publishedMs, nowMs) : undefined,
-                        url: s.url,
-                      });
-                    }}
-                  >
-                    <div class="news-item-main">
-                      <div class="news-item-title news-clamp-2">{s.title}</div>
-                      {s.publishedMs ? (
-                        <div class="news-item-meta">
-                          <span>{formatAgoZh(s.publishedMs, nowMs)}</span>
-                        </div>
-                      ) : null}
-                    </div>
-                  </li>
-                );
-              })}
-            </ol>
-          </section>
-
-          {/* GitHub Trending */}
-          <section class="news-card news-card-gh" aria-label="GitHub trending repositories">
-            <div class="news-card-head">
-              <svg class="news-gh-mark" width="18" height="18" viewBox="0 0 16 16" aria-hidden="true">
-                <path
-                  fill="currentColor"
-                  d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"
-                />
-              </svg>
-              <span class="news-card-title">GitHub Trending</span>
-            </div>
-            <ol class="news-list">
-              {github.length === 0 ? <li class="news-empty">{emptyHint}</li> : null}
-              {github.map(function (g) {
-                return (
-                  <li
-                    key={'gh-' + g.owner + '/' + g.name}
-                    class="news-item"
-                    onClick={function () {
-                      openDetail({
-                        source: 'github',
-                        sourceLabel: 'GitHub Trending',
-                        title: g.owner + ' / ' + g.name,
-                        body: g.description,
-                        meta:
-                          (g.language ? g.language + ' · ' : '') +
-                          '★ ' +
-                          g.stars.toLocaleString('en-US') +
-                          ' · +' +
-                          g.starsToday.toLocaleString('en-US') +
-                          ' today',
-                        url: g.url,
-                      });
-                    }}
-                  >
-                    <div class="news-item-main">
-                      <div class="news-item-title news-clamp-1">
-                        <span class="news-gh-owner">{g.owner} / </span>
-                        {g.name}
-                      </div>
-                      <div class="news-item-meta">
-                        {g.language ? (
-                          <span class="news-lang">
-                            <span
-                              class="news-lang-dot"
-                              style={{ backgroundColor: g.languageColor || '#94a3b8' }}
-                            />
-                            {g.language}
-                          </span>
-                        ) : null}
-                        <span>★ {formatCount(g.stars)}</span>
-                        <span class="news-stars-today">+{formatCount(g.starsToday)} today</span>
-                      </div>
-                      {g.description ? (
-                        <div class="news-item-desc news-clamp-2">{g.description}</div>
-                      ) : null}
-                    </div>
-                  </li>
-                );
-              })}
-            </ol>
-          </section>
-
-        </div>
+          </div>
+        ) : feeds.length === 0 ? (
+          <div class="news-setup">
+            <div class="news-setup-hint">{loadError ? 'Unavailable · ' + loadError : 'Loading…'}</div>
+          </div>
+        ) : (
+          <div class="news-grid">
+            {feeds.map(function (feed, feedIdx) {
+              var accent = FEED_ACCENTS[feedIdx % FEED_ACCENTS.length];
+              return (
+                <section
+                  key={'feed-' + String(feedIdx) + '-' + feed.url}
+                  class="news-card"
+                  style={{ width: columnWidth }}
+                  aria-label={feed.name}
+                >
+                  <div class="news-card-accent" style={{ backgroundColor: accent }} />
+                  <div class="news-card-head">
+                    <span class="news-badge" style={{ backgroundColor: accent }}>
+                      {(feed.name || '?').charAt(0).toUpperCase()}
+                    </span>
+                    <span class="news-card-title">{feed.name}</span>
+                  </div>
+                  <ol class="news-list">
+                    {feed.items.length === 0 ? (
+                      <li class="news-empty">
+                        {feed.error ? 'Unavailable · ' + feed.error : 'No items'}
+                      </li>
+                    ) : null}
+                    {feed.items.map(function (item, itemIdx) {
+                      return (
+                        <li
+                          key={'item-' + String(itemIdx) + '-' + item.url}
+                          class={CJK_RE.test(item.title) ? 'news-item news-item-zh' : 'news-item'}
+                          onClick={function () {
+                            setDetail({ feedName: feed.name, accent: accent, item: item });
+                          }}
+                        >
+                          <div class="news-item-main">
+                            <div class="news-item-title news-clamp-2">{item.title}</div>
+                            <div class="news-item-meta">
+                              {item.publishedMs ? <span>{formatAgo(item.publishedMs, nowMs)}</span> : null}
+                              {item.source ? <span class="news-domain">{item.source}</span> : null}
+                            </div>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ol>
+                </section>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {detail ? (
@@ -413,22 +316,29 @@ export function NewsDashboard(props: NewsDashboardProps) {
           }}
         >
           <div
-            class={'news-popover news-popover-' + detail.source}
+            class="news-popover"
+            style={{ borderTopColor: detail.accent }}
             role="dialog"
-            aria-label={detail.title}
+            aria-label={detail.item.title}
             onClick={function (ev) {
               ev.stopPropagation();
             }}
           >
             <div class="news-popover-text">
-              <div class="news-popover-source">{detail.sourceLabel}</div>
-              <div class="news-popover-title">{detail.title}</div>
-              {detail.body ? <div class="news-popover-body">{detail.body}</div> : null}
-              {detail.meta ? <div class="news-popover-meta">{detail.meta}</div> : null}
-              <div class="news-popover-url">{shortURL(detail.url)}</div>
+              <div class="news-popover-source">{detail.feedName}</div>
+              <div class="news-popover-title">{detail.item.title}</div>
+              {detail.item.summary ? (
+                <div class="news-popover-body">{detail.item.summary}</div>
+              ) : null}
+              <div class="news-popover-meta">
+                {(detail.item.source || '') +
+                  (detail.item.source && detail.item.publishedMs ? ' · ' : '') +
+                  (detail.item.publishedMs ? formatAgo(detail.item.publishedMs, nowMs) : '')}
+              </div>
+              <div class="news-popover-url">{shortURL(detail.item.url)}</div>
             </div>
             <div class="news-popover-qr">
-              <QRCode value={detail.url} size={168} />
+              <QRCode value={detail.item.url} size={168} />
               <div class="news-popover-hint">Scan to open on your phone</div>
             </div>
             <button

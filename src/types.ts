@@ -340,41 +340,24 @@ export type WeatherKind =
   | 'snow'
   | 'storm';
 
-export interface HNStory {
-  id: number;
+export interface NewsItem {
   title: string;
   url: string;
-  domain?: string;
-  score: number;
-  comments: number;
-  by: string;
-  timeMs: number;
-  hnUrl: string;
-}
-
-export interface BBCStory {
-  title: string;
+  source?: string; // publisher, or the link's domain
   summary?: string;
-  url: string;
   publishedMs?: number;
 }
 
-export interface GitHubRepo {
-  owner: string;
+export interface NewsFeed {
   name: string;
-  description?: string;
-  language?: string;
-  languageColor?: string;
-  stars: number;
-  starsToday: number;
   url: string;
+  items: NewsItem[];
+  error?: string;
 }
 
 export interface NewsResponse {
   fetchedAt: string;
   date: string; // YYYY-MM-DD in the Home city's timezone
-  hn: HNStory[];
-  bbc: BBCStory[];
-  github: GitHubRepo[];
-  warnings?: string[];
+  configured: boolean;
+  feeds: NewsFeed[];
 }

@@ -12,7 +12,7 @@ Captured at the iPad mini 2's 1024×768 landscape resolution (Retina 2×).
 | **Calendar** (demo mode) | **World** |
 | ![Calendar dashboard: month grid of color-coded Work, Personal, and Family events with Chinese lunar dates and US holidays, today's agenda, and a trip countdown](docs/screenshots/calendar.jpg) | ![World dashboard: day/night map with city arcs, ISS orbit, earthquakes, and FX currency cards](docs/screenshots/world.jpg) |
 | **Headlines** | **Photos** (demo mode) |
-| ![Headlines dashboard: three columns of Hacker News, BBC Chinese, and GitHub Trending](docs/screenshots/news.jpg) | ![Photos frame: auto-collage of one portrait and two landscape stock photos](docs/screenshots/photos.jpg) |
+| ![Headlines dashboard: one column per RSS feed — Hacker News, Sunnyvale-area local news, and Chinese headlines](docs/screenshots/news.jpg) | ![Photos frame: auto-collage of one portrait and two landscape stock photos](docs/screenshots/photos.jpg) |
 
 ## Features
 
@@ -37,8 +37,12 @@ Captured at the iPad mini 2's 1024×768 landscape resolution (Retina 2×).
   - **Live World Map:** Seamless equirectangular map centered horizontally on the Home city, with the real-time day/night terminator, live ISS position and orbit track (propagated from TLEs via wheretheiss.at with a CelesTrak fallback), M4.5+ earthquakes from the past day (USGS), NOAA SWPC Kp-index aurora ovals, and active tropical storms (NHC + GDACS). Tap any marker for an inline popover with details.
   - **FX Currency Cards:** Live exchange rates derived automatically from your cities: the first (Home) city's currency is the base, and each other city adds its local currency (looked up from its `timezone`, deduplicated, in city order). The default cities give USD → EUR, CNY, JPY, GBP, SGD, AUD; a non-USD Home uses cross rates (e.g. `GBPJPY=X`). Cities whose timezone isn't in [`config/currency.go`](./config/currency.go) get no card. To pick pairs by hand instead, set `world.fxPairs` (e.g. `[{ "symbol": "KRW=X" }]`).
 - **Headlines Dashboard (Slide 5):**
-  - **Three columns at a glance:** Hacker News top stories (points, comments, domain), BBC News 中文 (the official Traditional-Chinese RSS feed converted to Simplified with the [OpenCC](https://github.com/BYVoid/OpenCC) character table), and GitHub Trending (language, total stars, stars today). Each source is cached for 15 minutes server-side and fails independently.
-  - **Tap for a QR code:** Tapping any headline or repo opens a popover with its summary and a QR code to open it on your phone, so the wall display never leaves the dashboard.
+  - **Your RSS feeds, one column each:** Reads up to 4 RSS 2.0, RSS 1.0/RDF, or Atom feeds from `NEWS_FEEDS` (Vercel Environment Variables or gitignored `.env.local`) and lays them out as equal-width columns in order. No per-site parsing: each item shows its title, age, and publisher. Each feed is cached for 15 minutes server-side, backs off for 5 minutes after a failure, and fails independently.
+    ```
+    NEWS_FEEDS=[{"name":"Hacker News","url":"https://news.ycombinator.com/rss"},{"name":"Sunnyvale","url":"https://news.google.com/rss/headlines/section/geo/Sunnyvale%2C%20CA?hl=en-US&gl=US&ceid=US:en"},{"name":"中国要闻","url":"https://www.chinanews.com.cn/rss/importnews.xml"}]
+    ```
+    Local news for any city: `https://news.google.com/rss/headlines/section/geo/<City>%2C%20<Region>?hl=en-US&gl=US&ceid=US:en`. Chinese-language feeds that work: 中新网 要闻 (`chinanews.com.cn/rss/importnews.xml`) or 滚动 (`…/scroll-news.xml`), 纽约时报中文网 (`cn.nytimes.com/rss/`), DW 中文 (`rss.dw.com/rdf/rss-chi-all`), RFI 中文 (`rfi.fr/cn/rss`), 人民网 时政 (`people.com.cn/rss/politics.xml`).
+  - **Tap for a QR code:** Tapping any headline opens a popover with its summary and a QR code to open it on your phone, so the wall display never leaves the dashboard.
 - **Photos Frame (Slide 6):**
   - **Pure Edge-to-Edge Smart Auto-Collage:** Reads one or more Google Photos link-shared album URLs from `PHOTOS_ALBUM_URL` / `PHOTOS_ALBUM_URLS` (stored in Vercel Environment Variables or gitignored `.env.local`). Automatically composes aspect-ratio-aware full-screen layouts (1 landscape hero, 2–3 side-by-side portraits, or 1 portrait + 2 stacked landscape bento grids), shuffles & crossfades every 15s, and supports tap or left/right swipe to jump between collages.
 - **Minimalist Top-Center Controls:**
@@ -86,7 +90,7 @@ Edit [`config/dashboard.config.json`](./config/dashboard.config.json) to customi
 - **Serverless Calendar API (`api/calendar.go`):** Fetches and parses the private `.ics` feeds from `CALENDAR_ICS_URLS` (including recurring events), served `private, no-store`.
 - **Serverless Photos API (`api/photos.go`):** Resolves Google Photos shared-album links from `PHOTOS_ALBUM_URLS` into image URLs and dimensions for the collage layout, served `private, no-store`.
 - **Serverless World API (`api/world.go`):** Concurrently fetches FX quotes (Yahoo Finance), ISS TLEs, USGS earthquakes, NOAA aurora Kp index, and tropical storms, each with its own in-memory cache (`?refresh=1` bypasses it).
-- **Serverless News API (`api/news.go`):** Concurrently fetches Hacker News, BBC 中文 RSS (converted by the stdlib-only `zhconv/` package), and GitHub Trending (scraped; no official API), each with its own in-memory cache.
+- **Serverless News API (`api/news.go`):** A generic RSS/Atom reader for the feeds in `NEWS_FEEDS`, fetched concurrently with per-feed caching.
 - **Auth API (`api/auth.go` + `auth/`):** `GET /api/auth` reports lock status; `POST /api/auth` verifies the PIN (per-IP rate limited) and issues the signed session cookie.
 - **Local Dev Server (`cmd/devserver/main.go`):** Mounts `/api/auth`, `/api/weather`, `/api/stocks`, `/api/calendar`, `/api/world`, `/api/news`, and `/api/photos` on `127.0.0.1:8080`, loads secrets from `.env.local`/`.env`, and reads `config/dashboard.config.json` live from disk on every request.
 
@@ -116,9 +120,9 @@ Append `?demo=<mode>` to preview any condition immediately:
 ## Deploy to Vercel
 
 **Option A — GitHub Auto-Deploy (Recommended):**
-Import this repository at [vercel.com/new](https://vercel.com/new) and click **Deploy** (Vercel detects [`vercel.json`](./vercel.json), [`go.mod`](./go.mod), and the Go handlers in `api/` automatically). Set `GLANCE_PASSCODE`, `GLANCE_SESSION_SECRET`, `CALENDAR_ICS_URLS`, and `PHOTOS_ALBUM_URLS` under **Project Settings → Environment Variables**. Pushing edits to `config/dashboard.config.json` auto-deploys and updates the wall-mounted iPad automatically.
+Import this repository at [vercel.com/new](https://vercel.com/new) and click **Deploy** (Vercel detects [`vercel.json`](./vercel.json), [`go.mod`](./go.mod), and the Go handlers in `api/` automatically). Set `GLANCE_PASSCODE`, `GLANCE_SESSION_SECRET`, `CALENDAR_ICS_URLS`, `PHOTOS_ALBUM_URLS`, and `NEWS_FEEDS` under **Project Settings → Environment Variables**. Pushing edits to `config/dashboard.config.json` auto-deploys and updates the wall-mounted iPad automatically.
 
-> **Note:** Vercel turns every `.go` file in `api/` into its own serverless function, so each file there must export an HTTP handler. Put shared helpers in the same file as their handler or in a package outside `api/` (like `auth/`, `config/`, `zhconv/`); a helper-only file in `api/` fails the deployment.
+> **Note:** Vercel turns every `.go` file in `api/` into its own serverless function, so each file there must export an HTTP handler. Put shared helpers in the same file as their handler or in a package outside `api/` (like `auth/`, `config/`); a helper-only file in `api/` fails the deployment.
 
 **Option B — Vercel CLI:**
 ```bash
