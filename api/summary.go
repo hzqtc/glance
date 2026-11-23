@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"html"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -158,19 +159,38 @@ func summarizeCached(apiKey, articleURL string) SummaryResponse {
 	return resp
 }
 
+// summaryError carries a short reason for the popover and the technical
+// detail for the server log.
+type summaryError struct {
+	reason string
+	detail string
+}
+
+func (e *summaryError) Error() string { return e.reason }
+
+func failSummary(reason, detailFormat string, args ...interface{}) error {
+	return &summaryError{reason: reason, detail: fmt.Sprintf(detailFormat, args...)}
+}
+
 func summarizeArticle(apiKey, articleURL string) SummaryResponse {
 	resp := SummaryResponse{URL: articleURL}
 	title, text, err := fetchArticleText(articleURL)
-	if err != nil {
-		resp.Error = err.Error()
-		return resp
+	if err == nil {
+		var tldr string
+		if tldr, err = geminiTLDR(apiKey, title, text); err != nil {
+			err = failSummary("AI service unavailable", "%v", err)
+		} else {
+			resp.TLDR = tldr
+			return resp
+		}
 	}
-	tldr, err := geminiTLDR(apiKey, title, text)
-	if err != nil {
-		resp.Error = err.Error()
-		return resp
+	// Short reason for the UI; full detail in the server log (Vercel logs)
+	resp.Error = err.Error()
+	if se, ok := err.(*summaryError); ok {
+		log.Printf("summary failed for %s: %s (%s)", articleURL, se.reason, se.detail)
+	} else {
+		log.Printf("summary failed for %s: %v", articleURL, err)
 	}
-	resp.TLDR = tldr
 	return resp
 }
 
@@ -184,23 +204,23 @@ func fetchArticleText(articleURL string) (string, string, error) {
 	req.Header.Set("Accept", "text/html,application/xhtml+xml")
 	res, err := articleHTTPClient.Do(req)
 	if err != nil {
-		return "", "", err
+		return "", "", failSummary("couldn't load the article", "%v", err)
 	}
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK {
-		return "", "", fmt.Errorf("article HTTP %d", res.StatusCode)
+		return "", "", failSummary("couldn't load the article", "HTTP %d", res.StatusCode)
 	}
 	body, err := io.ReadAll(io.LimitReader(res.Body, articleMaxBytes))
 	if err != nil {
-		return "", "", err
+		return "", "", failSummary("couldn't load the article", "read body: %v", err)
 	}
 	if cs := declaredCharset(res.Header.Get("Content-Type"), body); cs != "" && cs != "utf-8" && cs != "utf8" {
-		return "", "", fmt.Errorf("unsupported charset %s", cs)
+		return "", "", failSummary("unsupported page encoding", "charset %s", cs)
 	}
 	title, text := extractArticle(string(body))
 	if text == "" {
 		// Describe what came back (e.g. a bot-check page served with HTTP 200)
-		return "", "", fmt.Errorf("no article text found (HTTP %d, %s, page title %q)",
+		return "", "", failSummary("no article text found", "HTTP %d, %s, page title %q",
 			res.StatusCode, formatByteSize(len(body)), pageTitle(string(body)))
 	}
 	return title, text, nil
@@ -213,7 +233,7 @@ func formatByteSize(n int) string {
 	return fmt.Sprintf("%d KB", (n+512)/1024)
 }
 
-// pageTitle returns the page's <title>, shortened, for error messages.
+// pageTitle returns the page's <title>, shortened, for the server log.
 func pageTitle(page string) string {
 	m := articleTitleRe.FindStringSubmatch(page)
 	if m == nil {

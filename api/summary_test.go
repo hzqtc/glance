@@ -165,11 +165,12 @@ func TestSummaryRejectsAndReportsFailures(t *testing.T) {
 	if code, _ := getSummary(t, "https://evil.example.com/x"); code != http.StatusForbidden {
 		t.Fatalf("expected 403 for a link outside the feeds, got %d", code)
 	}
-	if _, resp := getSummary(t, "https://gbk.example.cn/a"); resp.TLDR != "" || !strings.Contains(resp.Error, "charset") {
-		t.Fatalf("expected unsupported-charset error, got %+v", resp)
+	// Errors are short, user-facing reasons (details go to the server log)
+	if _, resp := getSummary(t, "https://gbk.example.cn/a"); resp.TLDR != "" || resp.Error != "unsupported page encoding" {
+		t.Fatalf("expected unsupported-encoding error, got %+v", resp)
 	}
 	if _, resp := getSummary(t, "https://app.example.com/post"); resp.TLDR != "" ||
-		resp.Error != `no article text found (HTTP 200, 72 B, page title "")` {
+		resp.Error != "no article text found" {
 		t.Fatalf("expected no-text error for a JavaScript-only page, got %+v", resp)
 	}
 	if m.geminiCalls != 0 {
@@ -206,7 +207,7 @@ func TestSummaryNoTLDRWhenGeminiFails(t *testing.T) {
 	t.Setenv("GEMINI_API_KEY", "test-key")
 
 	_, resp := getSummary(t, "https://news.example.com/storm")
-	if resp.TLDR != "" || !strings.Contains(resp.Error, "Resource exhausted") || m.geminiCalls != 1 {
+	if resp.TLDR != "" || resp.Error != "AI service unavailable" || m.geminiCalls != 1 {
 		t.Fatalf("expected no TL;DR after a Gemini error, got %+v (calls %d)", resp, m.geminiCalls)
 	}
 }
