@@ -379,6 +379,10 @@ export function NewsDashboard(props: NewsDashboardProps) {
             <div class="news-popover-text">
               <div class="news-popover-source">{detail.feedName}</div>
               <div class="news-popover-title">{detail.item.title}</div>
+              {/* The feed's own summary always shows; the AI TL;DR goes below it */}
+              {detail.item.summary ? (
+                <div class="news-popover-body">{detail.item.summary}</div>
+              ) : null}
               {tldr && tldr.url === detail.item.url && tldr.status === 'ok' ? (
                 <div class="news-tldr">
                   <div class="news-tldr-label">
@@ -386,12 +390,20 @@ export function NewsDashboard(props: NewsDashboardProps) {
                   </div>
                   <div class="news-popover-body">{tldr.text}</div>
                 </div>
-              ) : detail.item.summary ? (
-                <div class="news-popover-body">{detail.item.summary}</div>
-              ) : tldr && tldr.status === 'loading' ? (
-                <div class="news-tldr news-tldr-loading">
-                  <div class="news-tldr-label">TL;DR</div>
-                  <div class="news-popover-body">Summarizing…</div>
+              ) : tldr && tldr.url === detail.item.url && tldr.status === 'loading' ? (
+                <div class="news-tldr news-tldr-loading" aria-live="polite">
+                  <div class="news-tldr-label">
+                    TL;DR
+                    <span class="news-tldr-kind">
+                      <span class="news-tldr-spark" aria-hidden="true">✦</span>
+                      Generating AI summary…
+                    </span>
+                  </div>
+                  <div class="news-tldr-skeleton" aria-hidden="true">
+                    <span />
+                    <span />
+                    <span />
+                  </div>
                 </div>
               ) : null}
               <div class="news-popover-meta">

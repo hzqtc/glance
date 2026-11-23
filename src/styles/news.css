@@ -365,8 +365,41 @@
   color: var(--text-muted);
 }
 
-.news-tldr-loading .news-popover-body {
-  color: var(--text-muted);
+/* Generating state: pulsing placeholder lines (opacity only, cheap on the A7) */
+.news-tldr-skeleton {
+  margin-top: 8px;
+}
+
+.news-tldr-skeleton span {
+  display: block;
+  height: 11px;
+  margin-top: 8px;
+  border-radius: 6px;
+  background-color: rgba(125, 211, 252, 0.18);
+  -webkit-animation: newsPulse 1.2s ease-in-out infinite;
+  animation: newsPulse 1.2s ease-in-out infinite;
+}
+
+.news-tldr-skeleton span:first-child {
+  margin-top: 0;
+}
+
+.news-tldr-skeleton span:nth-child(2) {
+  width: 92%;
+  -webkit-animation-delay: 0.15s;
+  animation-delay: 0.15s;
+}
+
+.news-tldr-skeleton span:nth-child(3) {
+  width: 64%;
+  -webkit-animation-delay: 0.3s;
+  animation-delay: 0.3s;
+}
+
+.news-tldr-spark {
+  display: inline-block;
+  margin-right: 4px;
+  color: #7dd3fc;
   -webkit-animation: newsPulse 1.2s ease-in-out infinite;
   animation: newsPulse 1.2s ease-in-out infinite;
 }
