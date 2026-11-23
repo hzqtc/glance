@@ -20,6 +20,14 @@ interface NewsDashboardProps {
   onUnauthorized?: () => void;
 }
 
+// AI TL;DR for the item in the popover, from /api/summary (only when the
+// server has a GEMINI_API_KEY; otherwise no TL;DR is shown at all)
+interface Tldr {
+  url: string;
+  status: 'loading' | 'ok' | 'none';
+  text?: string;
+}
+
 // What the QR popover shows for a tapped item
 interface NewsDetail {
   feedName: string;
@@ -98,6 +106,48 @@ export function NewsDashboard(props: NewsDashboardProps) {
   var _detailState = useState<NewsDetail | null>(null);
   var detail = _detailState[0];
   var setDetail = _detailState[1];
+
+  var _tldrState = useState<Tldr | null>(null);
+  var tldr = _tldrState[0];
+  var setTldr = _tldrState[1];
+  var tldrCacheRef = useRef<{ [url: string]: Tldr }>({});
+
+  var tldrEnabled = Boolean(data && data.tldr);
+
+  // Fetch (or reuse) the TL;DR whenever a popover opens
+  useEffect(
+    function () {
+      if (!detail || !tldrEnabled) {
+        setTldr(null);
+        return;
+      }
+      var url = detail.item.url;
+      var cached = tldrCacheRef.current[url];
+      if (cached) {
+        setTldr(cached);
+        return;
+      }
+      var cancelled = false;
+      setTldr({ url: url, status: 'loading' });
+      fetch('/api/summary?url=' + encodeURIComponent(url), { credentials: 'same-origin' })
+        .then(function (resp) {
+          return resp.ok ? resp.json() : null;
+        })
+        .then(function (json: { tldr?: string } | null) {
+          var result: Tldr =
+            json && json.tldr ? { url: url, status: 'ok', text: json.tldr } : { url: url, status: 'none' };
+          tldrCacheRef.current[url] = result;
+          if (!cancelled) setTldr(result);
+        })
+        .catch(function () {
+          if (!cancelled) setTldr({ url: url, status: 'none' });
+        });
+      return function () {
+        cancelled = true;
+      };
+    },
+    [detail, tldrEnabled]
+  );
 
   var hasPreloadedRef = useRef<boolean>(false);
   var lastFetchMsRef = useRef<number>(0);
@@ -329,8 +379,20 @@ export function NewsDashboard(props: NewsDashboardProps) {
             <div class="news-popover-text">
               <div class="news-popover-source">{detail.feedName}</div>
               <div class="news-popover-title">{detail.item.title}</div>
-              {detail.item.summary ? (
+              {tldr && tldr.url === detail.item.url && tldr.status === 'ok' ? (
+                <div class="news-tldr">
+                  <div class="news-tldr-label">
+                    TL;DR<span class="news-tldr-kind">AI summary</span>
+                  </div>
+                  <div class="news-popover-body">{tldr.text}</div>
+                </div>
+              ) : detail.item.summary ? (
                 <div class="news-popover-body">{detail.item.summary}</div>
+              ) : tldr && tldr.status === 'loading' ? (
+                <div class="news-tldr news-tldr-loading">
+                  <div class="news-tldr-label">TL;DR</div>
+                  <div class="news-popover-body">Summarizing…</div>
+                </div>
               ) : null}
               <div class="news-popover-meta">
                 {(detail.item.source || '') +

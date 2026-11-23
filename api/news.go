@@ -52,6 +52,7 @@ type NewsResponse struct {
 	FetchedAt  string     `json:"fetchedAt"`
 	Date       string     `json:"date"` // YYYY-MM-DD in the Home city's timezone
 	Configured bool       `json:"configured"`
+	TLDR       bool       `json:"tldr"` // GEMINI_API_KEY is set, so /api/summary is available
 	Feeds      []NewsFeed `json:"feeds"`
 }
 
@@ -110,6 +111,7 @@ func NewsHandler(w http.ResponseWriter, r *http.Request) {
 		FetchedAt:  time.Now().UTC().Format(time.RFC3339),
 		Date:       time.Now().In(loadTimezoneSafe(tzName)).Format("2006-01-02"),
 		Configured: len(sources) > 0,
+		TLDR:       geminiAPIKey() != "",
 		Feeds:      make([]NewsFeed, len(sources)),
 	}
 

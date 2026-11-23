@@ -17,7 +17,7 @@ Captured at the iPad mini 2's 1024×768 landscape resolution (Retina 2×).
 ## Features
 
 - **One-Time 4-Digit PIN Gate:**
-  - Protected server-side via `GLANCE_PASSCODE` (stored in Vercel Environment Variables; never committed to Git or sent to the client). Issues a 1-year `HttpOnly` cookie on unlock, HMAC-SHA256 signed with a separate random `GLANCE_SESSION_SECRET` (32+ characters, e.g. `openssl rand -hex 32`) so the cookie can't be forged by guessing the PIN. Rotating either the PIN or the secret logs out every device. The gate blocks `/api/weather`, `/api/stocks`, `/api/calendar`, `/api/world`, `/api/news`, and `/api/photos` until verified. Local dev allows open access when `GLANCE_PASSCODE` is unset, while Vercel fails closed if either variable is missing.
+  - Protected server-side via `GLANCE_PASSCODE` (stored in Vercel Environment Variables; never committed to Git or sent to the client). Issues a 1-year `HttpOnly` cookie on unlock, HMAC-SHA256 signed with a separate random `GLANCE_SESSION_SECRET` (32+ characters, e.g. `openssl rand -hex 32`) so the cookie can't be forged by guessing the PIN. Rotating either the PIN or the secret logs out every device. The gate blocks `/api/weather`, `/api/stocks`, `/api/calendar`, `/api/world`, `/api/news`, `/api/summary`, and `/api/photos` until verified. Local dev allows open access when `GLANCE_PASSCODE` is unset, while Vercel fails closed if either variable is missing.
 - **Vertical Auto-Rotating Carousel (Weather ↕ Stocks ↕ Calendar ↕ World ↕ Headlines ↕ Photos):**
   - Auto-cycles across dashboards every `carousel.intervalSeconds` (15s by default), or follows an explicit `carousel.schedule` of `{ "slide": "<weather|stocks|calendar|world|news|photos>", "seconds": N }` steps (the default schedule interleaves 60s of Photos between each 15s dashboard). Rotation pauses for `carousel.manualPauseSeconds` (60s by default) whenever you manually swipe up/down, tap the right-side icon rail, or press `↑`/`↓`.
 - **Weather Dashboard (Slide 1):**
@@ -43,6 +43,7 @@ Captured at the iPad mini 2's 1024×768 landscape resolution (Retina 2×).
     ```
     Local news for any city: `https://news.google.com/rss/headlines/section/geo/<City>%2C%20<Region>?hl=en-US&gl=US&ceid=US:en`. Chinese-language feeds that work: 中新网 要闻 (`chinanews.com.cn/rss/importnews.xml`) or 滚动 (`…/scroll-news.xml`), 纽约时报中文网 (`cn.nytimes.com/rss/`), DW 中文 (`rss.dw.com/rdf/rss-chi-all`), RFI 中文 (`rfi.fr/cn/rss`), 人民网 时政 (`people.com.cn/rss/politics.xml`).
   - **Tap for a QR code:** Tapping any headline opens a popover with its summary and a QR code to open it on your phone, so the wall display never leaves the dashboard.
+  - **Optional AI TL;DR:** With `GEMINI_API_KEY` set (free key from [Google AI Studio](https://aistudio.google.com/apikey); model via `GEMINI_MODEL`, default `gemini-flash-lite-latest`), the popover shows a 2–3 sentence TL;DR in the article's language. `/api/summary` fetches the article, extracts its paragraph text generically (the `<article>` element or sentence-like paragraphs, else the meta description), and asks Gemini — only for links that appear in the configured feeds, cached for 24 hours. Without a key, or if a page can't be read (JavaScript-only pages, Google News redirect links, non-UTF-8 pages), no TL;DR is shown and the feed's own summary is used. On Gemini's free tier Google may use the submitted article text to improve its products.
 - **Photos Frame (Slide 6):**
   - **Pure Edge-to-Edge Smart Auto-Collage:** Reads one or more Google Photos link-shared album URLs from `PHOTOS_ALBUM_URL` / `PHOTOS_ALBUM_URLS` (stored in Vercel Environment Variables or gitignored `.env.local`). Automatically composes aspect-ratio-aware full-screen layouts (1 landscape hero, 2–3 side-by-side portraits, or 1 portrait + 2 stacked landscape bento grids), shuffles & crossfades every 15s, and supports tap or left/right swipe to jump between collages.
 - **Minimalist Top-Center Controls:**
@@ -91,8 +92,9 @@ Edit [`config/dashboard.config.json`](./config/dashboard.config.json) to customi
 - **Serverless Photos API (`api/photos.go`):** Resolves Google Photos shared-album links from `PHOTOS_ALBUM_URLS` into image URLs and dimensions for the collage layout, served `private, no-store`.
 - **Serverless World API (`api/world.go`):** Concurrently fetches FX quotes (Yahoo Finance), ISS TLEs, USGS earthquakes, NOAA aurora Kp index, and tropical storms, each with its own in-memory cache (`?refresh=1` bypasses it).
 - **Serverless News API (`api/news.go`):** A generic RSS/Atom reader for the feeds in `NEWS_FEEDS`, fetched concurrently with per-feed caching.
+- **Serverless Summary API (`api/summary.go`):** Optional Gemini TL;DR for a Headlines item (`GEMINI_API_KEY`), restricted to links from `NEWS_FEEDS`.
 - **Auth API (`api/auth.go` + `auth/`):** `GET /api/auth` reports lock status; `POST /api/auth` verifies the PIN (per-IP rate limited) and issues the signed session cookie.
-- **Local Dev Server (`cmd/devserver/main.go`):** Mounts `/api/auth`, `/api/weather`, `/api/stocks`, `/api/calendar`, `/api/world`, `/api/news`, and `/api/photos` on `127.0.0.1:8080`, loads secrets from `.env.local`/`.env`, and reads `config/dashboard.config.json` live from disk on every request.
+- **Local Dev Server (`cmd/devserver/main.go`):** Mounts `/api/auth`, `/api/weather`, `/api/stocks`, `/api/calendar`, `/api/world`, `/api/news`, `/api/summary`, and `/api/photos` on `127.0.0.1:8080`, loads secrets from `.env.local`/`.env`, and reads `config/dashboard.config.json` live from disk on every request.
 
 ## Local Development
 
@@ -120,7 +122,7 @@ Append `?demo=<mode>` to preview any condition immediately:
 ## Deploy to Vercel
 
 **Option A — GitHub Auto-Deploy (Recommended):**
-Import this repository at [vercel.com/new](https://vercel.com/new) and click **Deploy** (Vercel detects [`vercel.json`](./vercel.json), [`go.mod`](./go.mod), and the Go handlers in `api/` automatically). Set `GLANCE_PASSCODE`, `GLANCE_SESSION_SECRET`, `CALENDAR_ICS_URLS`, `PHOTOS_ALBUM_URLS`, and `NEWS_FEEDS` under **Project Settings → Environment Variables**. Pushing edits to `config/dashboard.config.json` auto-deploys and updates the wall-mounted iPad automatically.
+Import this repository at [vercel.com/new](https://vercel.com/new) and click **Deploy** (Vercel detects [`vercel.json`](./vercel.json), [`go.mod`](./go.mod), and the Go handlers in `api/` automatically). Set `GLANCE_PASSCODE`, `GLANCE_SESSION_SECRET`, `CALENDAR_ICS_URLS`, `PHOTOS_ALBUM_URLS`, `NEWS_FEEDS`, and optionally `GEMINI_API_KEY` under **Project Settings → Environment Variables**. Pushing edits to `config/dashboard.config.json` auto-deploys and updates the wall-mounted iPad automatically.
 
 > **Note:** Vercel turns every `.go` file in `api/` into its own serverless function, so each file there must export an HTTP handler. Put shared helpers in the same file as their handler or in a package outside `api/` (like `auth/`, `config/`); a helper-only file in `api/` fails the deployment.
 

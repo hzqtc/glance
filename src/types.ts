@@ -353,5 +353,6 @@ export interface NewsResponse {
   fetchedAt: string;
   date: string; // YYYY-MM-DD in the Home city's timezone
   configured: boolean;
+  tldr: boolean; // GEMINI_API_KEY is set, so /api/summary can write TL;DRs
   feeds: NewsFeed[];
 }
