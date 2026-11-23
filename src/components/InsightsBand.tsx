@@ -2,6 +2,7 @@ import type { CityWeather, TempUnit } from '../types';
 import { formatWeekdayFromISO } from '../utils/time';
 import {
   describeAQI,
+  describeDewPoint,
   describePM25,
   describeUV,
   describeWMO,
@@ -52,6 +53,8 @@ export function InsightsBand(props: InsightsBandProps) {
         ? daily[0].uvIndexMax
         : null;
   var uvDesc = uvVal !== null ? describeUV(uvVal) : null;
+  var dewVal = typeof weather.dewPointC === 'number' ? weather.dewPointC : null;
+  var dewDesc = dewVal !== null ? describeDewPoint(dewVal) : null;
 
   // Today's rain total / sunshine hours and any low-visibility note sit on the
   // Air & Conditions card; the forecast card gets a look at the days ahead.
@@ -129,14 +132,7 @@ export function InsightsBand(props: InsightsBandProps) {
 
         <div class="atmos-metrics">
           <div class="atmos-metric-box">
-            <div class="atmos-metric-label">
-              Air Quality
-              {showUV && pm25Text !== null ? (
-                <span class="atmos-metric-inline-sub">
-                  {' '}· PM2.5 {pm25Text}
-                </span>
-              ) : null}
-            </div>
+            <div class="atmos-metric-label">Air Quality</div>
             {aqiVal !== null && aqiDesc ? (
               <div class="atmos-metric-value-row">
                 <span
@@ -156,44 +152,22 @@ export function InsightsBand(props: InsightsBandProps) {
           <div class="atmos-metric-divider" />
 
           <div class="atmos-metric-box">
-            {showUV ? (
-              <div>
-                <div class="atmos-metric-label">UV Index</div>
-                {uvVal !== null && uvDesc ? (
-                  <div class="atmos-metric-value-row">
-                    <span
-                      class="metric-dot"
-                      style={{ backgroundColor: uvDesc.color }}
-                    />
-                    <span class="atmos-metric-num">{Math.round(uvVal)}</span>
-                    <span class="atmos-metric-tag">{uvDesc.label}</span>
-                  </div>
-                ) : (
-                  <div class="atmos-metric-value-row">
-                    <span class="atmos-metric-tag">—</span>
-                  </div>
-                )}
+            <div class="atmos-metric-label">
+              PM2.5
+              <span class="atmos-metric-inline-sub"> µg/m³</span>
+            </div>
+            {pm25Text !== null && pm25Desc ? (
+              <div class="atmos-metric-value-row">
+                <span
+                  class="metric-dot"
+                  style={{ backgroundColor: pm25Desc.color }}
+                />
+                <span class="atmos-metric-num">{pm25Text}</span>
+                <span class="atmos-metric-tag">{pm25Desc.label}</span>
               </div>
             ) : (
-              <div>
-                <div class="atmos-metric-label">
-                  PM2.5
-                  <span class="atmos-metric-inline-sub"> µg/m³</span>
-                </div>
-                {pm25Text !== null && pm25Desc ? (
-                  <div class="atmos-metric-value-row">
-                    <span
-                      class="metric-dot"
-                      style={{ backgroundColor: pm25Desc.color }}
-                    />
-                    <span class="atmos-metric-num">{pm25Text}</span>
-                    <span class="atmos-metric-tag">{pm25Desc.label}</span>
-                  </div>
-                ) : (
-                  <div class="atmos-metric-value-row">
-                    <span class="atmos-metric-tag">—</span>
-                  </div>
-                )}
+              <div class="atmos-metric-value-row">
+                <span class="atmos-metric-tag">—</span>
               </div>
             )}
           </div>
@@ -202,10 +176,34 @@ export function InsightsBand(props: InsightsBandProps) {
         <div class="daylight-block">
           <div class="daylight-row">
             <div class="daylight-item">
-              <span class="daylight-item-label">Feels Like</span>
-              <span class="daylight-item-value">
-                {formatTemp(weather.feelsLikeC, props.units)}
+              <span class="daylight-item-label">
+                {showUV ? 'UV Index' : 'Dew Point'}
               </span>
+              {showUV ? (
+                uvVal !== null && uvDesc ? (
+                  <span class="daylight-item-value daylight-item-value-rated">
+                    <span
+                      class="daylight-metric-dot"
+                      style={{ backgroundColor: uvDesc.color }}
+                    />
+                    <span>{Math.round(uvVal)}</span>
+                    <span class="daylight-item-tag">{uvDesc.label}</span>
+                  </span>
+                ) : (
+                  <span class="daylight-item-value">—</span>
+                )
+              ) : dewVal !== null && dewDesc ? (
+                <span class="daylight-item-value daylight-item-value-rated">
+                  <span
+                    class="daylight-metric-dot"
+                    style={{ backgroundColor: dewDesc.color }}
+                  />
+                  <span>{formatTemp(dewVal, props.units)}</span>
+                  <span class="daylight-item-tag">{dewDesc.label}</span>
+                </span>
+              ) : (
+                <span class="daylight-item-value">—</span>
+              )}
             </div>
             <div class="daylight-item">
               <span class="daylight-item-label">Wind</span>

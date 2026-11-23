@@ -275,6 +275,10 @@ export function HeroSpotlight(props: HeroSpotlightProps) {
               <div class="hero-condition">{desc.label}</div>
               <div class="hero-meta-row">
                 <span class="hero-meta-item">
+                  Feels {formatTemp(weather.feelsLikeC, units)}
+                </span>
+                <span class="hero-meta-sep">·</span>
+                <span class="hero-meta-item">
                   H {formatTemp(weather.highC, units)}
                 </span>
                 <span class="hero-meta-sep">·</span>

@@ -537,6 +537,28 @@
   font-variant-numeric: tabular-nums;
 }
 
+.daylight-item-value-rated {
+  display: inline-flex;
+  align-items: baseline;
+  white-space: nowrap;
+}
+
+.daylight-metric-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  margin-right: 6px;
+  align-self: center;
+  flex-shrink: 0;
+}
+
+.daylight-item-tag {
+  margin-left: 5px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
 /* Row 3: Tappable Multi-City Cards Grid (supports 1 or 2 rows of 4) */
 .cities-grid {
   width: 100%;
@@ -685,6 +707,10 @@
 
 .weather-slide-multi .daylight-item-value {
   font-size: 16px;
+}
+
+.weather-slide-multi .daylight-item-tag {
+  font-size: 13px;
 }
 
 .weather-slide-multi .cities-grid {

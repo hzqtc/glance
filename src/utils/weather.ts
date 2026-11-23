@@ -185,6 +185,22 @@ export interface RatingDescriptor {
   color: string;
 }
 
+export function describeDewPoint(dewPointC: number): RatingDescriptor {
+  if (dewPointC < 10) {
+    return { label: 'Crisp', color: '#60a5fa' };
+  }
+  if (dewPointC < 15.5) {
+    return { label: 'Comfy', color: '#4ade80' };
+  }
+  if (dewPointC < 18.5) {
+    return { label: 'Mild', color: '#a3e635' };
+  }
+  if (dewPointC < 21) {
+    return { label: 'Humid', color: '#facc15' };
+  }
+  return { label: 'Muggy', color: '#fb923c' };
+}
+
 export function describePM25(pm25: number): RatingDescriptor {
   if (pm25 <= 9) {
     return { label: 'Good', color: '#4ade80' };

@@ -439,6 +439,10 @@
     font-size: 14px;
   }
 
+  .weather-slide-multi .daylight-item-tag {
+    font-size: 12px;
+  }
+
   .weather-slide-multi .cities-row-next {
     margin-top: 6px;
   }
