@@ -54,7 +54,7 @@ var DEFAULT_ROTATION_SCHEDULE: ResolvedRotationStep[] = [
   { slide: PHOTOS_SLIDE, seconds: 60 }, // photos
   { slide: 3, seconds: 15 }, // world
   { slide: PHOTOS_SLIDE, seconds: 60 }, // photos
-  { slide: NEWS_SLIDE, seconds: 15 }, // news
+  { slide: NEWS_SLIDE, seconds: 30 }, // news
 ];
 
 function slideNameToIndex(name: string): number {

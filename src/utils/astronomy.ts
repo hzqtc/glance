@@ -297,16 +297,6 @@ export function computeGreatCircleArc(
   };
 }
 
-export function formatCoordLat(lat: number): string {
-  var hemi = lat >= 0 ? 'N' : 'S';
-  return Math.abs(lat).toFixed(1) + '°' + hemi;
-}
-
-export function formatCoordLon(lon: number): string {
-  var hemi = lon >= 0 ? 'E' : 'W';
-  return Math.abs(lon).toFixed(1) + '°' + hemi;
-}
-
 export function formatFXRate(rate: number, quote: string): string {
   if (!isFinite(rate) || rate <= 0) return '—';
   if (quote === 'JPY' || quote === 'KRW' || rate >= 50) {

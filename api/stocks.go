@@ -71,11 +71,11 @@ type StockQuote struct {
 }
 
 type StockHero struct {
-	Symbol           string       `json:"symbol"`
-	Label            string       `json:"label"`
-	Name             string       `json:"name"`
-	Format           string       `json:"format"`
-	Currency         string       `json:"currency"`
+	Symbol            string       `json:"symbol"`
+	Label             string       `json:"label"`
+	Name              string       `json:"name"`
+	Format            string       `json:"format"`
+	Currency          string       `json:"currency"`
 	Exchange          string       `json:"exchange"`
 	MarketState       string       `json:"marketState"`
 	MarketTime        int64        `json:"marketTime,omitempty"`
@@ -95,22 +95,22 @@ type StockHero struct {
 	RegularEnd        int64        `json:"regularEnd,omitempty"`
 	SessionEnd        int64        `json:"sessionEnd,omitempty"`
 	DayHigh           float64      `json:"dayHigh"`
-	DayLow           float64      `json:"dayLow"`
-	RangeHigh        float64      `json:"rangeHigh"`
-	RangeLow         float64      `json:"rangeLow"`
-	FiftyTwoWeekHigh float64      `json:"fiftyTwoWeekHigh"`
-	FiftyTwoWeekLow  float64      `json:"fiftyTwoWeekLow"`
-	Volume           int64        `json:"volume"`
-	Points           []StockPoint `json:"points"`
+	DayLow            float64      `json:"dayLow"`
+	RangeHigh         float64      `json:"rangeHigh"`
+	RangeLow          float64      `json:"rangeLow"`
+	FiftyTwoWeekHigh  float64      `json:"fiftyTwoWeekHigh"`
+	FiftyTwoWeekLow   float64      `json:"fiftyTwoWeekLow"`
+	Volume            int64        `json:"volume"`
+	Points            []StockPoint `json:"points"`
 }
 
 type StocksResponse struct {
-	Version       string       `json:"version"`
-	FetchedAt     string       `json:"fetchedAt"`
-	MarketHours   bool         `json:"marketHours"`
-	DefaultRange  string       `json:"defaultRange"`
-	Hero          *StockHero   `json:"hero"`
-	Quotes        []StockQuote `json:"quotes,omitempty"`
+	Version      string       `json:"version"`
+	FetchedAt    string       `json:"fetchedAt"`
+	MarketHours  bool         `json:"marketHours"`
+	DefaultRange string       `json:"defaultRange"`
+	Hero         *StockHero   `json:"hero"`
+	Quotes       []StockQuote `json:"quotes,omitempty"`
 }
 
 // Yahoo Finance v8 chart response structures.
@@ -1097,15 +1097,15 @@ func writeStocksError(w http.ResponseWriter, status int, message string) {
 }
 
 type yfQuoteMetaItem struct {
-	Symbol                 string  `json:"symbol"`
-	MarketState            string  `json:"marketState"`
-	MarketCap              float64 `json:"marketCap"`
-	RegularMarketTime      int64   `json:"regularMarketTime"`
-	PreMarketPrice         float64 `json:"preMarketPrice"`
-	PreMarketChange        float64 `json:"preMarketChange"`
-	PreMarketChangePercent float64 `json:"preMarketChangePercent"`
-	PostMarketPrice        float64 `json:"postMarketPrice"`
-	PostMarketChange       float64 `json:"postMarketChange"`
+	Symbol                  string  `json:"symbol"`
+	MarketState             string  `json:"marketState"`
+	MarketCap               float64 `json:"marketCap"`
+	RegularMarketTime       int64   `json:"regularMarketTime"`
+	PreMarketPrice          float64 `json:"preMarketPrice"`
+	PreMarketChange         float64 `json:"preMarketChange"`
+	PreMarketChangePercent  float64 `json:"preMarketChangePercent"`
+	PostMarketPrice         float64 `json:"postMarketPrice"`
+	PostMarketChange        float64 `json:"postMarketChange"`
 	PostMarketChangePercent float64 `json:"postMarketChangePercent"`
 }
 

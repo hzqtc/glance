@@ -83,7 +83,6 @@ type CalendarResponse struct {
 	Configured    bool            `json:"configured"`
 	Calendars     []CalendarMeta  `json:"calendars"`
 	Events        []CalendarEvent `json:"events"`
-	NextEvent     *CalendarEvent  `json:"nextEvent,omitempty"`
 	UpcomingTrips []CalendarTrip  `json:"upcomingTrips,omitempty"`
 	Warnings      []string        `json:"warnings,omitempty"`
 }
@@ -153,17 +152,13 @@ func CalendarHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Compute 42-day Monday-to-Sunday grid window for requested year/month
 	winStart, winEnd := monthGridWindowMonday(year, month, loc)
-	// Also scan next 14 days from now for NextEvent banner
-	upcomingStart := time.Date(nowLocal.Year(), nowLocal.Month(), nowLocal.Day(), 0, 0, 0, 0, loc)
-	upcomingEnd := upcomingStart.AddDate(0, 0, 15)
 
 	var (
-		allEvents      []CalendarEvent
-		upcomingEvents []CalendarEvent
-		upcomingTrips  []CalendarTrip
-		warnings       []string
-		mu             sync.Mutex
-		wg             sync.WaitGroup
+		allEvents     []CalendarEvent
+		upcomingTrips []CalendarTrip
+		warnings      []string
+		mu            sync.Mutex
+		wg            sync.WaitGroup
 	)
 
 	for _, src := range sources {
@@ -192,12 +187,10 @@ func CalendarHandler(w http.ResponseWriter, r *http.Request) {
 			}
 
 			winEvs := expandEventsForWindow(parsed, s.ID, calName, s.Color, winStart, winEnd, loc)
-			upEvs := expandEventsForWindow(parsed, s.ID, calName, s.Color, upcomingStart, upcomingEnd, loc)
 			trips := extractUpcomingTrips(parsed, s.ID, calName, s.Color, nowLocal, loc)
 
 			mu.Lock()
 			allEvents = append(allEvents, winEvs...)
-			upcomingEvents = append(upcomingEvents, upEvs...)
 			upcomingTrips = append(upcomingTrips, trips...)
 			if calName != s.Name {
 				for i := range calendars {
@@ -213,22 +206,7 @@ func CalendarHandler(w http.ResponseWriter, r *http.Request) {
 	wg.Wait()
 
 	sortCalendarEvents(allEvents)
-	sortCalendarEvents(upcomingEvents)
 	upcomingTrips = normalizeUpcomingTrips(upcomingTrips)
-
-	var nextEv *CalendarEvent
-	nowMs := nowLocal.UnixNano() / int64(time.Millisecond)
-	for i := range upcomingEvents {
-		ev := upcomingEvents[i]
-		if ev.AllDay {
-			continue
-		}
-		if ev.EndMs > nowMs {
-			copyEv := ev
-			nextEv = &copyEv
-			break
-		}
-	}
 
 	if allEvents == nil {
 		allEvents = []CalendarEvent{}
@@ -243,7 +221,6 @@ func CalendarHandler(w http.ResponseWriter, r *http.Request) {
 		Configured:    len(sources) > 0,
 		Calendars:     calendars,
 		Events:        allEvents,
-		NextEvent:     nextEv,
 		UpcomingTrips: upcomingTrips,
 		Warnings:      warnings,
 	}
@@ -461,10 +438,6 @@ func unfoldICSLines(raw string) []string {
 		}
 	}
 	return out
-}
-
-func extractICSCalendarName(raw string) string {
-	return extractICSCalendarNameFromLines(unfoldICSLines(raw))
 }
 
 func extractICSCalendarNameFromLines(lines []string) string {

@@ -21,10 +21,6 @@ var (
 	embeddedErr     error
 )
 
-type HeroConfig struct {
-	LockFirstCity bool `json:"lockFirstCity"`
-}
-
 type NightModeConfig struct {
 	Enabled    bool    `json:"enabled"`
 	StartHour  int     `json:"startHour"`
@@ -91,25 +87,13 @@ type DashboardConfig struct {
 	Units            string          `json:"units"`
 	TimeFormat       string          `json:"timeFormat"`
 	IdleResetSeconds int             `json:"idleResetSeconds"`
-	Hero             HeroConfig      `json:"hero"`
-	NightMode  NightModeConfig `json:"nightMode"`
-	Refresh    RefreshConfig   `json:"refresh"`
-	Carousel   CarouselConfig  `json:"carousel"`
-	Photos     PhotosConfig    `json:"photos"`
-	World      WorldConfig     `json:"world"`
-	Cities     []CityConfig    `json:"cities"`
-	Stocks     StocksConfig    `json:"stocks"`
-}
-
-func LoadRawConfig() ([]byte, bool, error) {
-	if devPath := strings.TrimSpace(os.Getenv("GLANCE_DEV_CONFIG_PATH")); devPath != "" {
-		data, err := os.ReadFile(devPath)
-		if err != nil {
-			return nil, true, err
-		}
-		return data, true, nil
-	}
-	return embeddedConfigJSON, false, nil
+	NightMode        NightModeConfig `json:"nightMode"`
+	Refresh          RefreshConfig   `json:"refresh"`
+	Carousel         CarouselConfig  `json:"carousel"`
+	Photos           PhotosConfig    `json:"photos"`
+	World            WorldConfig     `json:"world"`
+	Cities           []CityConfig    `json:"cities"`
+	Stocks           StocksConfig    `json:"stocks"`
 }
 
 // LoadNormalizedConfig returns the normalized dashboard config and version hash,
@@ -214,7 +198,7 @@ func normalizeCarouselSchedule(raw []CarouselScheduleStep, fallbackSeconds int) 
 			{Slide: "photos", Seconds: 60},
 			{Slide: "world", Seconds: 15},
 			{Slide: "photos", Seconds: 60},
-			{Slide: "news", Seconds: 15},
+			{Slide: "news", Seconds: 30},
 		}
 	}
 	return normalized

@@ -29,6 +29,8 @@ interface NewsDetail {
 
 function readCachedNews(): NewsResponse | null {
   try {
+    // Cache from the pre-RSS Headlines format; no longer readable
+    window.localStorage.removeItem('glance:lastNews:v1');
     var raw = window.localStorage.getItem(NEWS_STORAGE_KEY);
     if (!raw) return null;
     var parsed = JSON.parse(raw) as NewsResponse;

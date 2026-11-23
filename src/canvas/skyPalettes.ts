@@ -291,27 +291,3 @@ export function getSkyThemeMode(
   return 'day';
 }
 
-export function getCityAccentGradient(
-  minutesSinceMidnight: number,
-  sunriseMin: number,
-  sunsetMin: number,
-  weatherKind: WeatherKind,
-  cloudCover: number
-): string {
-  var s = computeTargetSky(
-    minutesSinceMidnight,
-    sunriseMin,
-    sunsetMin,
-    weatherKind,
-    cloudCover
-  );
-  return (
-    'linear-gradient(90deg, ' +
-    rgbString(s.mid, 0.85) +
-    ' 0%, ' +
-    rgbString(s.glow, 0.9) +
-    ' 50%, ' +
-    rgbString(s.bottom, 0.85) +
-    ' 100%)'
-  );
-}

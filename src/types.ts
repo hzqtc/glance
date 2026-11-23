@@ -5,10 +5,6 @@ export type StockRange = '1d' | '1w' | '1m' | 'ytd' | '1y' | '2y' | '5y' | '10y'
 export type StockFormat = 'currency' | 'points' | 'yield';
 export type StockCardMetric = 'abs' | 'pct' | 'mcap';
 
-export interface HeroConfig {
-  lockFirstCity: boolean;
-}
-
 export interface NightModeConfig {
   enabled: boolean;
   startHour: number;
@@ -75,7 +71,6 @@ export interface DashboardConfig {
   units: TempUnit;
   timeFormat: TimeFormat;
   idleResetSeconds?: number;
-  hero: HeroConfig;
   nightMode: NightModeConfig;
   refresh: RefreshConfig;
   carousel?: CarouselConfig;
@@ -243,7 +238,6 @@ export interface CalendarResponse {
   configured: boolean;
   calendars: CalendarMeta[];
   events: CalendarEvent[];
-  nextEvent?: CalendarEvent | null;
   upcomingTrips?: CalendarTrip[];
   warnings?: string[];
 }

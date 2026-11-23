@@ -4,11 +4,7 @@ import "testing"
 
 func TestParseAndNormalizeCarouselSchedule(t *testing.T) {
 	// Embedded default config should carry the configured photo/dashboard schedule
-	raw, _, err := LoadRawConfig()
-	if err != nil {
-		t.Fatalf("LoadRawConfig failed: %v", err)
-	}
-	cfg, err := ParseAndNormalizeConfig(raw)
+	cfg, err := ParseAndNormalizeConfig(embeddedConfigJSON)
 	if err != nil {
 		t.Fatalf("ParseAndNormalizeConfig failed: %v", err)
 	}

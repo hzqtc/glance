@@ -50,7 +50,7 @@ Captured at the iPad mini 2's 1024×768 landscape resolution (Retina 2×).
   - **°F / °C toggle:** Instant temperature & wind unit switching.
   - **Hard Refresh button:** Clears cached weather, unregisters Service Workers, purges Cache Storage, and performs a cache-busted full reload (ideal for Home Screen PWA mode).
 - **Built for 24/7 iPad mini 2 (iOS 12) Stability:**
-  - Preact + Vite with a classic ES5 Safari 12 production bundle (~22.5 KB gzipped) and zero `<script type="module">` traps.
+  - Preact + Vite with a classic ES5 Safari 12 production bundle (~110 KB gzipped, plus ~21 KB of legacy polyfills) and zero `<script type="module">` traps.
   - Minute-aligned clock updates, auto night-dimming (`11 PM – 7 AM`), offline `localStorage`/Service Worker resilience, zero-touch auto-reload on new Vercel deployments, and a silent daily 3:30 AM reload.
   - Full iOS PWA assets (`152×152`, `167×167`, `180×180` Apple touch icons and `2048×1536` landscape launch splash screen).
 

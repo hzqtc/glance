@@ -67,7 +67,7 @@ self.addEventListener('fetch', function (event) {
     return;
   }
 
-  /* Network-first for /api/weather and /api/stocks with cached fallback during Wi-Fi blips */
+  /* Network-first for the other APIs (weather, stocks, world, news) with cached fallback during Wi-Fi blips */
   if (url.indexOf('/api/') !== -1) {
     event.respondWith(
       fetch(req).then(function (resp) {

@@ -550,28 +550,3 @@ export function formatRelativeDayLabel(selectedKey: string, todayKey: string): s
   return '';
 }
 
-export function formatNextEventCountdown(
-  ev: CalendarEvent,
-  nowMs: number,
-  todayKey: string,
-  timeFormat: TimeFormat
-): string {
-  if (nowMs >= ev.startMs && nowMs < ev.endMs) {
-    return 'Now';
-  }
-  var diffMin = Math.max(1, Math.round((ev.startMs - nowMs) / 60000));
-  if (diffMin < 60) {
-    return 'in ' + String(diffMin) + 'm';
-  }
-  if (diffMin < 12 * 60 && ev.date === todayKey) {
-    var hrs = Math.floor(diffMin / 60);
-    var mins = diffMin % 60;
-    return mins > 0 ? 'in ' + String(hrs) + 'h ' + String(mins) + 'm' : 'in ' + String(hrs) + 'h';
-  }
-  var rel = formatRelativeDayLabel(ev.date, todayKey);
-  if (rel === 'Tomorrow') {
-    return 'Tomorrow ' + formatHHMM(ev.startTime, timeFormat);
-  }
-  var p = parseDateKey(ev.date);
-  return MONTHS_SHORT[p.month - 1] + ' ' + String(p.day) + ' · ' + formatHHMM(ev.startTime, timeFormat);
-}

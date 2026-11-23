@@ -613,7 +613,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
     var clk = getCityClock(props.nowMs, w ? w.utcOffsetSeconds : undefined, props.timeFormat);
     var isDay = w ? w.isDay : clk.hour24 >= 6 && clk.hour24 < 19;
 
-    // Skip pins virtually on top of Home (e.g., San Francisco 1.3px from Sunnyvale)
+    // Skip pins virtually on top of Home (e.g., a neighbouring city ~1px away)
     if (!isHome && homePt) {
       var dxHome = pt.x - homePt.x;
       var dyHome = pt.y - homePt.y;

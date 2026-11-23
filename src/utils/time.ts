@@ -199,66 +199,6 @@ export function formatWeekdayFromISO(isoDate: string, isFirstDay: boolean): stri
   return WEEKDAYS_SHORT[dt.getUTCDay()];
 }
 
-export interface DaylightProgress {
-  isDaylight: boolean;
-  progress: number; // 0..1 across daylight (or night)
-  remainingDuration: string;
-  remainingText: string;
-  durationText: string;
-}
-
-function formatDurationMinutes(totalMinutes: number): string {
-  var mins = Math.max(0, Math.round(totalMinutes));
-  var h = Math.floor(mins / 60);
-  var m = mins % 60;
-  if (h === 0) {
-    return String(m) + 'm';
-  }
-  return String(h) + 'h ' + String(m) + 'm';
-}
-
-export function computeDaylightProgress(
-  minutesSinceMidnight: number,
-  sunriseMin: number,
-  sunsetMin: number
-): DaylightProgress {
-  var daySpan = Math.max(60, sunsetMin - sunriseMin);
-  var durationText = formatDurationMinutes(daySpan) + ' daylight';
-
-  if (minutesSinceMidnight >= sunriseMin && minutesSinceMidnight <= sunsetMin) {
-    var prog = (minutesSinceMidnight - sunriseMin) / daySpan;
-    var left = sunsetMin - minutesSinceMidnight;
-    var leftStr = formatDurationMinutes(left);
-    return {
-      isDaylight: true,
-      progress: prog < 0 ? 0 : prog > 1 ? 1 : prog,
-      remainingDuration: leftStr,
-      remainingText: leftStr + ' until sunset',
-      durationText: durationText,
-    };
-  }
-
-  var nightSpan = Math.max(60, 1440 - daySpan);
-  var sinceSunset =
-    minutesSinceMidnight > sunsetMin
-      ? minutesSinceMidnight - sunsetMin
-      : minutesSinceMidnight + (1440 - sunsetMin);
-  var untilSunrise =
-    minutesSinceMidnight < sunriseMin
-      ? sunriseMin - minutesSinceMidnight
-      : 1440 - minutesSinceMidnight + sunriseMin;
-  var nightProg = sinceSunset / nightSpan;
-  var untilStr = formatDurationMinutes(untilSunrise);
-
-  return {
-    isDaylight: false,
-    progress: nightProg < 0 ? 0 : nightProg > 1 ? 1 : nightProg,
-    remainingDuration: untilStr,
-    remainingText: untilStr + ' until sunrise',
-    durationText: durationText,
-  };
-}
-
 /**
  * Returns the astronomical lunar phase in [0, 1):
  * 0.00 = New Moon, 0.25 = First Quarter, 0.50 = Full Moon, 0.75 = Last Quarter.
