@@ -23,7 +23,7 @@ func TestParseAndNormalizeCarouselSchedule(t *testing.T) {
 		{Slide: "photos", Seconds: 60},
 		{Slide: "world", Seconds: 15},
 		{Slide: "photos", Seconds: 60},
-		{Slide: "news", Seconds: 15},
+		{Slide: "news", Seconds: 30},
 	}
 	if len(cfg.Carousel.Schedule) != len(want) {
 		t.Fatalf("expected %d schedule steps, got %d: %+v", len(want), len(cfg.Carousel.Schedule), cfg.Carousel.Schedule)
