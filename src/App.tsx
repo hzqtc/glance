@@ -23,6 +23,7 @@ import { InsightsBand } from './components/InsightsBand';
 import { CityCard } from './components/CityCard';
 import { STOCKS_STORAGE_KEY, StocksDashboard } from './components/StocksDashboard';
 import { CalendarDashboard } from './components/CalendarDashboard';
+import { NEWS_STORAGE_KEY, NewsDashboard } from './components/NewsDashboard';
 import { PhotosDashboard } from './components/PhotosDashboard';
 import { WORLD_STORAGE_KEY, WorldDashboard } from './components/WorldDashboard';
 import { PasscodeGate } from './components/PasscodeGate';
@@ -33,7 +34,10 @@ var ANIM_STORAGE_KEY = 'glance:animEnabled:v1';
 var STOCK_METRIC_STORAGE_KEY = 'glance:stockCardMetric:v1';
 var ACTIVE_SLIDE_STORAGE_KEY = 'glance:activeSlide:v1';
 var UNITS_STORAGE_KEY = 'glance:units:v1';
-var TOTAL_SLIDES = 5;
+// Slide order (top to bottom): weather, stocks, calendar, world, news, photos
+var NEWS_SLIDE = 4;
+var PHOTOS_SLIDE = 5;
+var TOTAL_SLIDES = 6;
 
 interface ResolvedRotationStep {
   slide: number;
@@ -41,14 +45,16 @@ interface ResolvedRotationStep {
 }
 
 var DEFAULT_ROTATION_SCHEDULE: ResolvedRotationStep[] = [
-  { slide: 4, seconds: 60 }, // photos
+  { slide: PHOTOS_SLIDE, seconds: 60 }, // photos
   { slide: 0, seconds: 15 }, // weather
-  { slide: 4, seconds: 60 }, // photos
+  { slide: PHOTOS_SLIDE, seconds: 60 }, // photos
   { slide: 1, seconds: 15 }, // stocks
-  { slide: 4, seconds: 60 }, // photos
+  { slide: PHOTOS_SLIDE, seconds: 60 }, // photos
   { slide: 2, seconds: 15 }, // calendar
-  { slide: 4, seconds: 60 }, // photos
+  { slide: PHOTOS_SLIDE, seconds: 60 }, // photos
   { slide: 3, seconds: 15 }, // world
+  { slide: PHOTOS_SLIDE, seconds: 60 }, // photos
+  { slide: NEWS_SLIDE, seconds: 15 }, // news
 ];
 
 function slideNameToIndex(name: string): number {
@@ -57,7 +63,8 @@ function slideNameToIndex(name: string): number {
   if (lower === 'stocks' || lower === 'stock') return 1;
   if (lower === 'calendar') return 2;
   if (lower === 'world' || lower === 'map') return 3;
-  if (lower === 'photos' || lower === 'photo') return 4;
+  if (lower === 'news' || lower === 'headlines') return NEWS_SLIDE;
+  if (lower === 'photos' || lower === 'photo') return PHOTOS_SLIDE;
   return -1;
 }
 
@@ -290,6 +297,7 @@ function clearCachedDashboardData(): void {
     window.localStorage.removeItem(WEATHER_STORAGE_KEY);
     window.localStorage.removeItem(STOCKS_STORAGE_KEY);
     window.localStorage.removeItem(WORLD_STORAGE_KEY);
+    window.localStorage.removeItem(NEWS_STORAGE_KEY);
   } catch (_err) {
     // Ignore storage errors
   }
@@ -702,6 +710,7 @@ function DashboardShell(props: DashboardShellProps) {
               try {
                 window.localStorage.removeItem(STOCKS_STORAGE_KEY);
                 window.localStorage.removeItem(WORLD_STORAGE_KEY);
+                window.localStorage.removeItem(NEWS_STORAGE_KEY);
               } catch (_err) {
                 // Ignore storage errors
               }
@@ -1000,7 +1009,7 @@ function DashboardShell(props: DashboardShellProps) {
         toHex2(currentSky.top[0]) +
         toHex2(currentSky.top[1]) +
         toHex2(currentSky.top[2])
-      : activeSlide === 4
+      : activeSlide === PHOTOS_SLIDE
         ? '#060911'
         : activeSlide === 3
           ? '#091120'
@@ -1060,6 +1069,7 @@ function DashboardShell(props: DashboardShellProps) {
       window.localStorage.removeItem(WEATHER_STORAGE_KEY);
       window.localStorage.removeItem(STOCKS_STORAGE_KEY);
       window.localStorage.removeItem(WORLD_STORAGE_KEY);
+      window.localStorage.removeItem(NEWS_STORAGE_KEY);
     } catch (_err) {
       // Ignore storage errors
     }
@@ -1340,10 +1350,21 @@ function DashboardShell(props: DashboardShellProps) {
             onUnauthorized={props.onUnauthorized}
           />
         </section>
-        {/* Slide 4: Photos Frame */}
-        <section class="carousel-slide" aria-hidden={activeSlide !== 4}>
+        {/* Slide 4: Headlines (HN, BBC 中文, GitHub Trending, On This Day) */}
+        <section class="carousel-slide" aria-hidden={activeSlide !== NEWS_SLIDE}>
+          <NewsDashboard
+            isActive={activeSlide === NEWS_SLIDE}
+            preload={preloadReady}
+            nowMs={nowMs}
+            isRefreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            onUnauthorized={props.onUnauthorized}
+          />
+        </section>
+        {/* Slide 5: Photos Frame */}
+        <section class="carousel-slide" aria-hidden={activeSlide !== PHOTOS_SLIDE}>
           <PhotosDashboard
-            isActive={activeSlide === 4}
+            isActive={activeSlide === PHOTOS_SLIDE}
             preload={preloadReady}
             slideIntervalSeconds={photoSlideIntervalSec}
             isRefreshing={isRefreshing}
@@ -1359,7 +1380,7 @@ function DashboardShell(props: DashboardShellProps) {
           class={
             isLightRail
               ? 'carousel-rail carousel-rail-light'
-              : activeSlide === 4
+              : activeSlide === PHOTOS_SLIDE
                 ? 'carousel-rail carousel-rail-photos'
                 : 'carousel-rail'
           }
@@ -1523,22 +1544,60 @@ function DashboardShell(props: DashboardShellProps) {
         <button
           type="button"
           class={
-            activeSlide === 4
+            activeSlide === NEWS_SLIDE
               ? isRotatePaused
                 ? 'rail-btn rail-btn-active rail-btn-paused'
                 : 'rail-btn rail-btn-active'
               : 'rail-btn'
           }
           onClick={function () {
-            handleManualSlideSelect(4);
+            handleManualSlideSelect(NEWS_SLIDE);
           }}
           title={
-            activeSlide === 4 && isRotatePaused
+            activeSlide === NEWS_SLIDE && isRotatePaused
+              ? 'Headlines (auto-rotate paused)'
+              : 'Headlines dashboard'
+          }
+          aria-label="Headlines dashboard"
+          aria-current={activeSlide === NEWS_SLIDE ? 'page' : undefined}
+        >
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="ctrl-svg"
+            aria-hidden="true"
+          >
+            <path d="M4 5.5h13a1 1 0 0 1 1 1V18a2 2 0 0 0 2 2H6a2 2 0 0 1-2-2V5.5z" />
+            <path d="M18 9h1.5a.5.5 0 0 1 .5.5V18a2 2 0 0 1-2 2" />
+            <path d="M7.5 9h7M7.5 12.5h7M7.5 16h4" />
+          </svg>
+        </button>
+
+        <button
+          type="button"
+          class={
+            activeSlide === PHOTOS_SLIDE
+              ? isRotatePaused
+                ? 'rail-btn rail-btn-active rail-btn-paused'
+                : 'rail-btn rail-btn-active'
+              : 'rail-btn'
+          }
+          onClick={function () {
+            handleManualSlideSelect(PHOTOS_SLIDE);
+          }}
+          title={
+            activeSlide === PHOTOS_SLIDE && isRotatePaused
               ? 'Photos (auto-rotate paused)'
               : 'Photos dashboard'
           }
           aria-label="Photos dashboard"
-          aria-current={activeSlide === 4 ? 'page' : undefined}
+          aria-current={activeSlide === PHOTOS_SLIDE ? 'page' : undefined}
         >
           <svg
             width="14"
@@ -1563,7 +1622,7 @@ function DashboardShell(props: DashboardShellProps) {
           targetMs={rotateTargetMs}
           visible={autoRotate && !isRotatePaused}
           light={isLightRail}
-          photos={activeSlide === 4}
+          photos={activeSlide === PHOTOS_SLIDE}
         />
       </div>
 

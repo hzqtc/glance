@@ -11,4 +11,5 @@
 @import './passcode.css';   /* PIN passcode gate */
 @import './photos.css';     /* Photos collage slide */
 @import './world.css';      /* World map & FX slide */
+@import './news.css';       /* Headlines slide: HN, BBC 中文, GitHub Trending, On This Day */
 @import './responsive.css'; /* Cross-slide max-height overrides (iPad mini 6, short landscapes) */

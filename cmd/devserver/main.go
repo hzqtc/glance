@@ -59,9 +59,10 @@ func main() {
 	mux.HandleFunc("/api/calendar", handler.CalendarHandler)
 	mux.HandleFunc("/api/photos", handler.PhotosHandler)
 	mux.HandleFunc("/api/world", handler.WorldHandler)
+	mux.HandleFunc("/api/news", handler.NewsHandler)
 
 	addr := "127.0.0.1:" + port
-	log.Printf("Glance Go dev API listening on http://%s (/api/auth, /api/weather, /api/stocks, /api/calendar, /api/photos, /api/world)", addr)
+	log.Printf("Glance Go dev API listening on http://%s (/api/auth, /api/weather, /api/stocks, /api/calendar, /api/photos, /api/world, /api/news)", addr)
 	if err := http.ListenAndServe(addr, mux); err != nil {
 		log.Fatal(err)
 	}

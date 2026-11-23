@@ -213,6 +213,8 @@ func normalizeCarouselSchedule(raw []CarouselScheduleStep, fallbackSeconds int) 
 			{Slide: "calendar", Seconds: 15},
 			{Slide: "photos", Seconds: 60},
 			{Slide: "world", Seconds: 15},
+			{Slide: "photos", Seconds: 60},
+			{Slide: "news", Seconds: 15},
 		}
 	}
 	return normalized
@@ -230,6 +232,8 @@ func normalizeCarouselSlideName(raw string) string {
 		return "photos"
 	case "world", "map":
 		return "world"
+	case "news", "headlines":
+		return "news"
 	default:
 		return ""
 	}
