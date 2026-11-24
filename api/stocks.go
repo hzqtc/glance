@@ -47,6 +47,7 @@ var (
 )
 
 const (
+	yahooUserAgent     = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
 	maxYahooBodyBytes  = 4 * 1024 * 1024
 	maxYahooCrumbBytes = 4 * 1024
 )
@@ -57,17 +58,16 @@ type StockPoint struct {
 }
 
 type StockQuote struct {
-	Symbol        string    `json:"symbol"`
-	Label         string    `json:"label"`
-	Name          string    `json:"name"`
-	Format        string    `json:"format"`
-	Price         float64   `json:"price"`
-	PreviousClose float64   `json:"previousClose"`
-	Change        float64   `json:"change"`
-	ChangePct     float64   `json:"changePct"`
-	MarketCap     float64   `json:"marketCap,omitempty"`
-	Sparkline     []float64 `json:"sparkline"`
-	Unavailable   bool      `json:"unavailable,omitempty"`
+	Symbol      string    `json:"symbol"`
+	Label       string    `json:"label"`
+	Name        string    `json:"name"`
+	Format      string    `json:"format"`
+	Price       float64   `json:"price"`
+	Change      float64   `json:"change"`
+	ChangePct   float64   `json:"changePct"`
+	MarketCap   float64   `json:"marketCap,omitempty"`
+	Sparkline   []float64 `json:"sparkline"`
+	Unavailable bool      `json:"unavailable,omitempty"`
 }
 
 type StockHero struct {
@@ -81,7 +81,6 @@ type StockHero struct {
 	MarketTime        int64        `json:"marketTime,omitempty"`
 	Range             string       `json:"range"`
 	Price             float64      `json:"price"`
-	PreviousClose     float64      `json:"previousClose"`
 	Baseline          float64      `json:"baseline"`
 	Change            float64      `json:"change"`
 	ChangePct         float64      `json:"changePct"`
@@ -94,13 +93,8 @@ type StockHero struct {
 	RegularStart      int64        `json:"regularStart,omitempty"`
 	RegularEnd        int64        `json:"regularEnd,omitempty"`
 	SessionEnd        int64        `json:"sessionEnd,omitempty"`
-	DayHigh           float64      `json:"dayHigh"`
-	DayLow            float64      `json:"dayLow"`
 	RangeHigh         float64      `json:"rangeHigh"`
 	RangeLow          float64      `json:"rangeLow"`
-	FiftyTwoWeekHigh  float64      `json:"fiftyTwoWeekHigh"`
-	FiftyTwoWeekLow   float64      `json:"fiftyTwoWeekLow"`
-	Volume            int64        `json:"volume"`
 	Points            []StockPoint `json:"points"`
 }
 
@@ -118,7 +112,6 @@ type yfChartEnvelope struct {
 	Chart struct {
 		Result []yfChartResult `json:"result"`
 		Error  *struct {
-			Code        string `json:"code"`
 			Description string `json:"description"`
 		} `json:"error"`
 	} `json:"chart"`
@@ -154,9 +147,6 @@ type yfChartMeta struct {
 	PreviousClose        float64 `json:"previousClose"`
 	RegularMarketHigh    float64 `json:"regularMarketDayHigh"`
 	RegularMarketLow     float64 `json:"regularMarketDayLow"`
-	FiftyTwoWeekHigh     float64 `json:"fiftyTwoWeekHigh"`
-	FiftyTwoWeekLow      float64 `json:"fiftyTwoWeekLow"`
-	RegularMarketVol     int64   `json:"regularMarketVolume"`
 	CurrentTradingPeriod struct {
 		Pre     yfTradingPeriod `json:"pre"`
 		Regular yfTradingPeriod `json:"regular"`
@@ -202,7 +192,7 @@ func mapCardRangeSpec(normRange string, heroSpec yahooRangeSpec) yahooRangeSpec 
 // StocksHandler serves GET /api/stocks on Vercel (and locally via cmd/devserver).
 func StocksHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
-		writeStocksError(w, http.StatusMethodNotAllowed, "method not allowed")
+		auth.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 	if !auth.RequireAuth(w, r) {
@@ -211,12 +201,12 @@ func StocksHandler(w http.ResponseWriter, r *http.Request) {
 
 	cfg, version, isDevDisk, err := config.LoadNormalizedConfig()
 	if err != nil {
-		writeStocksError(w, http.StatusInternalServerError, fmt.Sprintf("invalid config: %v", err))
+		auth.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("invalid config: %v", err))
 		return
 	}
 
 	if len(cfg.Stocks.Symbols) == 0 {
-		writeStocksError(w, http.StatusInternalServerError, "no stock symbols configured")
+		auth.WriteJSONError(w, http.StatusInternalServerError, "no stock symbols configured")
 		return
 	}
 
@@ -243,7 +233,7 @@ func StocksHandler(w http.ResponseWriter, r *http.Request) {
 		if !found {
 			upperSym := strings.ToUpper(reqSymbol)
 			if !reValidStockSymbol.MatchString(upperSym) {
-				writeStocksError(w, http.StatusBadRequest, "invalid stock symbol")
+				auth.WriteJSONError(w, http.StatusBadRequest, "invalid stock symbol")
 				return
 			}
 			heroCfg = config.StockSymbolConfig{
@@ -268,7 +258,7 @@ func StocksHandler(w http.ResponseWriter, r *http.Request) {
 	if chartOnly {
 		heroRes, err := fetchYahooChart(heroCfg.Symbol, spec, includeHeroPrePost)
 		if err != nil {
-			writeStocksError(w, http.StatusBadGateway, fmt.Sprintf("failed to fetch stock chart: %v", err))
+			auth.WriteJSONError(w, http.StatusBadGateway, fmt.Sprintf("failed to fetch stock chart: %v", err))
 			return
 		}
 		h := buildStockHero(heroCfg, normRange, heroRes)
@@ -328,7 +318,7 @@ func StocksHandler(w http.ResponseWriter, r *http.Request) {
 		// Populate quotes from batched spark response; collect any missing symbols for chart fallback
 		var missingIdx []int
 		for i, sc := range symbols {
-			if res, ok := sparkMap[strings.ToUpper(sc.Symbol)]; ok && res != nil && len(extractValidPoints(res)) > 0 {
+			if res, ok := sparkMap[strings.ToUpper(sc.Symbol)]; ok && hasValidPoints(res) {
 				quotes[i] = buildStockQuote(sc, normRange, res)
 			} else {
 				missingIdx = append(missingIdx, i)
@@ -395,7 +385,7 @@ func StocksHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if hero == nil && heroErr != nil {
-			writeStocksError(w, http.StatusBadGateway, fmt.Sprintf("failed to fetch stocks: %v", heroErr))
+			auth.WriteJSONError(w, http.StatusBadGateway, fmt.Sprintf("failed to fetch stocks: %v", heroErr))
 			return
 		}
 	}
@@ -457,26 +447,35 @@ func fetchYahooChart(symbol string, spec yahooRangeSpec, includePrePost bool) (*
 	return nil, lastErr
 }
 
-func fetchYahooChartFromURL(reqURL string) (*yfChartResult, error) {
+func yahooHTTPGet(client *http.Client, reqURL string) ([]byte, int, error) {
 	req, err := http.NewRequest(http.MethodGet, reqURL, nil)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15")
+	req.Header.Set("User-Agent", yahooUserAgent)
 	req.Header.Set("Accept", "application/json")
 
-	resp, err := stocksHTTPClient.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode != http.StatusOK {
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
+		return nil, resp.StatusCode, nil
+	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxYahooBodyBytes))
+	return body, resp.StatusCode, err
+}
+
+func fetchYahooChartFromURL(reqURL string) (*yfChartResult, error) {
+	body, status, err := yahooHTTPGet(stocksHTTPClient, reqURL)
 	if err != nil {
 		return nil, err
 	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("yahoo chart returned status %d", resp.StatusCode)
+	if status != http.StatusOK {
+		return nil, fmt.Errorf("yahoo chart returned status %d", status)
 	}
 
 	var env yfChartEnvelope
@@ -528,23 +527,9 @@ func fetchYahooSparkChunk(symbols []string, spec yahooRangeSpec) map[string]*yfC
 		yahooSparkFallbackURL + "?" + qs,
 	}
 
-	const ua = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
-
 	for _, u := range urls {
-		req, err := http.NewRequest(http.MethodGet, u, nil)
-		if err != nil {
-			continue
-		}
-		req.Header.Set("User-Agent", ua)
-		req.Header.Set("Accept", "application/json")
-
-		resp, err := stocksHTTPClient.Do(req)
-		if err != nil {
-			continue
-		}
-		body, readErr := io.ReadAll(io.LimitReader(resp.Body, maxYahooBodyBytes))
-		_ = resp.Body.Close()
-		if readErr != nil || resp.StatusCode != http.StatusOK {
+		body, status, err := yahooHTTPGet(stocksHTTPClient, u)
+		if err != nil || status != http.StatusOK {
 			continue
 		}
 
@@ -562,41 +547,41 @@ func fetchYahooSparkChunk(symbols []string, spec yahooRangeSpec) map[string]*yfC
 func decodeYahooSparkBody(body []byte) map[string]*yfChartResult {
 	out := make(map[string]*yfChartResult)
 
-	// Format 1: {"spark": {"result": [...]}}
-	var wrapped struct {
-		Spark *struct {
-			Result []struct {
-				Symbol   string          `json:"symbol"`
-				Response []yfChartResult `json:"response"`
-			} `json:"result"`
-		} `json:"spark"`
-	}
-	if err := json.Unmarshal(body, &wrapped); err == nil && wrapped.Spark != nil && len(wrapped.Spark.Result) > 0 {
-		for _, item := range wrapped.Spark.Result {
-			if len(item.Response) == 0 {
-				continue
-			}
-			r := item.Response[0]
-			sym := item.Symbol
-			if sym == "" {
-				sym = r.Meta.Symbol
-			}
-			if sym != "" {
-				copyR := r
-				out[strings.ToUpper(sym)] = &copyR
-			}
-		}
-		if len(out) > 0 {
-			return out
-		}
-	}
-
-	// Format 2: Root-keyed {"NVDA": {...}, "AAPL": {...}}
 	var root map[string]json.RawMessage
 	if err := json.Unmarshal(body, &root); err != nil {
 		return out
 	}
 
+	// Format 1: {"spark": {"result": [...]}}
+	if sparkRaw, ok := root["spark"]; ok {
+		var spark struct {
+			Result []struct {
+				Symbol   string          `json:"symbol"`
+				Response []yfChartResult `json:"response"`
+			} `json:"result"`
+		}
+		if err := json.Unmarshal(sparkRaw, &spark); err == nil && len(spark.Result) > 0 {
+			for _, item := range spark.Result {
+				if len(item.Response) == 0 {
+					continue
+				}
+				r := item.Response[0]
+				sym := item.Symbol
+				if sym == "" {
+					sym = r.Meta.Symbol
+				}
+				if sym != "" {
+					copyR := r
+					out[strings.ToUpper(sym)] = &copyR
+				}
+			}
+			if len(out) > 0 {
+				return out
+			}
+		}
+	}
+
+	// Format 2: Root-keyed {"NVDA": {...}, "AAPL": {...}}
 	type flatSparkEntry struct {
 		Symbol             string          `json:"symbol"`
 		RegularMarketPrice float64         `json:"regularMarketPrice"`
@@ -671,6 +656,23 @@ func decodeYahooSparkBody(body []byte) map[string]*yfChartResult {
 	}
 
 	return out
+}
+
+func hasValidPoints(res *yfChartResult) bool {
+	if res == nil || len(res.Timestamp) == 0 || len(res.Indicators.Quote) == 0 {
+		return false
+	}
+	closes := res.Indicators.Quote[0].Close
+	n := len(res.Timestamp)
+	if len(closes) < n {
+		n = len(closes)
+	}
+	for i := 0; i < n; i++ {
+		if closes[i] != nil && !math.IsNaN(*closes[i]) && !math.IsInf(*closes[i], 0) {
+			return true
+		}
+	}
+	return false
 }
 
 func extractValidPoints(res *yfChartResult) []StockPoint {
@@ -771,15 +773,14 @@ func buildStockQuote(cfg config.StockSymbolConfig, normRange string, res *yfChar
 	}
 
 	return StockQuote{
-		Symbol:        cfg.Symbol,
-		Label:         cfg.Label,
-		Name:          name,
-		Format:        cfg.Format,
-		Price:         price,
-		PreviousClose: prevClose,
-		Change:        change,
-		ChangePct:     changePct,
-		Sparkline:     spark,
+		Symbol:    cfg.Symbol,
+		Label:     cfg.Label,
+		Name:      name,
+		Format:    cfg.Format,
+		Price:     price,
+		Change:    change,
+		ChangePct: changePct,
+		Sparkline: spark,
 	}
 }
 
@@ -1008,7 +1009,6 @@ func buildStockHero(cfg config.StockSymbolConfig, normRange string, res *yfChart
 		MarketTime:        marketTime,
 		Range:             normRange,
 		Price:             price,
-		PreviousClose:     prevClose,
 		Baseline:          baseline,
 		Change:            change,
 		ChangePct:         changePct,
@@ -1020,13 +1020,8 @@ func buildStockHero(cfg config.StockSymbolConfig, normRange string, res *yfChart
 		RegularStart:      regularStart,
 		RegularEnd:        regularEnd,
 		SessionEnd:        sessionEnd,
-		DayHigh:           res.Meta.RegularMarketHigh,
-		DayLow:            res.Meta.RegularMarketLow,
 		RangeHigh:         rangeHigh,
 		RangeLow:          rangeLow,
-		FiftyTwoWeekHigh:  res.Meta.FiftyTwoWeekHigh,
-		FiftyTwoWeekLow:   res.Meta.FiftyTwoWeekLow,
-		Volume:            res.Meta.RegularMarketVol,
 		Points:            downsamplePoints(pts, 160),
 	}
 }
@@ -1075,8 +1070,8 @@ func nowInET(nowUTC time.Time) time.Time {
 	return nowUTC.Add(-5 * time.Hour)
 }
 
-// isUSMarketHoursNow approximates US regular + brief buffer hours (Mon-Fri 9:25-16:30 ET)
-// without requiring OS tzdata in minimal serverless containers.
+// isUSMarketHoursNow checks US regular + brief buffer hours (Mon-Fri 9:25-16:30 ET),
+// falling back to UTC-5 if OS tzdata is unavailable.
 func isUSMarketHoursNow(nowUTC time.Time) bool {
 	et := nowInET(nowUTC)
 	wd := et.Weekday()
@@ -1085,15 +1080,6 @@ func isUSMarketHoursNow(nowUTC time.Time) bool {
 	}
 	mins := et.Hour()*60 + et.Minute()
 	return mins >= 9*60+25 && mins <= 16*60+30
-}
-
-func writeStocksError(w http.ResponseWriter, status int, message string) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-store")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(map[string]string{
-		"error": message,
-	})
 }
 
 type yfQuoteMetaItem struct {
@@ -1153,14 +1139,12 @@ func getYahooSession(forceRefresh bool) (http.CookieJar, string, error) {
 		Transport: stocksHTTPClient.Transport,
 	}
 
-	const ua = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
-
 	// 1. Grab Yahoo consent/session cookie
 	cookieReq, err := http.NewRequest(http.MethodGet, yahooCookieURL, nil)
 	if err != nil {
 		return nil, "", err
 	}
-	cookieReq.Header.Set("User-Agent", ua)
+	cookieReq.Header.Set("User-Agent", yahooUserAgent)
 	if resp, err := client.Do(cookieReq); err == nil {
 		_, _ = io.Copy(io.Discard, resp.Body)
 		_ = resp.Body.Close()
@@ -1171,7 +1155,7 @@ func getYahooSession(forceRefresh bool) (http.CookieJar, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	crumbReq.Header.Set("User-Agent", ua)
+	crumbReq.Header.Set("User-Agent", yahooUserAgent)
 	crumbResp, err := client.Do(crumbReq)
 	if err != nil {
 		return nil, "", err
@@ -1207,8 +1191,6 @@ func fetchYahooQuoteMetaCached(symbols []string) map[string]yfQuoteMetaItem {
 	}
 	yfQuoteCacheMu.Unlock()
 
-	const ua = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
-
 	for attempt := 0; attempt < 2; attempt++ {
 		jar, crumb, err := getYahooSession(attempt > 0)
 		if err != nil {
@@ -1234,27 +1216,15 @@ func fetchYahooQuoteMetaCached(symbols []string) map[string]yfQuoteMetaItem {
 
 		needRefresh := false
 		for _, u := range urls {
-			req, err := http.NewRequest(http.MethodGet, u, nil)
+			body, status, err := yahooHTTPGet(client, u)
 			if err != nil {
 				continue
 			}
-			req.Header.Set("User-Agent", ua)
-			req.Header.Set("Accept", "application/json")
-
-			resp, err := client.Do(req)
-			if err != nil {
-				continue
-			}
-			body, readErr := io.ReadAll(io.LimitReader(resp.Body, maxYahooBodyBytes))
-			_ = resp.Body.Close()
-			if readErr != nil {
-				continue
-			}
-			if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+			if status == http.StatusUnauthorized || status == http.StatusForbidden {
 				needRefresh = true
 				break
 			}
-			if resp.StatusCode != http.StatusOK {
+			if status != http.StatusOK {
 				continue
 			}
 

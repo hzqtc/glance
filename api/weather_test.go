@@ -19,7 +19,7 @@ func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) {
 
 func TestDecodeOpenMeteoResponseSingleAndMulti(t *testing.T) {
 	singleJSON := []byte(`{"utc_offset_seconds":-28800,"current":{"time":"2026-11-18T22:00","temperature_2m":14.5,"is_day":0}}`)
-	got, err := decodeOpenMeteoResponse(singleJSON)
+	got, err := decodeOpenMeteoSlice[omLocation](singleJSON)
 	if err != nil {
 		t.Fatalf("single decode failed: %v", err)
 	}
@@ -31,7 +31,7 @@ func TestDecodeOpenMeteoResponseSingleAndMulti(t *testing.T) {
 		{"utc_offset_seconds":-28800,"current":{"time":"2026-11-18T22:00","temperature_2m":14.5,"is_day":0}},
 		{"utc_offset_seconds":28800,"current":{"time":"2026-11-19T14:00","temperature_2m":19.0,"is_day":1}}
 	]`)
-	got, err = decodeOpenMeteoResponse(multiJSON)
+	got, err = decodeOpenMeteoSlice[omLocation](multiJSON)
 	if err != nil {
 		t.Fatalf("multi decode failed: %v", err)
 	}

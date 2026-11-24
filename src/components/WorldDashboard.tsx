@@ -834,7 +834,6 @@ export function WorldDashboard(props: WorldDashboardProps) {
             quote: p.quote,
             label: p.label,
             rate: 0,
-            previousClose: 0,
             change: 0,
             changePct: 0,
             sparkline: [],

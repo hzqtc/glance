@@ -111,7 +111,6 @@ export interface CityWeather {
   dewPointC?: number;
   humidity: number;
   windKmh: number;
-  windDirDeg?: number;
   visibilityM?: number;
   weatherCode: number;
   isDay: boolean;
@@ -149,7 +148,6 @@ export interface StockQuote {
   name: string;
   format: StockFormat;
   price: number;
-  previousClose: number;
   change: number;
   changePct: number;
   marketCap?: number;
@@ -168,7 +166,6 @@ export interface StockHero {
   marketTime?: number;
   range: StockRange;
   price: number;
-  previousClose: number;
   baseline: number;
   change: number;
   changePct: number;
@@ -181,13 +178,8 @@ export interface StockHero {
   regularStart?: number;
   regularEnd?: number;
   sessionEnd?: number;
-  dayHigh: number;
-  dayLow: number;
   rangeHigh?: number;
   rangeLow?: number;
-  fiftyTwoWeekHigh: number;
-  fiftyTwoWeekLow: number;
-  volume: number;
   points: StockPoint[];
 }
 
@@ -279,7 +271,6 @@ export interface FXQuote {
   quote: string;
   label: string;
   rate: number;
-  previousClose: number;
   change: number;
   changePct: number;
   sparkline: number[];
@@ -296,7 +287,6 @@ export interface ISSOrbit {
   meanAnomalyDeg: number;
   meanMotionRevPerDay: number;
   meanMotionDot: number;
-  fetchedAt: string;
 }
 
 export interface EarthquakeEvent {
@@ -313,7 +303,6 @@ export interface AuroraStatus {
   kp: number;
   maxKp24h: number;
   scale: string;
-  observedAt: string;
 }
 
 export interface TropicalStorm {
@@ -324,7 +313,6 @@ export interface TropicalStorm {
   lat: number;
   lon: number;
   alertLevel: string;
-  updatedAt: string;
 }
 
 export interface WorldResponse {

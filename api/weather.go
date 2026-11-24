@@ -47,7 +47,6 @@ type CityWeather struct {
 	DewPointC           float64          `json:"dewPointC"`
 	Humidity            int              `json:"humidity"`
 	WindKmh             float64          `json:"windKmh"`
-	WindDirDeg          int              `json:"windDirDeg"`
 	VisibilityM         float64          `json:"visibilityM"`
 	WeatherCode         int              `json:"weatherCode"`
 	IsDay               bool             `json:"isDay"`
@@ -91,7 +90,6 @@ type omCurrent struct {
 	RelativeHumidity2m  int     `json:"relative_humidity_2m"`
 	WeatherCode         int     `json:"weather_code"`
 	WindSpeed10m        float64 `json:"wind_speed_10m"`
-	WindDirection10m    int     `json:"wind_direction_10m"`
 	Visibility          float64 `json:"visibility"`
 	IsDay               int     `json:"is_day"`
 	CloudCover          int     `json:"cloud_cover"`
@@ -137,7 +135,7 @@ type omAirCurrent struct {
 // WeatherHandler serves GET /api/weather on Vercel (and locally via cmd/devserver).
 func WeatherHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
-		writeWeatherError(w, http.StatusMethodNotAllowed, "method not allowed")
+		auth.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 	if !auth.RequireAuth(w, r) {
@@ -146,13 +144,13 @@ func WeatherHandler(w http.ResponseWriter, r *http.Request) {
 
 	cfg, version, isDevDisk, err := config.LoadNormalizedConfig()
 	if err != nil {
-		writeWeatherError(w, http.StatusInternalServerError, fmt.Sprintf("invalid dashboard config: %v", err))
+		auth.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("invalid dashboard config: %v", err))
 		return
 	}
 
 	weather, err := fetchAllWeather(cfg.Cities)
 	if err != nil {
-		writeWeatherError(w, http.StatusBadGateway, fmt.Sprintf("failed to fetch weather: %v", err))
+		auth.WriteJSONError(w, http.StatusBadGateway, fmt.Sprintf("failed to fetch weather: %v", err))
 		return
 	}
 
@@ -202,7 +200,7 @@ func fetchAllWeather(cities []config.CityConfig) ([]CityWeather, error) {
 		params.Set("latitude", latCSV)
 		params.Set("longitude", lonCSV)
 		params.Set("timezone", "auto")
-		params.Set("current", "temperature_2m,apparent_temperature,dew_point_2m,relative_humidity_2m,weather_code,wind_speed_10m,wind_direction_10m,visibility,is_day,cloud_cover")
+		params.Set("current", "temperature_2m,apparent_temperature,dew_point_2m,relative_humidity_2m,weather_code,wind_speed_10m,visibility,is_day,cloud_cover")
 		params.Set("minutely_15", "precipitation")
 		params.Set("hourly", "temperature_2m,weather_code,precipitation_probability,is_day")
 		params.Set("daily", "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,sunshine_duration,uv_index_max,sunrise,sunset")
@@ -216,7 +214,7 @@ func fetchAllWeather(cities []config.CityConfig) ([]CityWeather, error) {
 			weatherErr = err
 			return
 		}
-		locations, weatherErr = decodeOpenMeteoResponse(body)
+		locations, weatherErr = decodeOpenMeteoSlice[omLocation](body)
 	}()
 
 	// 2. Air Quality + PM2.5 + live UV (best-effort; degrades gracefully if unavailable)
@@ -232,7 +230,7 @@ func fetchAllWeather(cities []config.CityConfig) ([]CityWeather, error) {
 		if err != nil {
 			return
 		}
-		decoded, err := decodeOpenMeteoAirResponse(body)
+		decoded, err := decodeOpenMeteoSlice[omAirLocation](body)
 		if err == nil {
 			airList = decoded
 		}
@@ -265,54 +263,32 @@ func weatherHTTPGet(reqURL string) ([]byte, error) {
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 4*1024*1024))
-	if err != nil {
-		return nil, err
-	}
 	if resp.StatusCode != http.StatusOK {
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
 		return nil, fmt.Errorf("upstream returned status %d", resp.StatusCode)
 	}
-	return body, nil
+	return io.ReadAll(io.LimitReader(resp.Body, 4*1024*1024))
 }
 
-// decodeOpenMeteoResponse handles both single-location JSON objects and
+// decodeOpenMeteoSlice handles both single-location JSON objects and
 // multi-location JSON arrays returned by Open-Meteo.
-func decodeOpenMeteoResponse(body []byte) ([]omLocation, error) {
+func decodeOpenMeteoSlice[T any](body []byte) ([]T, error) {
 	trimmed := bytes.TrimSpace(body)
 	if len(trimmed) == 0 {
 		return nil, fmt.Errorf("empty response body")
 	}
 	if trimmed[0] == '[' {
-		var list []omLocation
+		var list []T
 		if err := json.Unmarshal(trimmed, &list); err != nil {
 			return nil, err
 		}
 		return list, nil
 	}
-	var single omLocation
+	var single T
 	if err := json.Unmarshal(trimmed, &single); err != nil {
 		return nil, err
 	}
-	return []omLocation{single}, nil
-}
-
-func decodeOpenMeteoAirResponse(body []byte) ([]omAirLocation, error) {
-	trimmed := bytes.TrimSpace(body)
-	if len(trimmed) == 0 {
-		return nil, fmt.Errorf("empty air quality body")
-	}
-	if trimmed[0] == '[' {
-		var list []omAirLocation
-		if err := json.Unmarshal(trimmed, &list); err != nil {
-			return nil, err
-		}
-		return list, nil
-	}
-	var single omAirLocation
-	if err := json.Unmarshal(trimmed, &single); err != nil {
-		return nil, err
-	}
-	return []omAirLocation{single}, nil
+	return []T{single}, nil
 }
 
 func mapLocationWeather(cityID string, loc omLocation, air *omAirLocation) CityWeather {
@@ -358,7 +334,6 @@ func mapLocationWeather(cityID string, loc omLocation, air *omAirLocation) CityW
 		DewPointC:           loc.Current.DewPoint2m,
 		Humidity:            loc.Current.RelativeHumidity2m,
 		WindKmh:             loc.Current.WindSpeed10m,
-		WindDirDeg:          loc.Current.WindDirection10m,
 		VisibilityM:         loc.Current.Visibility,
 		WeatherCode:         loc.Current.WeatherCode,
 		IsDay:               loc.Current.IsDay == 1,
@@ -554,13 +529,4 @@ func extractNextHours(currentISO string, hourly omHourly, limit int) []HourlyFor
 		})
 	}
 	return out
-}
-
-func writeWeatherError(w http.ResponseWriter, status int, message string) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-store")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(map[string]string{
-		"error": message,
-	})
 }

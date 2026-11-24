@@ -17,16 +17,15 @@ import (
 )
 
 type FXQuote struct {
-	Symbol        string    `json:"symbol"`
-	Base          string    `json:"base"`
-	Quote         string    `json:"quote"`
-	Label         string    `json:"label"`
-	Rate          float64   `json:"rate"`
-	PreviousClose float64   `json:"previousClose"`
-	Change        float64   `json:"change"`
-	ChangePct     float64   `json:"changePct"`
-	Sparkline     []float64 `json:"sparkline"`
-	Unavailable   bool      `json:"unavailable,omitempty"`
+	Symbol      string    `json:"symbol"`
+	Base        string    `json:"base"`
+	Quote       string    `json:"quote"`
+	Label       string    `json:"label"`
+	Rate        float64   `json:"rate"`
+	Change      float64   `json:"change"`
+	ChangePct   float64   `json:"changePct"`
+	Sparkline   []float64 `json:"sparkline"`
+	Unavailable bool      `json:"unavailable,omitempty"`
 }
 
 type ISSOrbit struct {
@@ -39,7 +38,6 @@ type ISSOrbit struct {
 	MeanAnomalyDeg      float64 `json:"meanAnomalyDeg"`
 	MeanMotionRevPerDay float64 `json:"meanMotionRevPerDay"`
 	MeanMotionDot       float64 `json:"meanMotionDot"`
-	FetchedAt           string  `json:"fetchedAt"`
 }
 
 type EarthquakeEvent struct {
@@ -53,10 +51,9 @@ type EarthquakeEvent struct {
 }
 
 type AuroraStatus struct {
-	Kp         float64 `json:"kp"`
-	MaxKp24h   float64 `json:"maxKp24h"`
-	Scale      string  `json:"scale"`
-	ObservedAt string  `json:"observedAt"`
+	Kp       float64 `json:"kp"`
+	MaxKp24h float64 `json:"maxKp24h"`
+	Scale    string  `json:"scale"`
 }
 
 type TropicalStorm struct {
@@ -67,7 +64,6 @@ type TropicalStorm struct {
 	Lat        float64 `json:"lat"`
 	Lon        float64 `json:"lon"`
 	AlertLevel string  `json:"alertLevel"`
-	UpdatedAt  string  `json:"updatedAt"`
 }
 
 type WorldResponse struct {
@@ -86,45 +82,69 @@ type fxCacheEntry struct {
 	fetchedAt time.Time
 }
 
-type issCacheEntry struct {
-	orbit     *ISSOrbit
+// ttlCache holds a single cached value with stale-on-error fallback.
+type ttlCache[T any] struct {
+	mu        sync.Mutex
+	val       T
 	fetchedAt time.Time
 }
 
-type quakesCacheEntry struct {
-	events    []EarthquakeEvent
-	fetchedAt time.Time
+func (c *ttlCache[T]) reset() {
+	c.mu.Lock()
+	var zero T
+	c.val = zero
+	c.fetchedAt = time.Time{}
+	c.mu.Unlock()
 }
 
-type auroraCacheEntry struct {
-	status    *AuroraStatus
-	fetchedAt time.Time
-}
+func (c *ttlCache[T]) getOrFetch(ttl time.Duration, force bool, fetch func() (T, error)) T {
+	if !force {
+		c.mu.Lock()
+		if !c.fetchedAt.IsZero() && time.Since(c.fetchedAt) < ttl {
+			val := c.val
+			c.mu.Unlock()
+			return val
+		}
+		c.mu.Unlock()
+	}
 
-type stormsCacheEntry struct {
-	storms    []TropicalStorm
-	fetchedAt time.Time
+	val, err := fetch()
+	if err == nil {
+		c.mu.Lock()
+		c.val = val
+		c.fetchedAt = time.Now()
+		c.mu.Unlock()
+		return val
+	}
+
+	c.mu.Lock()
+	if !c.fetchedAt.IsZero() {
+		stale := c.val
+		c.mu.Unlock()
+		return stale
+	}
+	c.mu.Unlock()
+	var zero T
+	return zero
 }
 
 var (
 	fxCacheMu sync.Mutex
 	fxCache   fxCacheEntry
 
-	issCacheMu    sync.Mutex
-	issCache      issCacheEntry
+	issCache      ttlCache[*ISSOrbit]
 	issHTTPClient = &http.Client{Timeout: 8 * time.Second}
 
-	quakesCacheMu    sync.Mutex
-	quakesCache      quakesCacheEntry
+	quakesCache      ttlCache[[]EarthquakeEvent]
 	quakesHTTPClient = &http.Client{Timeout: 8 * time.Second}
 
-	auroraCacheMu    sync.Mutex
-	auroraCache      auroraCacheEntry
+	auroraCache      ttlCache[*AuroraStatus]
 	auroraHTTPClient = &http.Client{Timeout: 8 * time.Second}
 
-	stormsCacheMu    sync.Mutex
-	stormsCache      stormsCacheEntry
+	stormsCache      ttlCache[[]TropicalStorm]
 	stormsHTTPClient = &http.Client{Timeout: 8 * time.Second}
+
+	gdacsStormPrefixes = []string{"tropical cyclone ", "tropical storm ", "typhoon ", "hurricane ", "cyclone "}
 )
 
 const (
@@ -145,7 +165,7 @@ const (
 // WorldHandler serves GET /api/world on Vercel (and locally via cmd/devserver).
 func WorldHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
-		writeWorldError(w, http.StatusMethodNotAllowed, "method not allowed")
+		auth.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 	if !auth.RequireAuth(w, r) {
@@ -154,7 +174,7 @@ func WorldHandler(w http.ResponseWriter, r *http.Request) {
 
 	cfg, version, isDevDisk, err := config.LoadNormalizedConfig()
 	if err != nil {
-		writeWorldError(w, http.StatusInternalServerError, fmt.Sprintf("invalid config: %v", err))
+		auth.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("invalid config: %v", err))
 		return
 	}
 
@@ -239,16 +259,29 @@ func fetchFXQuotesCached(pairs []config.FXPairConfig, forceRefresh bool) []FXQuo
 	spec := yahooRangeSpec{Range: "1d", Interval: "30m"}
 	sparkMap := fetchYahooSparkBatched(syms, spec)
 
+	results := make([]*yfChartResult, len(pairs))
+	var fbWg sync.WaitGroup
+	for i, p := range pairs {
+		res := sparkMap[strings.ToUpper(p.Symbol)]
+		if hasValidPoints(res) {
+			results[i] = res
+			continue
+		}
+		fbWg.Add(1)
+		go func(idx int, symbol string) {
+			defer fbWg.Done()
+			if chartRes, err := fetchYahooChart(symbol, spec, false); err == nil {
+				results[idx] = chartRes
+			}
+		}(i, p.Symbol)
+	}
+	fbWg.Wait()
+
 	out := make([]FXQuote, len(pairs))
 	anyValid := false
 
 	for i, p := range pairs {
-		res := sparkMap[strings.ToUpper(p.Symbol)]
-		if res == nil || len(extractValidPoints(res)) == 0 {
-			if chartRes, err := fetchYahooChart(p.Symbol, spec, false); err == nil {
-				res = chartRes
-			}
-		}
+		res := results[i]
 		if res == nil {
 			out[i] = FXQuote{
 				Symbol:      p.Symbol,
@@ -281,15 +314,14 @@ func fetchFXQuotesCached(pairs []config.FXPairConfig, forceRefresh bool) []FXQuo
 
 		anyValid = true
 		out[i] = FXQuote{
-			Symbol:        p.Symbol,
-			Base:          p.Base,
-			Quote:         p.Quote,
-			Label:         p.Label,
-			Rate:          sq.Price,
-			PreviousClose: sq.PreviousClose,
-			Change:        sq.Change,
-			ChangePct:     sq.ChangePct,
-			Sparkline:     sq.Sparkline,
+			Symbol:    p.Symbol,
+			Base:      p.Base,
+			Quote:     p.Quote,
+			Label:     p.Label,
+			Rate:      sq.Price,
+			Change:    sq.Change,
+			ChangePct: sq.ChangePct,
+			Sparkline: sq.Sparkline,
 		}
 	}
 
@@ -319,41 +351,36 @@ func fetchFXQuotesCached(pairs []config.FXPairConfig, forceRefresh bool) []FXQuo
 	return out
 }
 
+func worldHTTPGet(client *http.Client, reqURL string, maxBytes int64, label string) ([]byte, error) {
+	req, err := http.NewRequest(http.MethodGet, reqURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", "GlanceDashboard/1.0")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
+		return nil, fmt.Errorf("%s HTTP %d", label, resp.StatusCode)
+	}
+	return io.ReadAll(io.LimitReader(resp.Body, maxBytes))
+}
+
 func fetchISSOrbitCached(forceRefresh bool) *ISSOrbit {
-	if !forceRefresh {
-		issCacheMu.Lock()
-		if issCache.orbit != nil && time.Since(issCache.fetchedAt) < issCacheTTL {
-			copyOrbit := *issCache.orbit
-			issCacheMu.Unlock()
-			return &copyOrbit
+	return issCache.getOrFetch(issCacheTTL, forceRefresh, func() (*ISSOrbit, error) {
+		orbit, err := fetchISSFromWhereTheISS()
+		if err != nil || orbit == nil {
+			orbit, err = fetchISSFromCelesTrak()
 		}
-		issCacheMu.Unlock()
-	}
-
-	orbit, err := fetchISSFromWhereTheISS()
-	if err != nil || orbit == nil {
-		orbit, err = fetchISSFromCelesTrak()
-	}
-	if err == nil && orbit != nil {
-		issCacheMu.Lock()
-		stored := *orbit
-		issCache = issCacheEntry{
-			orbit:     &stored,
-			fetchedAt: time.Now(),
+		if err == nil && orbit == nil {
+			return nil, fmt.Errorf("empty ISS orbit")
 		}
-		issCacheMu.Unlock()
-		return orbit
-	}
-
-	// Serve stale cached TLE if both upstream endpoints failed
-	issCacheMu.Lock()
-	if issCache.orbit != nil {
-		stale := *issCache.orbit
-		issCacheMu.Unlock()
-		return &stale
-	}
-	issCacheMu.Unlock()
-	return nil
+		return orbit, err
+	})
 }
 
 type whereTheISSTLEResp struct {
@@ -363,21 +390,7 @@ type whereTheISSTLEResp struct {
 }
 
 func fetchISSFromWhereTheISS() (*ISSOrbit, error) {
-	req, err := http.NewRequest(http.MethodGet, whereTheISSTLEURL, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("User-Agent", "GlanceDashboard/1.0")
-
-	resp, err := issHTTPClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("wheretheiss HTTP %d", resp.StatusCode)
-	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 16*1024))
+	body, err := worldHTTPGet(issHTTPClient, whereTheISSTLEURL, 16*1024, "wheretheiss")
 	if err != nil {
 		return nil, err
 	}
@@ -394,21 +407,7 @@ func fetchISSFromWhereTheISS() (*ISSOrbit, error) {
 }
 
 func fetchISSFromCelesTrak() (*ISSOrbit, error) {
-	req, err := http.NewRequest(http.MethodGet, celestrakISSTLEURL, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("User-Agent", "GlanceDashboard/1.0")
-
-	resp, err := issHTTPClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("celestrak HTTP %d", resp.StatusCode)
-	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 16*1024))
+	body, err := worldHTTPGet(issHTTPClient, celestrakISSTLEURL, 16*1024, "celestrak")
 	if err != nil {
 		return nil, err
 	}
@@ -497,7 +496,6 @@ func parseISSTLE(name, line1, line2 string) (*ISSOrbit, error) {
 		MeanAnomalyDeg:      meanAnom,
 		MeanMotionRevPerDay: meanMot,
 		MeanMotionDot:       ndot,
-		FetchedAt:           time.Now().UTC().Format(time.RFC3339),
 	}, nil
 }
 
@@ -516,57 +514,11 @@ type usgsGeoJSON struct {
 }
 
 func fetchQuakesCached(forceRefresh bool) []EarthquakeEvent {
-	if !forceRefresh {
-		quakesCacheMu.Lock()
-		if !quakesCache.fetchedAt.IsZero() && time.Since(quakesCache.fetchedAt) < quakesCacheTTL {
-			out := make([]EarthquakeEvent, len(quakesCache.events))
-			copy(out, quakesCache.events)
-			quakesCacheMu.Unlock()
-			return out
-		}
-		quakesCacheMu.Unlock()
-	}
-
-	events, err := fetchUSGSQuakes()
-	if err == nil {
-		quakesCacheMu.Lock()
-		stored := make([]EarthquakeEvent, len(events))
-		copy(stored, events)
-		quakesCache = quakesCacheEntry{
-			events:    stored,
-			fetchedAt: time.Now(),
-		}
-		quakesCacheMu.Unlock()
-		return events
-	}
-
-	quakesCacheMu.Lock()
-	if !quakesCache.fetchedAt.IsZero() {
-		stale := make([]EarthquakeEvent, len(quakesCache.events))
-		copy(stale, quakesCache.events)
-		quakesCacheMu.Unlock()
-		return stale
-	}
-	quakesCacheMu.Unlock()
-	return nil
+	return quakesCache.getOrFetch(quakesCacheTTL, forceRefresh, fetchUSGSQuakes)
 }
 
 func fetchUSGSQuakes() ([]EarthquakeEvent, error) {
-	req, err := http.NewRequest(http.MethodGet, usgsQuakesURL, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("User-Agent", "GlanceDashboard/1.0")
-
-	resp, err := quakesHTTPClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("usgs HTTP %d", resp.StatusCode)
-	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 512*1024))
+	body, err := worldHTTPGet(quakesHTTPClient, usgsQuakesURL, 512*1024, "usgs")
 	if err != nil {
 		return nil, err
 	}
@@ -618,36 +570,13 @@ func fetchUSGSQuakes() ([]EarthquakeEvent, error) {
 }
 
 func fetchAuroraCached(forceRefresh bool) *AuroraStatus {
-	if !forceRefresh {
-		auroraCacheMu.Lock()
-		if auroraCache.status != nil && time.Since(auroraCache.fetchedAt) < auroraCacheTTL {
-			copyStatus := *auroraCache.status
-			auroraCacheMu.Unlock()
-			return &copyStatus
+	return auroraCache.getOrFetch(auroraCacheTTL, forceRefresh, func() (*AuroraStatus, error) {
+		status, err := fetchNOAASWPCKp()
+		if err == nil && status == nil {
+			return nil, fmt.Errorf("empty aurora status")
 		}
-		auroraCacheMu.Unlock()
-	}
-
-	status, err := fetchNOAASWPCKp()
-	if err == nil && status != nil {
-		auroraCacheMu.Lock()
-		stored := *status
-		auroraCache = auroraCacheEntry{
-			status:    &stored,
-			fetchedAt: time.Now(),
-		}
-		auroraCacheMu.Unlock()
-		return status
-	}
-
-	auroraCacheMu.Lock()
-	if auroraCache.status != nil {
-		stale := *auroraCache.status
-		auroraCacheMu.Unlock()
-		return &stale
-	}
-	auroraCacheMu.Unlock()
-	return nil
+		return status, err
+	})
 }
 
 func describeKpScale(kp float64) string {
@@ -685,21 +614,7 @@ func parseFlexibleFloat(raw json.RawMessage) (float64, bool) {
 }
 
 func fetchNOAASWPCKp() (*AuroraStatus, error) {
-	req, err := http.NewRequest(http.MethodGet, noaaSWPCKpURL, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("User-Agent", "GlanceDashboard/1.0")
-
-	resp, err := auroraHTTPClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("noaa swpc HTTP %d", resp.StatusCode)
-	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 128*1024))
+	body, err := worldHTTPGet(auroraHTTPClient, noaaSWPCKpURL, 128*1024, "noaa swpc")
 	if err != nil {
 		return nil, err
 	}
@@ -712,11 +627,7 @@ func fetchNOAASWPCKp() (*AuroraStatus, error) {
 		return nil, fmt.Errorf("empty kp table")
 	}
 
-	type kpEntry struct {
-		observedAt string
-		kp         float64
-	}
-	entries := make([]kpEntry, 0, len(rows)-1)
+	kps := make([]float64, 0, len(rows)-1)
 	for i := 1; i < len(rows); i++ {
 		if len(rows[i]) < 2 {
 			continue
@@ -725,88 +636,56 @@ func fetchNOAASWPCKp() (*AuroraStatus, error) {
 		if !ok || kp < 0 || kp > 9.5 {
 			continue
 		}
-		obs := strings.Trim(strings.TrimSpace(string(rows[i][0])), "\"")
-		entries = append(entries, kpEntry{
-			observedAt: obs,
-			kp:         math.Round(kp*10) / 10,
-		})
+		kps = append(kps, math.Round(kp*10)/10)
 	}
-	if len(entries) == 0 {
+	if len(kps) == 0 {
 		return nil, fmt.Errorf("no valid kp rows")
 	}
 
-	latest := entries[len(entries)-1]
-	startIdx := len(entries) - 8 // last 24h (8 x 3-hour windows)
+	latest := kps[len(kps)-1]
+	startIdx := len(kps) - 8 // last 24h (8 x 3-hour windows)
 	if startIdx < 0 {
 		startIdx = 0
 	}
-	max24 := latest.kp
-	for i := startIdx; i < len(entries); i++ {
-		if entries[i].kp > max24 {
-			max24 = entries[i].kp
+	max24 := latest
+	for i := startIdx; i < len(kps); i++ {
+		if kps[i] > max24 {
+			max24 = kps[i]
 		}
 	}
 
 	return &AuroraStatus{
-		Kp:         latest.kp,
-		MaxKp24h:   max24,
-		Scale:      describeKpScale(latest.kp),
-		ObservedAt: latest.observedAt,
+		Kp:       latest,
+		MaxKp24h: max24,
+		Scale:    describeKpScale(latest),
 	}, nil
 }
 
 func fetchStormsCached(forceRefresh bool) []TropicalStorm {
-	if !forceRefresh {
-		stormsCacheMu.Lock()
-		if !stormsCache.fetchedAt.IsZero() && time.Since(stormsCache.fetchedAt) < stormsCacheTTL {
-			out := make([]TropicalStorm, len(stormsCache.storms))
-			copy(out, stormsCache.storms)
-			stormsCacheMu.Unlock()
-			return out
+	return stormsCache.getOrFetch(stormsCacheTTL, forceRefresh, func() ([]TropicalStorm, error) {
+		var (
+			nhcStorms   []TropicalStorm
+			gdacsStorms []TropicalStorm
+			nhcErr      error
+			gdacsErr    error
+			wg          sync.WaitGroup
+		)
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			nhcStorms, nhcErr = fetchNHCStorms()
+		}()
+		go func() {
+			defer wg.Done()
+			gdacsStorms, gdacsErr = fetchGDACSStorms()
+		}()
+		wg.Wait()
+
+		if nhcErr != nil && gdacsErr != nil {
+			return nil, nhcErr
 		}
-		stormsCacheMu.Unlock()
-	}
-
-	var (
-		nhcStorms   []TropicalStorm
-		gdacsStorms []TropicalStorm
-		nhcErr      error
-		gdacsErr    error
-		wg          sync.WaitGroup
-	)
-	wg.Add(2)
-	go func() {
-		defer wg.Done()
-		nhcStorms, nhcErr = fetchNHCStorms()
-	}()
-	go func() {
-		defer wg.Done()
-		gdacsStorms, gdacsErr = fetchGDACSStorms()
-	}()
-	wg.Wait()
-
-	if nhcErr == nil || gdacsErr == nil {
-		merged := mergeTropicalStorms(nhcStorms, gdacsStorms)
-		stormsCacheMu.Lock()
-		stored := make([]TropicalStorm, len(merged))
-		copy(stored, merged)
-		stormsCache = stormsCacheEntry{
-			storms:    stored,
-			fetchedAt: time.Now(),
-		}
-		stormsCacheMu.Unlock()
-		return merged
-	}
-
-	stormsCacheMu.Lock()
-	if !stormsCache.fetchedAt.IsZero() {
-		stale := make([]TropicalStorm, len(stormsCache.storms))
-		copy(stale, stormsCache.storms)
-		stormsCacheMu.Unlock()
-		return stale
-	}
-	stormsCacheMu.Unlock()
-	return nil
+		return mergeTropicalStorms(nhcStorms, gdacsStorms), nil
+	})
 }
 
 func classifyStormWind(windKmh float64) string {
@@ -842,30 +721,14 @@ type nhcStormsPayload struct {
 	ActiveStorms []struct {
 		ID               string          `json:"id"`
 		Name             string          `json:"name"`
-		Classification   string          `json:"classification"`
 		Intensity        json.RawMessage `json:"intensity"`
 		LatitudeNumeric  *float64        `json:"latitudeNumeric"`
 		LongitudeNumeric *float64        `json:"longitudeNumeric"`
-		LastUpdate       string          `json:"lastUpdate"`
 	} `json:"activeStorms"`
 }
 
 func fetchNHCStorms() ([]TropicalStorm, error) {
-	req, err := http.NewRequest(http.MethodGet, nhcCurrentStorms, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("User-Agent", "GlanceDashboard/1.0")
-
-	resp, err := stormsHTTPClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("nhc HTTP %d", resp.StatusCode)
-	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 256*1024))
+	body, err := worldHTTPGet(stormsHTTPClient, nhcCurrentStorms, 256*1024, "nhc")
 	if err != nil {
 		return nil, err
 	}
@@ -902,7 +765,6 @@ func fetchNHCStorms() ([]TropicalStorm, error) {
 			Lat:        math.Round(lat*100) / 100,
 			Lon:        math.Round(lon*100) / 100,
 			AlertLevel: stormAlertFromWind(windKmh),
-			UpdatedAt:  strings.TrimSpace(s.LastUpdate),
 		})
 	}
 	return out, nil
@@ -917,7 +779,6 @@ type gdacsGeoJSON struct {
 			EventName    string          `json:"eventname"`
 			AlertLevel   string          `json:"alertlevel"`
 			IsCurrent    string          `json:"iscurrent"`
-			ToDate       string          `json:"todate"`
 			SeverityData struct {
 				Severity     float64 `json:"severity"`
 				SeverityUnit string  `json:"severityunit"`
@@ -936,8 +797,9 @@ func cleanGDACSStormName(eventName, fullName string) string {
 		n = strings.TrimSpace(fullName)
 	}
 	// Strip verbose prefixes like "Tropical Cyclone " or "Hurricane "
-	for _, prefix := range []string{"Tropical Cyclone ", "Tropical Storm ", "Typhoon ", "Hurricane ", "Cyclone "} {
-		if strings.HasPrefix(strings.ToLower(n), strings.ToLower(prefix)) {
+	lowerN := strings.ToLower(n)
+	for _, prefix := range gdacsStormPrefixes {
+		if strings.HasPrefix(lowerN, prefix) {
 			n = strings.TrimSpace(n[len(prefix):])
 			break
 		}
@@ -971,21 +833,7 @@ func cleanGDACSStormName(eventName, fullName string) string {
 }
 
 func fetchGDACSStorms() ([]TropicalStorm, error) {
-	req, err := http.NewRequest(http.MethodGet, gdacsMapFeedURL, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("User-Agent", "GlanceDashboard/1.0")
-
-	resp, err := stormsHTTPClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("gdacs HTTP %d", resp.StatusCode)
-	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 1024*1024))
+	body, err := worldHTTPGet(stormsHTTPClient, gdacsMapFeedURL, 1024*1024, "gdacs")
 	if err != nil {
 		return nil, err
 	}
@@ -1044,7 +892,6 @@ func fetchGDACSStorms() ([]TropicalStorm, error) {
 			Lat:        math.Round(lat*100) / 100,
 			Lon:        math.Round(lon*100) / 100,
 			AlertLevel: alert,
-			UpdatedAt:  strings.TrimSpace(f.Properties.ToDate),
 		})
 	}
 	return out, nil
@@ -1082,13 +929,4 @@ func mergeTropicalStorms(nhc, gdacs []TropicalStorm) []TropicalStorm {
 		merged = merged[:15]
 	}
 	return merged
-}
-
-func writeWorldError(w http.ResponseWriter, status int, message string) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-store")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(map[string]string{
-		"error": message,
-	})
 }

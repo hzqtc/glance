@@ -228,18 +228,10 @@ func TestWorldHandlerFXRates(t *testing.T) {
 		fxCacheMu.Lock()
 		fxCache = fxCacheEntry{}
 		fxCacheMu.Unlock()
-		issCacheMu.Lock()
-		issCache = issCacheEntry{}
-		issCacheMu.Unlock()
-		quakesCacheMu.Lock()
-		quakesCache = quakesCacheEntry{}
-		quakesCacheMu.Unlock()
-		auroraCacheMu.Lock()
-		auroraCache = auroraCacheEntry{}
-		auroraCacheMu.Unlock()
-		stormsCacheMu.Lock()
-		stormsCache = stormsCacheEntry{}
-		stormsCacheMu.Unlock()
+		issCache.reset()
+		quakesCache.reset()
+		auroraCache.reset()
+		stormsCache.reset()
 	}()
 
 	req := httptest.NewRequest(http.MethodGet, "/api/world", nil)
@@ -326,9 +318,7 @@ func TestFetchISSCelesTrakFallback(t *testing.T) {
 	}
 	defer func() {
 		issHTTPClient = origISSClient
-		issCacheMu.Lock()
-		issCache = issCacheEntry{}
-		issCacheMu.Unlock()
+		issCache.reset()
 	}()
 
 	orbit := fetchISSOrbitCached(true)
