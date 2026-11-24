@@ -1,0 +1,68 @@
+name: Update Screenshots
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+      - 'api/**'
+      - 'config/**'
+      - 'public/**'
+      - 'index.html'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'vite.config.ts'
+      - 'scripts/screenshots.mjs'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: screenshots-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  screenshots:
+    if: github.event_name == 'workflow_dispatch' || !contains(github.event.head_commit.message, '[skip ci]')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install CJK fonts for Chinese headlines and lunar calendar
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends fonts-noto-cjk
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Capture dashboard screenshots
+        run: npm run screenshots
+
+      - name: Commit and push updated screenshots
+        run: |
+          if [ -z "$(git status --porcelain docs/screenshots)" ]; then
+            echo "No screenshot changes to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/screenshots
+          git commit -m "Update dashboard screenshots [skip ci]"
+          git pull --rebase origin main
+          git push origin HEAD:main

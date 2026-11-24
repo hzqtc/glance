@@ -406,24 +406,38 @@ async function main() {
     await waitForHttp(`http://127.0.0.1:${apiPort}/api/auth`, 15000);
     console.log(`Local servers ready (API :${apiPort}, Web :${webPort})`);
 
-    chromeProc = spawn(
-      chromePath,
-      [
-        '--headless=new',
-        `--remote-debugging-port=${cdpPort}`,
-        `--window-size=${VIEWPORT.width},${VIEWPORT.height}`,
-        '--no-first-run',
-        '--no-default-browser-check',
-        '--disable-background-timer-throttling',
-        '--disable-renderer-backgrounding',
-        '--hide-scrollbars',
-        `--user-data-dir=${chromeProfileDir}`,
-        'about:blank',
-      ],
-      { stdio: ['ignore', 'ignore', 'pipe'] }
-    );
+    const chromeArgs = [
+      '--headless=new',
+      `--remote-debugging-port=${cdpPort}`,
+      `--window-size=${VIEWPORT.width},${VIEWPORT.height}`,
+      '--no-first-run',
+      '--no-default-browser-check',
+      '--disable-background-timer-throttling',
+      '--disable-renderer-backgrounding',
+      '--hide-scrollbars',
+      `--user-data-dir=${chromeProfileDir}`,
+    ];
+    if (process.platform === 'linux') {
+      chromeArgs.push('--no-sandbox', '--disable-dev-shm-usage');
+    }
+    chromeArgs.push('about:blank');
 
-    await waitForHttp(`http://127.0.0.1:${cdpPort}/json/list`, 15000);
+    let chromeStderr = '';
+    chromeProc = spawn(chromePath, chromeArgs, {
+      stdio: ['ignore', 'ignore', 'pipe'],
+    });
+    chromeProc.stderr.on('data', (chunk) => {
+      if (chromeStderr.length < 4096) chromeStderr += String(chunk);
+    });
+
+    try {
+      await waitForHttp(`http://127.0.0.1:${cdpPort}/json/list`, 15000);
+    } catch (err) {
+      if (chromeStderr.trim()) {
+        console.error(`[chrome stderr]\n${chromeStderr.trim()}`);
+      }
+      throw err;
+    }
     const targets = await (await fetch(`http://127.0.0.1:${cdpPort}/json/list`)).json();
     const pageTarget = targets.find((t) => t.type === 'page') || targets[0];
     cdp = await connectCDP(pageTarget.webSocketDebuggerUrl);
