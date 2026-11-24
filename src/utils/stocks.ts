@@ -1,4 +1,5 @@
 import type { StockFormat, StockRange, TimeFormat } from '../types';
+import { MONTHS_SHORT, WEEKDAYS_SHORT, formatHourMinute } from './time';
 
 export interface RangeOption {
   id: StockRange;
@@ -17,23 +18,6 @@ export const STOCK_RANGES: RangeOption[] = [
   { id: 'all', label: 'ALL' },
 ];
 
-const MONTHS_SHORT = [
-  'Jan',
-  'Feb',
-  'Mar',
-  'Apr',
-  'May',
-  'Jun',
-  'Jul',
-  'Aug',
-  'Sep',
-  'Oct',
-  'Nov',
-  'Dec',
-];
-
-const WEEKDAYS_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
 function addCommas(numStr: string): string {
   var parts = numStr.split('.');
   var intPart = parts[0];
@@ -49,15 +33,19 @@ function addCommas(numStr: string): string {
   return (neg ? '-' : '') + out + (parts.length > 1 ? '.' + parts[1] : '');
 }
 
-export function getCurrencySymbol(currency?: string): string {
+export function getCurrencySymbol(currency?: string, fallback: string = '$'): string {
   var c = (currency || 'USD').trim().toUpperCase();
+  if (c === 'USD') return '$';
   if (c === 'EUR') return '€';
-  if (c === 'GBP' || c === 'GBp') return '£';
+  if (c === 'GBP') return '£';
   if (c === 'JPY' || c === 'CNY' || c === 'RMB') return '¥';
   if (c === 'HKD') return 'HK$';
   if (c === 'CAD') return 'C$';
+  if (c === 'AUD') return 'A$';
+  if (c === 'SGD') return 'S$';
+  if (c === 'KRW') return '₩';
   if (c === 'CHF') return 'CHF ';
-  return '$';
+  return fallback;
 }
 
 export function formatHeroValue(
@@ -190,10 +178,6 @@ export function formatExchangeName(exchange: string): string {
   return code;
 }
 
-function pad2(n: number): string {
-  return n < 10 ? '0' + String(n) : String(n);
-}
-
 export function formatChartAxisTime(
   unixSec: number,
   range: StockRange,
@@ -201,14 +185,7 @@ export function formatChartAxisTime(
 ): string {
   var d = new Date(unixSec * 1000);
   if (range === '1d') {
-    var h = d.getHours();
-    var m = d.getMinutes();
-    if (timeFormat === '24h') {
-      return pad2(h) + ':' + pad2(m);
-    }
-    var ampm = h >= 12 ? 'PM' : 'AM';
-    var h12 = h % 12;
-    return String(h12 === 0 ? 12 : h12) + ':' + pad2(m) + ' ' + ampm;
+    return formatHourMinute(d.getHours(), d.getMinutes(), timeFormat);
   }
   if (range === '1w') {
     var wd = WEEKDAYS_SHORT[d.getDay()];
@@ -229,17 +206,7 @@ export function formatChartTooltipTime(
   timeFormat: TimeFormat
 ): string {
   var d = new Date(unixSec * 1000);
-  var h = d.getHours();
-  var m = d.getMinutes();
-  var timeStr: string;
-  if (timeFormat === '24h') {
-    timeStr = pad2(h) + ':' + pad2(m);
-  } else {
-    var ampm = h >= 12 ? 'PM' : 'AM';
-    var h12 = h % 12;
-    timeStr = String(h12 === 0 ? 12 : h12) + ':' + pad2(m) + ' ' + ampm;
-  }
-
+  var timeStr = formatHourMinute(d.getHours(), d.getMinutes(), timeFormat);
   var monthDay = MONTHS_SHORT[d.getMonth()] + ' ' + String(d.getDate());
   if (range === '1d') {
     return timeStr;
@@ -257,16 +224,7 @@ export function formatMarketTimestamp(
   if (!unixSec || unixSec <= 0) return '';
   var d = new Date(unixSec * 1000);
   var now = new Date();
-  var h = d.getHours();
-  var m = d.getMinutes();
-  var timeStr: string;
-  if (timeFormat === '24h') {
-    timeStr = pad2(h) + ':' + pad2(m);
-  } else {
-    var ampm = h >= 12 ? 'PM' : 'AM';
-    var h12 = h % 12;
-    timeStr = String(h12 === 0 ? 12 : h12) + ':' + pad2(m) + ' ' + ampm;
-  }
+  var timeStr = formatHourMinute(d.getHours(), d.getMinutes(), timeFormat);
 
   var sameDay =
     d.getFullYear() === now.getFullYear() &&

@@ -2,9 +2,6 @@ import { Component } from 'preact';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import type { CalendarEvent, CalendarResponse, CalendarTrip, TimeFormat } from '../types';
 import {
-  MONTHS_FULL,
-  MONTHS_SHORT,
-  WEEKDAYS_FULL,
   WEEKDAYS_MON_START,
   buildMonthGridMonday,
   formatEventTimeRange,
@@ -17,6 +14,12 @@ import {
   toDateKey,
 } from '../utils/calendar';
 import type { USHolidayInfo } from '../utils/calendar';
+import {
+  MONTHS_LONG as MONTHS_FULL,
+  MONTHS_SHORT,
+  WEEKDAYS_LONG as WEEKDAYS_FULL,
+} from '../utils/time';
+import { readStorageJSON, writeStorageJSON } from '../utils/storage';
 
 type MonthModel = {
   year: number;
@@ -165,25 +168,12 @@ function isCalendarDemoMode(): boolean {
 }
 
 function readHiddenCalendars(): { [id: string]: boolean } {
-  try {
-    var raw = window.localStorage.getItem(HIDDEN_CALS_STORAGE_KEY);
-    if (!raw) return {};
-    var parsed = JSON.parse(raw);
-    if (parsed && typeof parsed === 'object') {
-      return parsed as { [id: string]: boolean };
-    }
-  } catch (_err) {
-    // Ignore storage errors
-  }
-  return {};
+  var parsed = readStorageJSON<{ [id: string]: boolean }>(HIDDEN_CALS_STORAGE_KEY);
+  return parsed && typeof parsed === 'object' ? parsed : {};
 }
 
 function writeHiddenCalendars(map: { [id: string]: boolean }): void {
-  try {
-    window.localStorage.setItem(HIDDEN_CALS_STORAGE_KEY, JSON.stringify(map));
-  } catch (_err) {
-    // Ignore storage errors
-  }
+  writeStorageJSON(HIDDEN_CALS_STORAGE_KEY, map);
 }
 
 interface CalendarDashboardProps {

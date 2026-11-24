@@ -1,15 +1,15 @@
 import type { StockCardMetric, TempUnit } from '../types';
 
 interface TopControlsProps {
-  animEnabled: boolean;
-  units: TempUnit;
+  animEnabled?: boolean;
+  units?: TempUnit;
   isRefreshing: boolean;
   showAnim?: boolean;
   showUnits?: boolean;
   stockMetric?: StockCardMetric;
   onSelectStockMetric?: (metric: StockCardMetric) => void;
-  onToggleAnim: () => void;
-  onToggleUnits: () => void;
+  onToggleAnim?: () => void;
+  onToggleUnits?: () => void;
   onRefresh: () => void;
 }
 

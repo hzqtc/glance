@@ -1,4 +1,5 @@
 import type { ISSOrbit } from '../types';
+import { pad2 } from './time';
 
 var DEG2RAD = Math.PI / 180;
 var RAD2DEG = 180 / Math.PI;
@@ -14,30 +15,29 @@ var EARTH_J2 = 1.08262668e-3;
  */
 export var MAP_CENTER_LON = -122.0363;
 export var MAP_LEFT_LON = -25;
-export var MAP_MAX_LAT = 82;
-export var MAP_MIN_LAT = -58;
-export var MAP_LAT_SPAN = MAP_MAX_LAT - MAP_MIN_LAT; // 140
+var MAP_MAX_LAT = 82;
+var MAP_MIN_LAT = -58;
+var MAP_LAT_SPAN = MAP_MAX_LAT - MAP_MIN_LAT; // 140
 
-export interface GeoPoint {
+interface GeoPoint {
   lat: number;
   lon: number;
 }
 
-export interface ProjectedPoint {
+interface ProjectedPoint {
   x: number;
   y: number;
 }
 
-export interface GreatCircleArcResult {
+interface GreatCircleArcResult {
   segments: string[];
   distKm: number;
-  distMi: number;
   flightLabel: string;
   midX: number;
   midY: number;
 }
 
-export function wrapLon180(lon: number): number {
+function wrapLon180(lon: number): number {
   var x = ((lon + 180) % 360 + 360) % 360 - 180;
   return x;
 }
@@ -219,7 +219,6 @@ export function computeGreatCircleArc(
   var dot = Math.max(-1, Math.min(1, x1 * x2 + y1 * y2 + z1 * z2));
   var omega = Math.acos(dot);
   var distKm = Math.round(6371 * omega);
-  var distMi = Math.round(distKm * 0.621371);
 
   // Commercial long-haul cruise (~840 km/h) + ~33 min climb/approach
   var flightHours = distKm / 840 + 0.55;
@@ -290,11 +289,60 @@ export function computeGreatCircleArc(
   return {
     segments: segments,
     distKm: distKm,
-    distMi: distMi,
     flightLabel: flightLabel,
     midX: midPt.x,
     midY: midPt.y,
   };
+}
+
+/** Builds an SVG path for the illuminated portion of a moon disc centered at (0, 0) with radius `r`. */
+export function buildMoonLitPath(moonPhase: number, r: number): string {
+  var waxing = moonPhase < 0.5;
+  var k = Math.cos(moonPhase * Math.PI * 2);
+  var rx = Math.abs(k) * r;
+  var outerSweep = waxing ? 1 : 0;
+
+  if (rx < 0.35) {
+    // Exact First or Last Quarter
+    return (
+      'M 0 ' +
+      String(-r) +
+      ' A ' +
+      String(r) +
+      ' ' +
+      String(r) +
+      ' 0 0 ' +
+      String(outerSweep) +
+      ' 0 ' +
+      String(r) +
+      ' L 0 ' +
+      String(-r) +
+      ' Z'
+    );
+  }
+
+  var innerSweep = waxing ? (k > 0 ? 0 : 1) : k > 0 ? 1 : 0;
+  return (
+    'M 0 ' +
+    String(-r) +
+    ' A ' +
+    String(r) +
+    ' ' +
+    String(r) +
+    ' 0 0 ' +
+    String(outerSweep) +
+    ' 0 ' +
+    String(r) +
+    ' A ' +
+    rx.toFixed(2) +
+    ' ' +
+    String(r) +
+    ' 0 0 ' +
+    String(innerSweep) +
+    ' 0 ' +
+    String(-r) +
+    ' Z'
+  );
 }
 
 export function formatFXRate(rate: number, quote: string): string {
@@ -322,14 +370,10 @@ export function formatFXInverseHint(rate: number, base: string, quote: string): 
 
 export function formatUTCClock(nowMs: number): string {
   var d = new Date(nowMs);
-  var h = d.getUTCHours();
-  var m = d.getUTCMinutes();
-  var hs = h < 10 ? '0' + String(h) : String(h);
-  var ms = m < 10 ? '0' + String(m) : String(m);
-  return hs + ':' + ms + ' UTC';
+  return pad2(d.getUTCHours()) + ':' + pad2(d.getUTCMinutes()) + ' UTC';
 }
 
-export interface ISSPosition {
+interface ISSPosition {
   lat: number;
   lon: number;
   altKm: number;
@@ -337,7 +381,7 @@ export interface ISSPosition {
   sunlit: boolean;
 }
 
-export interface ISSTrackResult {
+interface ISSTrackResult {
   current: ISSPosition;
   x: number;
   y: number;
@@ -351,7 +395,7 @@ export interface ISSTrackResult {
  * Propagates the ISS TLE orbital elements to `timeMs` using a J2-perturbed
  * Keplerian model (nodal + apsidal precession, drag term, WGS-84 geodetic lat/alt).
  */
-export function propagateISS(
+function propagateISS(
   orbit: ISSOrbit,
   timeMs: number,
   includeSunlit?: boolean
@@ -559,7 +603,7 @@ export function buildISSTrack(
   };
 }
 
-export interface AuroraOvalPaths {
+interface AuroraOvalPaths {
   northOuter: string;
   northCore: string;
   southOuter: string;

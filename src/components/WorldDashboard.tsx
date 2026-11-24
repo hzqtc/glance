@@ -18,6 +18,7 @@ import {
   MAP_LEFT_LON,
   buildAuroraOvalPaths,
   buildISSTrack,
+  buildMoonLitPath,
   buildTerminatorPaths,
   computeGreatCircleArc,
   formatFXInverseHint,
@@ -29,9 +30,10 @@ import {
   projectLat,
   projectLonLat,
 } from '../utils/astronomy';
-import { getCityClock } from '../utils/time';
+import { formatTimeAgo, getCityClock } from '../utils/time';
 import { formatTemp, formatWind } from '../utils/weather';
-import { formatStockPct } from '../utils/stocks';
+import { formatStockPct, getCurrencySymbol } from '../utils/stocks';
+import { readStorage, readStorageJSON, writeStorage, writeStorageJSON } from '../utils/storage';
 
 export var WORLD_STORAGE_KEY = 'glance:lastWorld:v1';
 var WORLD_HOME_LON_KEY = 'glance:homeLon:v1';
@@ -56,55 +58,37 @@ function readStoredWorldLayers(): WorldLayerPrefs {
     aurora: true,
     storms: true,
   };
-  try {
-    var raw = window.localStorage.getItem(WORLD_LAYERS_KEY);
-    if (raw) {
-      var parsed = JSON.parse(raw);
-      if (parsed && typeof parsed === 'object') {
-        var keys: (keyof WorldLayerPrefs)[] = ['arcs', 'celestial', 'iss', 'quakes', 'aurora', 'storms'];
-        for (var i = 0; i < keys.length; i++) {
-          if (typeof parsed[keys[i]] === 'boolean') prefs[keys[i]] = parsed[keys[i]];
-        }
-      }
+  var parsed = readStorageJSON<Partial<WorldLayerPrefs>>(WORLD_LAYERS_KEY);
+  if (parsed && typeof parsed === 'object') {
+    var keys: (keyof WorldLayerPrefs)[] = ['arcs', 'celestial', 'iss', 'quakes', 'aurora', 'storms'];
+    for (var i = 0; i < keys.length; i++) {
+      var val = parsed[keys[i]];
+      if (typeof val === 'boolean') prefs[keys[i]] = val;
     }
-  } catch (_err) {
-    // Ignore storage errors
   }
   return prefs;
 }
 
 function writeStoredWorldLayers(prefs: WorldLayerPrefs): void {
-  try {
-    window.localStorage.setItem(WORLD_LAYERS_KEY, JSON.stringify(prefs));
-  } catch (_err) {
-    // Ignore storage errors
-  }
+  writeStorageJSON(WORLD_LAYERS_KEY, prefs);
 }
 
 var MAP_W = 1000;
 var MAP_H = 500;
 
 function readStoredHomeLon(): number {
-  try {
-    var raw = window.localStorage.getItem(WORLD_HOME_LON_KEY);
-    if (raw !== null) {
-      var parsed = parseFloat(raw);
-      if (isFinite(parsed) && parsed >= -180 && parsed <= 180) {
-        return parsed;
-      }
+  var raw = readStorage(WORLD_HOME_LON_KEY);
+  if (raw !== null) {
+    var parsed = parseFloat(raw);
+    if (isFinite(parsed) && parsed >= -180 && parsed <= 180) {
+      return parsed;
     }
-  } catch (_err) {
-    // Ignore storage errors
   }
   return MAP_CENTER_LON;
 }
 
 function writeStoredHomeLon(lon: number): void {
-  try {
-    window.localStorage.setItem(WORLD_HOME_LON_KEY, String(lon));
-  } catch (_err) {
-    // Ignore storage errors
-  }
+  writeStorage(WORLD_HOME_LON_KEY, String(lon));
 }
 
 interface WorldDashboardProps {
@@ -125,25 +109,15 @@ interface WorldDashboardProps {
 }
 
 function readCachedWorld(): WorldResponse | null {
-  try {
-    var raw = window.localStorage.getItem(WORLD_STORAGE_KEY);
-    if (!raw) return null;
-    var parsed = JSON.parse(raw) as WorldResponse;
-    if (parsed && parsed.fx && parsed.fx.length > 0) {
-      return parsed;
-    }
-  } catch (_err) {
-    // Ignore storage errors
+  var parsed = readStorageJSON<WorldResponse>(WORLD_STORAGE_KEY);
+  if (parsed && parsed.fx && parsed.fx.length > 0) {
+    return parsed;
   }
   return null;
 }
 
 function writeCachedWorld(data: WorldResponse): void {
-  try {
-    window.localStorage.setItem(WORLD_STORAGE_KEY, JSON.stringify(data));
-  } catch (_err) {
-    // Ignore storage errors
-  }
+  writeStorageJSON(WORLD_STORAGE_KEY, data);
 }
 
 function buildMiniSparkPath(values: number[], w: number, h: number): string {
@@ -165,75 +139,6 @@ function buildMiniSparkPath(values: number[], w: number, h: number): string {
     parts.push((j === 0 ? 'M ' : 'L ') + x.toFixed(1) + ' ' + y.toFixed(1));
   }
   return parts.join(' ');
-}
-
-function buildSmallMoonLitPath(moonPhase: number, r: number): string {
-  var waxing = moonPhase < 0.5;
-  var k = Math.cos(moonPhase * Math.PI * 2);
-  var rx = Math.abs(k) * r;
-  var outerSweep = waxing ? 1 : 0;
-  if (rx < 0.3) {
-    return (
-      'M 0 ' +
-      String(-r) +
-      ' A ' +
-      String(r) +
-      ' ' +
-      String(r) +
-      ' 0 0 ' +
-      String(outerSweep) +
-      ' 0 ' +
-      String(r) +
-      ' L 0 ' +
-      String(-r) +
-      ' Z'
-    );
-  }
-  var innerSweep = waxing ? (k > 0 ? 0 : 1) : k > 0 ? 1 : 0;
-  return (
-    'M 0 ' +
-    String(-r) +
-    ' A ' +
-    String(r) +
-    ' ' +
-    String(r) +
-    ' 0 0 ' +
-    String(outerSweep) +
-    ' 0 ' +
-    String(r) +
-    ' A ' +
-    rx.toFixed(2) +
-    ' ' +
-    String(r) +
-    ' 0 0 ' +
-    String(innerSweep) +
-    ' 0 ' +
-    String(-r) +
-    ' Z'
-  );
-}
-
-function currencySymbol(code: string): string {
-  if (code === 'CNY' || code === 'JPY') return '¥';
-  if (code === 'EUR') return '€';
-  if (code === 'GBP') return '£';
-  if (code === 'AUD') return 'A$';
-  if (code === 'SGD') return 'S$';
-  if (code === 'USD') return '$';
-  if (code === 'KRW') return '₩';
-  return code;
-}
-
-function formatTimeAgo(timeMs: number, nowMs: number): string {
-  var diffMin = Math.max(0, Math.round((nowMs - timeMs) / 60000));
-  if (diffMin < 1) return 'Just now';
-  if (diffMin < 60) return String(diffMin) + 'm ago';
-  var hrs = Math.floor(diffMin / 60);
-  var mins = diffMin % 60;
-  if (hrs < 24) {
-    return mins > 0 ? String(hrs) + 'h ' + String(mins) + 'm ago' : String(hrs) + 'h ago';
-  }
-  return String(Math.floor(hrs / 24)) + 'd ago';
 }
 
 export function WorldDashboard(props: WorldDashboardProps) {
@@ -565,7 +470,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
   var isMoonNew = props.moonPhase < 0.02 || props.moonPhase > 0.98;
   var moonLitPath = useMemo(
     function () {
-      return buildSmallMoonLitPath(props.moonPhase, 6.2);
+      return buildMoonLitPath(props.moonPhase, 6.2);
     },
     [props.moonPhase]
   );
@@ -822,7 +727,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
         ' · ' +
         String(Math.round(selectedQuake.depthKm)) +
         ' km · ' +
-        formatTimeAgo(selectedQuake.timeMs, props.nowMs),
+        formatTimeAgo(selectedQuake.timeMs, props.nowMs, true),
       stroke: 'rgba(251, 146, 60, 0.62)',
       textColor: '#ffedd5',
     };
@@ -1909,7 +1814,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
               <div class="world-fx-card" key={fx.symbol}>
                 <div class="world-fx-top">
                   <div class="world-fx-pair-wrap">
-                    <span class="world-fx-badge">{currencySymbol(fx.quote)}</span>
+                    <span class="world-fx-badge">{getCurrencySymbol(fx.quote, fx.quote)}</span>
                     <span class="world-fx-pair">{displayLabel}</span>
                   </div>
                   {hasRate ? (

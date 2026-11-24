@@ -3,37 +3,36 @@ import { formatWeekdayFromISO } from './time';
 
 export interface WeatherDescriptor {
   label: string;
-  shortLabel: string;
   kind: WeatherKind;
 }
 
 export function describeWMO(code: number): WeatherDescriptor {
   if (code === 0) {
-    return { label: 'Clear Sky', shortLabel: 'Clear', kind: 'clear' };
+    return { label: 'Clear Sky', kind: 'clear' };
   }
   if (code === 1) {
-    return { label: 'Mostly Clear', shortLabel: 'Mostly Clear', kind: 'clear' };
+    return { label: 'Mostly Clear', kind: 'clear' };
   }
   if (code === 2) {
-    return { label: 'Partly Cloudy', shortLabel: 'Partly Cloudy', kind: 'partly-cloudy' };
+    return { label: 'Partly Cloudy', kind: 'partly-cloudy' };
   }
   if (code === 3) {
-    return { label: 'Overcast', shortLabel: 'Overcast', kind: 'cloudy' };
+    return { label: 'Overcast', kind: 'cloudy' };
   }
   if (code === 45 || code === 48) {
-    return { label: 'Foggy', shortLabel: 'Fog', kind: 'fog' };
+    return { label: 'Foggy', kind: 'fog' };
   }
   if (code === 51 || code === 53 || code === 55 || code === 56 || code === 57) {
-    return { label: 'Light Drizzle', shortLabel: 'Drizzle', kind: 'drizzle' };
+    return { label: 'Light Drizzle', kind: 'drizzle' };
   }
   if (code === 61 || code === 80) {
-    return { label: 'Light Rain', shortLabel: 'Light Rain', kind: 'rain' };
+    return { label: 'Light Rain', kind: 'rain' };
   }
   if (code === 63 || code === 66 || code === 81) {
-    return { label: 'Rain', shortLabel: 'Rain', kind: 'rain' };
+    return { label: 'Rain', kind: 'rain' };
   }
   if (code === 65 || code === 67 || code === 82) {
-    return { label: 'Heavy Rain', shortLabel: 'Heavy Rain', kind: 'rain' };
+    return { label: 'Heavy Rain', kind: 'rain' };
   }
   if (
     code === 71 ||
@@ -43,12 +42,12 @@ export function describeWMO(code: number): WeatherDescriptor {
     code === 85 ||
     code === 86
   ) {
-    return { label: 'Snow', shortLabel: 'Snow', kind: 'snow' };
+    return { label: 'Snow', kind: 'snow' };
   }
   if (code === 95 || code === 96 || code === 99) {
-    return { label: 'Thunderstorm', shortLabel: 'Storm', kind: 'storm' };
+    return { label: 'Thunderstorm', kind: 'storm' };
   }
-  return { label: 'Partly Cloudy', shortLabel: 'Cloudy', kind: 'partly-cloudy' };
+  return { label: 'Partly Cloudy', kind: 'partly-cloudy' };
 }
 
 export function convertTemp(tempC: number, units: TempUnit): number {

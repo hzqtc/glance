@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { NewsFeed, NewsItem, NewsResponse } from '../types';
+import { MONTHS_LONG, formatTimeAgo } from '../utils/time';
+import { readStorageJSON, writeStorageJSON } from '../utils/storage';
 import { QRCode } from './QRCode';
+import { TopControls } from './TopControls';
 
 export var NEWS_STORAGE_KEY = 'glance:lastNews:v2';
 var NEWS_POLL_MS = 15 * 60 * 1000;
@@ -37,48 +40,24 @@ interface NewsDetail {
 }
 
 function readCachedNews(): NewsResponse | null {
-  try {
-    // Cache from the pre-RSS Headlines format; no longer readable
-    window.localStorage.removeItem('glance:lastNews:v1');
-    var raw = window.localStorage.getItem(NEWS_STORAGE_KEY);
-    if (!raw) return null;
-    var parsed = JSON.parse(raw) as NewsResponse;
-    if (parsed && parsed.feeds && parsed.feeds.length > 0) {
-      return parsed;
-    }
-  } catch (_err) {
-    // Ignore storage errors
+  var parsed = readStorageJSON<NewsResponse>(NEWS_STORAGE_KEY);
+  if (parsed && parsed.feeds && parsed.feeds.length > 0) {
+    return parsed;
   }
   return null;
 }
 
 function writeCachedNews(data: NewsResponse): void {
-  try {
-    window.localStorage.setItem(NEWS_STORAGE_KEY, JSON.stringify(data));
-  } catch (_err) {
-    // Ignore storage errors
-  }
-}
-
-function formatAgo(timeMs: number, nowMs: number): string {
-  var mins = Math.max(0, Math.round((nowMs - timeMs) / 60000));
-  if (mins < 60) return String(Math.max(1, mins)) + 'm ago';
-  var hrs = Math.floor(mins / 60);
-  if (hrs < 24) return String(hrs) + 'h ago';
-  return String(Math.floor(hrs / 24)) + 'd ago';
+  writeStorageJSON(NEWS_STORAGE_KEY, data);
 }
 
 function formatHeaderDate(dateKey: string): string {
   var parts = (dateKey || '').split('-');
   if (parts.length !== 3) return '';
-  var months = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December',
-  ];
   var m = parseInt(parts[1], 10);
   var d = parseInt(parts[2], 10);
   if (!(m >= 1 && m <= 12) || !(d >= 1)) return '';
-  return months[m - 1] + ' ' + String(d);
+  return MONTHS_LONG[m - 1] + ' ' + String(d);
 }
 
 export function NewsDashboard(props: NewsDashboardProps) {
@@ -260,37 +239,17 @@ export function NewsDashboard(props: NewsDashboardProps) {
             {dateLabel ? <span class="news-date-tag">{dateLabel}</span> : null}
           </div>
           <div class="news-header-center">
-            <div class="top-controls" role="toolbar" aria-label="Headlines controls">
-              <button
-                type="button"
-                class="ctrl-btn ctrl-btn-icon"
-                onClick={props.onRefresh}
-                disabled={props.isRefreshing}
-                title="Hard reload & clear cache"
-                aria-label="Hard reload and clear cache"
-              >
-                <svg
-                  width="13"
-                  height="13"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.1"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  class={props.isRefreshing ? 'ctrl-svg ctrl-spinning' : 'ctrl-svg'}
-                  aria-hidden="true"
-                >
-                  <path d="M21 12a9 9 0 1 1-2.64-6.36" />
-                  <polyline points="21 3 21 9 15 9" />
-                </svg>
-              </button>
-            </div>
+            <TopControls
+              isRefreshing={props.isRefreshing}
+              showAnim={false}
+              showUnits={false}
+              onRefresh={props.onRefresh}
+            />
           </div>
           <div class="news-header-right">
             {data && data.fetchedAt ? (
               <span class="news-updated">
-                Updated {formatAgo(new Date(data.fetchedAt).getTime(), nowMs)}
+                Updated {formatTimeAgo(new Date(data.fetchedAt).getTime(), nowMs)}
               </span>
             ) : null}
           </div>
@@ -344,7 +303,7 @@ export function NewsDashboard(props: NewsDashboardProps) {
                           <div class="news-item-main">
                             <div class="news-item-title news-clamp-2">{item.title}</div>
                             <div class="news-item-meta">
-                              {item.publishedMs ? <span>{formatAgo(item.publishedMs, nowMs)}</span> : null}
+                              {item.publishedMs ? <span>{formatTimeAgo(item.publishedMs, nowMs)}</span> : null}
                               {item.source ? <span class="news-domain">{item.source}</span> : null}
                             </div>
                           </div>
@@ -424,7 +383,7 @@ export function NewsDashboard(props: NewsDashboardProps) {
               <div class="news-popover-meta">
                 {(detail.item.source || '') +
                   (detail.item.source && detail.item.publishedMs ? ' · ' : '') +
-                  (detail.item.publishedMs ? formatAgo(detail.item.publishedMs, nowMs) : '')}
+                  (detail.item.publishedMs ? formatTimeAgo(detail.item.publishedMs, nowMs) : '')}
               </div>
             </div>
             <div class="news-popover-qr">

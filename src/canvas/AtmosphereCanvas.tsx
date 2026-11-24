@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'preact/hooks';
 import type { WeatherKind } from '../types';
+import { buildMoonLitPath } from '../utils/astronomy';
 import { computeTargetSky, lerpSkyState } from './skyPalettes';
 import type { SkyState } from './skyPalettes';
 import { createParticleScene, renderAtmosphereFrame } from './particles';
@@ -14,61 +15,6 @@ interface AtmosphereCanvasProps {
   moonPhase: number;
   isNightQuiet: boolean;
   animated: boolean;
-}
-
-function buildMoonLitPath(moonPhase: number, r: number): string {
-  var waxing = moonPhase < 0.5;
-  var k = Math.cos(moonPhase * Math.PI * 2);
-  var rx = Math.abs(k) * r;
-  var outerSweep = waxing ? 1 : 0;
-
-  if (rx < 0.4) {
-    // Exact First or Last Quarter
-    return (
-      'M 0 ' +
-      String(-r) +
-      ' A ' +
-      String(r) +
-      ' ' +
-      String(r) +
-      ' 0 0 ' +
-      String(outerSweep) +
-      ' 0 ' +
-      String(r) +
-      ' L 0 ' +
-      String(-r) +
-      ' Z'
-    );
-  }
-
-  var innerSweep: number;
-  if (waxing) {
-    innerSweep = k > 0 ? 0 : 1;
-  } else {
-    innerSweep = k > 0 ? 1 : 0;
-  }
-
-  return (
-    'M 0 ' +
-    String(-r) +
-    ' A ' +
-    String(r) +
-    ' ' +
-    String(r) +
-    ' 0 0 ' +
-    String(outerSweep) +
-    ' 0 ' +
-    String(r) +
-    ' A ' +
-    rx.toFixed(2) +
-    ' ' +
-    String(r) +
-    ' 0 0 ' +
-    String(innerSweep) +
-    ' 0 ' +
-    String(-r) +
-    ' Z'
-  );
 }
 
 function skyCloseEnough(a: SkyState, b: SkyState): boolean {

@@ -16,6 +16,13 @@ import {
   isNightQuietHours,
   parseMinutesFromHHMM,
 } from './utils/time';
+import {
+  readStorage,
+  readStorageJSON,
+  removeStorageKeys,
+  writeStorage,
+  writeStorageJSON,
+} from './utils/storage';
 import { describeWMO } from './utils/weather';
 import { computeTargetSky, getSkyThemeMode } from './canvas/skyPalettes';
 import { AtmosphereCanvas } from './canvas/AtmosphereCanvas';
@@ -174,105 +181,63 @@ var DEFAULT_NIGHT_MODE: NightModeConfig = {
 var DEMO_OVERRIDE = getDemoOverride();
 
 function readCachedWeather(): WeatherResponse | null {
-  try {
-    var raw = window.localStorage.getItem(WEATHER_STORAGE_KEY);
-    if (!raw) return null;
-    var parsed = JSON.parse(raw) as WeatherResponse;
-    if (parsed && parsed.config && parsed.config.cities && parsed.config.cities.length > 0) {
-      return parsed;
-    }
-  } catch (_err) {
-    // Ignore storage errors in restricted Safari modes
+  var parsed = readStorageJSON<WeatherResponse>(WEATHER_STORAGE_KEY);
+  if (parsed && parsed.config && parsed.config.cities && parsed.config.cities.length > 0) {
+    return parsed;
   }
   return null;
 }
 
 function writeCachedWeather(data: WeatherResponse): void {
-  try {
-    window.localStorage.setItem(WEATHER_STORAGE_KEY, JSON.stringify(data));
-  } catch (_err) {
-    // Ignore quota/storage errors
-  }
+  writeStorageJSON(WEATHER_STORAGE_KEY, data);
 }
 
 function readStoredAnimEnabled(): boolean {
-  try {
-    var saved = window.localStorage.getItem(ANIM_STORAGE_KEY);
-    if (saved === '0') return false;
-    if (saved === '1') return true;
-  } catch (_err) {
-    // Ignore storage errors
-  }
+  var saved = readStorage(ANIM_STORAGE_KEY);
+  if (saved === '0') return false;
+  if (saved === '1') return true;
   return true;
 }
 
 function writeStoredAnimEnabled(enabled: boolean): void {
-  try {
-    window.localStorage.setItem(ANIM_STORAGE_KEY, enabled ? '1' : '0');
-  } catch (_err) {
-    // Ignore storage errors
-  }
+  writeStorage(ANIM_STORAGE_KEY, enabled ? '1' : '0');
 }
 
 function readStoredStockMetric(): StockCardMetric {
-  try {
-    var saved = window.localStorage.getItem(STOCK_METRIC_STORAGE_KEY);
-    if (saved === 'abs' || saved === 'pct' || saved === 'mcap') {
-      return saved;
-    }
-  } catch (_err) {
-    // Ignore storage errors
+  var saved = readStorage(STOCK_METRIC_STORAGE_KEY);
+  if (saved === 'abs' || saved === 'pct' || saved === 'mcap') {
+    return saved;
   }
   return 'pct';
 }
 
 function writeStoredStockMetric(metric: StockCardMetric): void {
-  try {
-    window.localStorage.setItem(STOCK_METRIC_STORAGE_KEY, metric);
-  } catch (_err) {
-    // Ignore storage errors
-  }
+  writeStorage(STOCK_METRIC_STORAGE_KEY, metric);
 }
 
 function readStoredUnits(): TempUnit | null {
-  try {
-    var saved = window.localStorage.getItem(UNITS_STORAGE_KEY);
-    if (saved === 'F' || saved === 'C') return saved;
-  } catch (_err) {
-    // Ignore storage errors
-  }
+  var saved = readStorage(UNITS_STORAGE_KEY);
+  if (saved === 'F' || saved === 'C') return saved;
   return null;
 }
 
 function writeStoredUnits(unit: TempUnit): void {
-  try {
-    window.localStorage.setItem(UNITS_STORAGE_KEY, unit);
-  } catch (_err) {
-    // Ignore storage errors
-  }
+  writeStorage(UNITS_STORAGE_KEY, unit);
 }
 
 function readStoredActiveSlide(): number {
-  try {
-    var saved = window.localStorage.getItem(ACTIVE_SLIDE_STORAGE_KEY);
-    if (saved !== null) {
-      var parsed = parseInt(saved, 10);
-      if (!isNaN(parsed) && parsed >= 0 && parsed < TOTAL_SLIDES) {
-        return parsed;
-      }
+  var saved = readStorage(ACTIVE_SLIDE_STORAGE_KEY);
+  if (saved !== null) {
+    var parsed = parseInt(saved, 10);
+    if (!isNaN(parsed) && parsed >= 0 && parsed < TOTAL_SLIDES) {
+      return parsed;
     }
-  } catch (_err) {
-    // Ignore storage errors
   }
   return 0;
 }
 
 function writeStoredActiveSlide(slide: number): void {
-  try {
-    window.localStorage.setItem(ACTIVE_SLIDE_STORAGE_KEY, String(slide));
-  } catch (_err) {
-    // Ignore storage errors
-  }
+  writeStorage(ACTIVE_SLIDE_STORAGE_KEY, String(slide));
 }
 
 /** Safari 12-safe ancestor class check so touches inside horizontally scrollable strips don't trigger carousel swipes. */
@@ -310,15 +275,15 @@ function setThemeColorMeta(hex: string): void {
   }
 }
 
+var CACHED_DATA_KEYS = [
+  WEATHER_STORAGE_KEY,
+  STOCKS_STORAGE_KEY,
+  WORLD_STORAGE_KEY,
+  NEWS_STORAGE_KEY,
+];
+
 function clearCachedDashboardData(): void {
-  try {
-    window.localStorage.removeItem(WEATHER_STORAGE_KEY);
-    window.localStorage.removeItem(STOCKS_STORAGE_KEY);
-    window.localStorage.removeItem(WORLD_STORAGE_KEY);
-    window.localStorage.removeItem(NEWS_STORAGE_KEY);
-  } catch (_err) {
-    // Ignore storage errors
-  }
+  removeStorageKeys(CACHED_DATA_KEYS);
   if ('caches' in window) {
     try {
       window.caches
@@ -1207,14 +1172,7 @@ function DashboardShell(props: DashboardShellProps) {
       }
     }
 
-    try {
-      window.localStorage.removeItem(WEATHER_STORAGE_KEY);
-      window.localStorage.removeItem(STOCKS_STORAGE_KEY);
-      window.localStorage.removeItem(WORLD_STORAGE_KEY);
-      window.localStorage.removeItem(NEWS_STORAGE_KEY);
-    } catch (_err) {
-      // Ignore storage errors
-    }
+    removeStorageKeys(CACHED_DATA_KEYS);
 
     var tasks: Promise<unknown>[] = [];
 
@@ -1440,15 +1398,11 @@ function DashboardShell(props: DashboardShellProps) {
             onUnauthorized={props.onUnauthorized}
             controls={
               <TopControls
-                animEnabled={animEnabled}
-                units={units}
                 isRefreshing={isRefreshing}
                 showAnim={false}
                 showUnits={false}
                 stockMetric={stockMetric}
                 onSelectStockMetric={handleSelectStockMetric}
-                onToggleAnim={handleToggleAnim}
-                onToggleUnits={handleToggleUnits}
                 onRefresh={handleRefresh}
               />
             }

@@ -1,44 +1,5 @@
 import type { CalendarEvent, CalendarTrip, TimeFormat } from '../types';
-
-export var MONTHS_FULL = [
-  'January',
-  'February',
-  'March',
-  'April',
-  'May',
-  'June',
-  'July',
-  'August',
-  'September',
-  'October',
-  'November',
-  'December',
-];
-
-export var MONTHS_SHORT = [
-  'Jan',
-  'Feb',
-  'Mar',
-  'Apr',
-  'May',
-  'Jun',
-  'Jul',
-  'Aug',
-  'Sep',
-  'Oct',
-  'Nov',
-  'Dec',
-];
-
-export var WEEKDAYS_FULL = [
-  'Sunday',
-  'Monday',
-  'Tuesday',
-  'Wednesday',
-  'Thursday',
-  'Friday',
-  'Saturday',
-];
+import { MONTHS_SHORT, formatHourMinute, pad2 } from './time';
 
 export var WEEKDAYS_MON_START = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 
@@ -50,10 +11,6 @@ export interface CalendarDayCell {
   inCurrentMonth: boolean;
   isWeekend: boolean;
   isToday: boolean;
-}
-
-function pad2(n: number): string {
-  return n < 10 ? '0' + String(n) : String(n);
 }
 
 export function toDateKey(year: number, month: number, day: number): string {
@@ -238,7 +195,7 @@ function getSolarTermDay(year: number, termIdx: number): number {
   return new Date(ms).getUTCDate();
 }
 
-export function getSolarTerm(year: number, month: number, day: number): string {
+function getSolarTerm(year: number, month: number, day: number): string {
   if (year < 1900 || year > 2100) return '';
   var idx1 = (month - 1) * 2;
   var idx2 = idx1 + 1;
@@ -327,8 +284,6 @@ function lunarYearDays(y: number): number {
 export interface LunarDateInfo {
   label: string;
   fullLabel: string;
-  festival: string;
-  solarTerm: string;
   isFestival: boolean;
   isSolarTerm: boolean;
   lunarYear: number;
@@ -446,8 +401,6 @@ function computeChineseLunarDate(
   return {
     label: label,
     fullLabel: fullParts.join(' · '),
-    festival: festival,
-    solarTerm: solarTerm,
     isFestival: Boolean(festival),
     isSolarTerm: Boolean(solarTerm) && !festival,
     lunarYear: lYear,
@@ -462,18 +415,13 @@ function computeChineseLunarDate(
 // Formatting Helpers
 // ============================================================================
 
-export function formatHHMM(hhmm: string | undefined, timeFormat: TimeFormat): string {
+function formatHHMM(hhmm: string | undefined, timeFormat: TimeFormat): string {
   if (!hhmm) return '';
   var parts = hhmm.split(':');
   var h = parseInt(parts[0], 10);
   var m = parseInt(parts[1], 10);
   if (isNaN(h) || isNaN(m)) return hhmm;
-  if (timeFormat === '24h') {
-    return pad2(h) + ':' + pad2(m);
-  }
-  var ampm = h >= 12 ? 'PM' : 'AM';
-  var h12 = h % 12;
-  return String(h12 === 0 ? 12 : h12) + ':' + pad2(m) + ' ' + ampm;
+  return formatHourMinute(h, m, timeFormat);
 }
 
 export function formatEventTimeRange(ev: CalendarEvent, timeFormat: TimeFormat): string {
@@ -484,7 +432,7 @@ export function formatEventTimeRange(ev: CalendarEvent, timeFormat: TimeFormat):
   return start + ' – ' + end;
 }
 
-export function diffDateKeys(fromKey: string, toKey: string): number {
+function diffDateKeys(fromKey: string, toKey: string): number {
   var a = parseDateKey(fromKey);
   var b = parseDateKey(toKey);
   return Math.round(
@@ -496,7 +444,6 @@ export function diffDateKeys(fromKey: string, toKey: string): number {
 export interface TripCountdownInfo {
   badge: string;
   dateLabel: string;
-  daysUntil: number;
   isOngoing: boolean;
   isSoon: boolean;
 }
@@ -518,7 +465,6 @@ export function formatTripCountdown(
     return {
       badge: badge,
       dateLabel: '',
-      daysUntil: daysUntil,
       isOngoing: true,
       isSoon: true,
     };
@@ -527,7 +473,6 @@ export function formatTripCountdown(
     return {
       badge: 'Today',
       dateLabel: '',
-      daysUntil: 0,
       isOngoing: true,
       isSoon: true,
     };
@@ -536,7 +481,6 @@ export function formatTripCountdown(
     return {
       badge: 'Tomorrow',
       dateLabel: '',
-      daysUntil: 1,
       isOngoing: false,
       isSoon: true,
     };
@@ -544,7 +488,6 @@ export function formatTripCountdown(
   return {
     badge: 'In ' + String(daysUntil) + 'd',
     dateLabel: dateLabel,
-    daysUntil: daysUntil,
     isOngoing: false,
     isSoon: daysUntil <= 7,
   };

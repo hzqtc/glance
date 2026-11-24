@@ -48,7 +48,7 @@ func TestParseAndNormalizeCarouselSchedule(t *testing.T) {
 	if cfg.IdleResetSeconds != 60 {
 		t.Fatalf("expected default idleResetSeconds 60, got %d", cfg.IdleResetSeconds)
 	}
-	if !cfg.NightMode.Enabled || cfg.NightMode.StartHour != 22 || cfg.NightMode.EndHour != 7 || cfg.NightMode.DimOpacity <= 0 {
+	if !cfg.NightMode.Enabled || cfg.NightMode.StartHour != 23 || cfg.NightMode.EndHour != 7 || cfg.NightMode.DimOpacity <= 0 {
 		t.Fatalf("unexpected default nightMode config: %+v", cfg.NightMode)
 	}
 

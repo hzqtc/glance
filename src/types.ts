@@ -22,10 +22,10 @@ export interface RefreshConfig {
   dailyReloadHour: number;
 }
 
-export type CarouselSlideName = 'weather' | 'stocks' | 'calendar' | 'photos' | 'world';
+export type CarouselSlideName = 'weather' | 'stocks' | 'calendar' | 'photos' | 'world' | 'news';
 
 export interface CarouselScheduleStep {
-  slide: CarouselSlideName | 'stock' | 'photo' | 'map';
+  slide: CarouselSlideName | 'stock' | 'photo' | 'map' | 'headlines';
   seconds: number;
 }
 

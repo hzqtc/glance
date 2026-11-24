@@ -24,6 +24,7 @@ import {
 import { StockChart } from './StockChart';
 import { StockCard } from './StockCard';
 import { StockLogo } from './StockLogo';
+import { readStorage, readStorageJSON, writeStorage, writeStorageJSON } from '../utils/storage';
 
 export var STOCKS_STORAGE_KEY = 'glance:lastStocks:v1';
 
@@ -44,47 +45,29 @@ var STOCK_RANGE_STORAGE_KEY = 'glance:stockRange:v1';
 
 // The chart timeframe is a per-device setting (unlike the selected symbol)
 function readStoredRange(): StockRange | null {
-  try {
-    var saved = window.localStorage.getItem(STOCK_RANGE_STORAGE_KEY) as StockRange | null;
-    if (saved) {
-      for (var i = 0; i < STOCK_RANGES.length; i++) {
-        if (STOCK_RANGES[i].id === saved) return saved;
-      }
+  var saved = readStorage(STOCK_RANGE_STORAGE_KEY) as StockRange | null;
+  if (saved) {
+    for (var i = 0; i < STOCK_RANGES.length; i++) {
+      if (STOCK_RANGES[i].id === saved) return saved;
     }
-  } catch (_err) {
-    // Ignore storage errors
   }
   return null;
 }
 
 function writeStoredRange(rng: StockRange): void {
-  try {
-    window.localStorage.setItem(STOCK_RANGE_STORAGE_KEY, rng);
-  } catch (_err) {
-    // Ignore storage errors
-  }
+  writeStorage(STOCK_RANGE_STORAGE_KEY, rng);
 }
 
 function readCachedStocks(): StocksResponse | null {
-  try {
-    var raw = window.localStorage.getItem(STOCKS_STORAGE_KEY);
-    if (!raw) return null;
-    var parsed = JSON.parse(raw) as StocksResponse;
-    if (parsed && parsed.hero && parsed.quotes && parsed.quotes.length > 0) {
-      return parsed;
-    }
-  } catch (_err) {
-    // Ignore storage errors
+  var parsed = readStorageJSON<StocksResponse>(STOCKS_STORAGE_KEY);
+  if (parsed && parsed.hero && parsed.quotes && parsed.quotes.length > 0) {
+    return parsed;
   }
   return null;
 }
 
 function writeCachedStocks(data: StocksResponse): void {
-  try {
-    window.localStorage.setItem(STOCKS_STORAGE_KEY, JSON.stringify(data));
-  } catch (_err) {
-    // Ignore storage errors
-  }
+  writeStorageJSON(STOCKS_STORAGE_KEY, data);
 }
 
 export function StocksDashboard(props: StocksDashboardProps) {

@@ -1,13 +1,12 @@
 import type { WeatherKind } from '../types';
 
-export type RGB = [number, number, number];
+type RGB = [number, number, number];
 
 export interface SkyState {
   top: RGB;
   mid: RGB;
   bottom: RGB;
   glow: RGB;
-  glowAlpha: number;
   starAlpha: number;
   cloudTint: RGB;
   cloudAlpha: number;
@@ -23,7 +22,6 @@ const NIGHT: BaseSky = {
   mid: [14, 26, 56],
   bottom: [26, 46, 84],
   glow: [165, 198, 255],
-  glowAlpha: 0.42,
   starAlpha: 0.95,
   cloudTint: [118, 152, 212],
   cloudAlpha: 0.3,
@@ -35,7 +33,6 @@ const DAWN: BaseSky = {
   mid: [94, 78, 128],
   bottom: [224, 144, 108],
   glow: [255, 196, 134],
-  glowAlpha: 0.65,
   starAlpha: 0.25,
   cloudTint: [252, 200, 174],
   cloudAlpha: 0.44,
@@ -47,7 +44,6 @@ const MORNING: BaseSky = {
   mid: [148, 202, 246],
   bottom: [216, 236, 252],
   glow: [255, 246, 202],
-  glowAlpha: 0.62,
   starAlpha: 0.0,
   cloudTint: [255, 255, 255],
   cloudAlpha: 0.68,
@@ -59,7 +55,6 @@ const DAY: BaseSky = {
   mid: [138, 198, 246],
   bottom: [206, 232, 250],
   glow: [255, 248, 212],
-  glowAlpha: 0.58,
   starAlpha: 0.0,
   cloudTint: [255, 255, 255],
   cloudAlpha: 0.68,
@@ -71,7 +66,6 @@ const SUNSET: BaseSky = {
   mid: [128, 70, 112],
   bottom: [232, 126, 82],
   glow: [255, 176, 102],
-  glowAlpha: 0.72,
   starAlpha: 0.14,
   cloudTint: [255, 186, 152],
   cloudAlpha: 0.46,
@@ -83,7 +77,6 @@ const DUSK: BaseSky = {
   mid: [38, 52, 92],
   bottom: [94, 76, 118],
   glow: [192, 166, 224],
-  glowAlpha: 0.38,
   starAlpha: 0.6,
   cloudTint: [148, 152, 202],
   cloudAlpha: 0.34,
@@ -98,7 +91,7 @@ function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }
 
-export function lerpRGB(a: RGB, b: RGB, t: number): RGB {
+function lerpRGB(a: RGB, b: RGB, t: number): RGB {
   return [
     lerp(a[0], b[0], t),
     lerp(a[1], b[1], t),
@@ -113,7 +106,6 @@ function blendBase(a: BaseSky, b: BaseSky, t: number): BaseSky {
     mid: lerpRGB(a.mid, b.mid, k),
     bottom: lerpRGB(a.bottom, b.bottom, k),
     glow: lerpRGB(a.glow, b.glow, k),
-    glowAlpha: lerp(a.glowAlpha, b.glowAlpha, k),
     starAlpha: lerp(a.starAlpha, b.starAlpha, k),
     cloudTint: lerpRGB(a.cloudTint, b.cloudTint, k),
     cloudAlpha: lerp(a.cloudAlpha, b.cloudAlpha, k),
@@ -189,7 +181,6 @@ export function computeTargetSky(
     mid: base.mid.slice() as RGB,
     bottom: base.bottom.slice() as RGB,
     glow: base.glow.slice() as RGB,
-    glowAlpha: base.glowAlpha,
     starAlpha: base.starAlpha,
     cloudTint: base.cloudTint.slice() as RGB,
     cloudAlpha: base.cloudAlpha,
@@ -208,7 +199,6 @@ export function computeTargetSky(
     state.top = lerpRGB(state.top, overcastTop, amount);
     state.mid = lerpRGB(state.mid, overcastMid, amount);
     state.bottom = lerpRGB(state.bottom, overcastBot, amount);
-    state.glowAlpha = 0;
     state.starAlpha = 0;
     state.cloudAlpha = Math.max(state.cloudAlpha, isNightish ? 0.52 : 0.68);
   } else if (weatherKind === 'drizzle' || weatherKind === 'rain') {
@@ -218,14 +208,12 @@ export function computeTargetSky(
     state.top = lerpRGB(state.top, rainTop, 0.72);
     state.mid = lerpRGB(state.mid, rainMid, 0.72);
     state.bottom = lerpRGB(state.bottom, rainBot, 0.72);
-    state.glowAlpha = 0;
     state.starAlpha = 0;
     state.cloudAlpha = Math.max(state.cloudAlpha, isNightish ? 0.54 : 0.66);
   } else if (weatherKind === 'storm') {
     state.top = lerpRGB(state.top, isNightish ? [10, 14, 28] : [92, 114, 144], 0.8);
     state.mid = lerpRGB(state.mid, isNightish ? [22, 28, 52] : [132, 152, 178], 0.8);
     state.bottom = lerpRGB(state.bottom, isNightish ? [38, 46, 72] : [174, 190, 210], 0.8);
-    state.glowAlpha = 0;
     state.starAlpha = 0;
     state.cloudAlpha = 0.64;
   } else if (weatherKind === 'snow') {
@@ -235,7 +223,6 @@ export function computeTargetSky(
     state.top = lerpRGB(state.top, snowTop, 0.6);
     state.mid = lerpRGB(state.mid, snowMid, 0.6);
     state.bottom = lerpRGB(state.bottom, snowBot, 0.6);
-    state.glowAlpha = 0;
     state.starAlpha = 0;
   }
 
@@ -252,7 +239,6 @@ export function lerpSkyState(cur: SkyState, target: SkyState, factor: number): S
     mid: lerpRGB(cur.mid, target.mid, k),
     bottom: lerpRGB(cur.bottom, target.bottom, k),
     glow: lerpRGB(cur.glow, target.glow, k),
-    glowAlpha: lerp(cur.glowAlpha, target.glowAlpha, k),
     starAlpha: lerp(cur.starAlpha, target.starAlpha, k),
     cloudTint: lerpRGB(cur.cloudTint, target.cloudTint, k),
     cloudAlpha: lerp(cur.cloudAlpha, target.cloudAlpha, k),
@@ -272,7 +258,7 @@ export function rgbString(c: RGB, alpha?: number): string {
   return 'rgb(' + r + ',' + g + ',' + b + ')';
 }
 
-export type SkyThemeMode = 'day' | 'twilight' | 'night';
+type SkyThemeMode = 'day' | 'twilight' | 'night';
 
 export function getSkyThemeMode(
   minutesSinceMidnight: number,

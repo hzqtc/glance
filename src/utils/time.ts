@@ -1,6 +1,6 @@
 import type { TimeFormat } from '../types';
 
-const WEEKDAYS_LONG = [
+export const WEEKDAYS_LONG = [
   'Sunday',
   'Monday',
   'Tuesday',
@@ -10,9 +10,9 @@ const WEEKDAYS_LONG = [
   'Saturday',
 ];
 
-const WEEKDAYS_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+export const WEEKDAYS_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-const MONTHS_LONG = [
+export const MONTHS_LONG = [
   'January',
   'February',
   'March',
@@ -27,7 +27,7 @@ const MONTHS_LONG = [
   'December',
 ];
 
-const MONTHS_SHORT = [
+export const MONTHS_SHORT = [
   'Jan',
   'Feb',
   'Mar',
@@ -48,15 +48,41 @@ export interface CityClockInfo {
   ampm: string;
   hour24: number;
   minute: number;
-  second: number;
   minutesSinceMidnight: number;
   longDate: string;
   shortDate: string;
   daySerial: number;
 }
 
-function pad2(n: number): string {
+export function pad2(n: number): string {
   return n < 10 ? '0' + String(n) : String(n);
+}
+
+export function formatHourMinute(h: number, m: number, timeFormat: TimeFormat): string {
+  if (timeFormat === '24h') {
+    return pad2(h) + ':' + pad2(m);
+  }
+  var ampm = h >= 12 ? 'PM' : 'AM';
+  var h12 = h % 12;
+  return String(h12 === 0 ? 12 : h12) + ':' + pad2(m) + ' ' + ampm;
+}
+
+export function formatTimeAgo(timeMs: number, nowMs: number, verbose?: boolean): string {
+  var diffMin = Math.max(0, Math.round((nowMs - timeMs) / 60000));
+  if (verbose) {
+    if (diffMin < 1) return 'Just now';
+    if (diffMin < 60) return String(diffMin) + 'm ago';
+    var hrsV = Math.floor(diffMin / 60);
+    var minsV = diffMin % 60;
+    if (hrsV < 24) {
+      return minsV > 0 ? String(hrsV) + 'h ' + String(minsV) + 'm ago' : String(hrsV) + 'h ago';
+    }
+    return String(Math.floor(hrsV / 24)) + 'd ago';
+  }
+  if (diffMin < 60) return String(Math.max(1, diffMin)) + 'm ago';
+  var hrs = Math.floor(diffMin / 60);
+  if (hrs < 24) return String(hrs) + 'h ago';
+  return String(Math.floor(hrs / 24)) + 'd ago';
 }
 
 /**
@@ -101,7 +127,6 @@ export function getCityClock(
     ampm: ampm,
     hour24: hour24,
     minute: minute,
-    second: second,
     minutesSinceMidnight: hour24 * 60 + minute + second / 60,
     longDate:
       WEEKDAYS_LONG[weekday] + ', ' + MONTHS_LONG[month] + ' ' + String(day),
@@ -140,14 +165,7 @@ export function formatClockHHMM(hhmm: string, timeFormat: TimeFormat): string {
   if (mins < 0) {
     return hhmm;
   }
-  var h = Math.floor(mins / 60) % 24;
-  var m = mins % 60;
-  if (timeFormat === '24h') {
-    return pad2(h) + ':' + pad2(m);
-  }
-  var ampm = h >= 12 ? 'PM' : 'AM';
-  var h12 = h % 12;
-  return String(h12 === 0 ? 12 : h12) + ':' + pad2(m) + ' ' + ampm;
+  return formatHourMinute(Math.floor(mins / 60) % 24, mins % 60, timeFormat);
 }
 
 export function formatHourlyLabel(isoTime: string, timeFormat: TimeFormat): string {
