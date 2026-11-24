@@ -3,6 +3,8 @@ import type { PhotoItem, PhotoLocationsResponse, PhotosResponse } from '../types
 import { buildCollageDeck } from '../utils/collage';
 import type { CollageFrame } from '../utils/collage';
 import { getDemoPhotosResponse, isPhotosDemoMode } from '../data/demoPhotos';
+import { getActiveHolidayTheme } from '../utils/holidays';
+import { HolidayFrame } from './HolidayFrame';
 
 var DEFAULT_PHOTO_INTERVAL_SEC = 15;
 var PHOTO_REFRESH_MS = 30 * 60 * 1000;
@@ -725,6 +727,8 @@ export function PhotosDashboard(props: PhotosDashboardProps) {
 
   var currentFrame = deck.length > 0 ? deck[frameIdx] || deck[0] : null;
   var isConfigured = resp ? resp.configured : true;
+  // Re-evaluated on every frame advance, so the theme rolls over at local midnight
+  var holidayTheme = currentFrame ? getActiveHolidayTheme(Date.now()) : null;
 
   return (
     <div
@@ -759,6 +763,7 @@ export function PhotosDashboard(props: PhotosDashboardProps) {
           >
             {renderCollageFrame(currentFrame, locationsById)}
           </div>
+          {holidayTheme ? <HolidayFrame theme={holidayTheme} /> : null}
         </div>
       ) : (
         <div class="photos-empty-wrap">

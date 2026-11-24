@@ -331,6 +331,11 @@ export interface LunarDateInfo {
   solarTerm: string;
   isFestival: boolean;
   isSolarTerm: boolean;
+  lunarYear: number;
+  lunarMonth: number; // 1-12
+  lunarDay: number; // 1-30
+  isLeapMonth: boolean;
+  isLastDayOfYear: boolean; // 除夕 (last day of lunar month 12)
 }
 
 // Each date is computed once: the 3-month calendar strip asks for 126 dates
@@ -445,6 +450,11 @@ function computeChineseLunarDate(
     solarTerm: solarTerm,
     isFestival: Boolean(festival),
     isSolarTerm: Boolean(solarTerm) && !festival,
+    lunarYear: lYear,
+    lunarMonth: lMonth,
+    lunarDay: lDay,
+    isLeapMonth: isLeap,
+    isLastDayOfYear: !isLeap && lMonth === 12 && lDay === lunarMonthDays(lYear, 12),
   };
 }
 
