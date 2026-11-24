@@ -11,7 +11,7 @@
   left: 0;
   z-index: 90; /* above the dashboards, below the night veil */
   background-color: #020409;
-  background-image: radial-gradient(circle at 32% 50%, rgba(30, 41, 70, 0.32) 0%, rgba(2, 4, 9, 0) 55%);
+  background-image: radial-gradient(circle at 34% 50%, rgba(30, 41, 70, 0.32) 0%, rgba(2, 4, 9, 0) 55%);
   color: rgba(203, 213, 225, 0.78);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
@@ -25,13 +25,17 @@
   align-items: center;
   width: 100%;
   height: 100%;
+  padding-left: 72px;
+  padding-left: calc(72px + env(safe-area-inset-left));
+  padding-right: 72px;
+  padding-right: calc(72px + env(safe-area-inset-right));
   transition: transform 2s ease;
 }
 
-/* Left: the clock gets ~65% of the width */
+/* Left: analog clock with equal spacing on page edges and between clock & info panel */
 .ambient-left {
-  width: 65%;
-  height: 100%;
+  flex: 0 0 auto;
+  margin-right: 72px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -39,8 +43,8 @@
 
 .ambient-dial {
   display: block;
-  width: 600px;
-  height: 600px;
+  width: 560px;
+  height: 560px;
 }
 
 .ambient-ring {
@@ -111,9 +115,8 @@
 
 /* Right: date, weather, sunrise */
 .ambient-right {
-  width: 35%;
-  padding-right: 64px;
-  padding-right: calc(64px + env(safe-area-inset-right));
+  flex: 1 1 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   justify-content: center;
