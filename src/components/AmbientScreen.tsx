@@ -45,6 +45,33 @@ function n(v: number): string {
   return v.toFixed(2);
 }
 
+// Precompute the 60 static SVG dial marks once at module load
+var DIAL_MARKS = (function () {
+  var list = [];
+  for (var i = 0; i < 60; i++) {
+    var deg = i * 6;
+    if (i % 5 === 0) {
+      var major = i % 15 === 0;
+      var a = dialPoint(deg, major ? 80 : 83);
+      var b = dialPoint(deg, 90);
+      list.push(
+        <line
+          key={'h' + i}
+          x1={n(a[0])}
+          y1={n(a[1])}
+          x2={n(b[0])}
+          y2={n(b[1])}
+          class={major ? 'ambient-mark ambient-mark-major' : 'ambient-mark'}
+        />
+      );
+    } else {
+      var p = dialPoint(deg, 89);
+      list.push(<circle key={'m' + i} cx={n(p[0])} cy={n(p[1])} r="0.7" class="ambient-dot" />);
+    }
+  }
+  return list;
+})();
+
 interface AnalogClockProps {
   hour24: number;
   minute: number;
@@ -76,29 +103,6 @@ function AnalogClock(props: AnalogClockProps) {
     };
   }, []);
 
-  var marks = [];
-  for (var i = 0; i < 60; i++) {
-    var deg = i * 6;
-    if (i % 5 === 0) {
-      var major = i % 15 === 0;
-      var a = dialPoint(deg, major ? 80 : 83);
-      var b = dialPoint(deg, 90);
-      marks.push(
-        <line
-          key={'h' + i}
-          x1={n(a[0])}
-          y1={n(a[1])}
-          x2={n(b[0])}
-          y2={n(b[1])}
-          class={major ? 'ambient-mark ambient-mark-major' : 'ambient-mark'}
-        />
-      );
-    } else {
-      var p = dialPoint(deg, 89);
-      marks.push(<circle key={'m' + i} cx={n(p[0])} cy={n(p[1])} r="0.7" class="ambient-dot" />);
-    }
-  }
-
   var hourDeg = ((props.hour24 % 12) + props.minute / 60) * 30;
   var minuteDeg = props.minute * 6;
   var hourTip = dialPoint(hourDeg, 48);
@@ -116,7 +120,7 @@ function AnalogClock(props: AnalogClockProps) {
       </defs>
       <circle cx="100" cy="100" r="98" fill="url(#ambientFace)" />
       <circle cx="100" cy="100" r="96" class="ambient-ring" />
-      {marks}
+      {DIAL_MARKS}
       {props.label ? (
         <text x="100" y="62" text-anchor="middle" class="ambient-dial-label">
           {props.label.toUpperCase()}

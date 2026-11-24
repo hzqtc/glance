@@ -400,9 +400,6 @@ export function PhotosDashboard(props: PhotosDashboardProps) {
         preloadFrameImages(nextDeck[0]);
         fetchLocationsForFrames([nextDeck[0]]);
       }
-      if (nextDeck.length > 1) {
-        preloadFrameImages(nextDeck[1]);
-      }
     }
   }
 
@@ -432,7 +429,7 @@ export function PhotosDashboard(props: PhotosDashboardProps) {
         return r.json();
       })
       .then(function (json: PhotosResponse | null) {
-        if (!json) return json;
+        if (unmountedRef.current || !json) return json;
         setResp(json);
         setLoadError(null);
         setIsLoading(false);
@@ -443,6 +440,7 @@ export function PhotosDashboard(props: PhotosDashboardProps) {
         return json;
       })
       .catch(function (err) {
+        if (unmountedRef.current) return null;
         setLoadError(err && err.message ? String(err.message) : 'Network error');
         setIsLoading(false);
         return null;
@@ -487,9 +485,6 @@ export function PhotosDashboard(props: PhotosDashboardProps) {
           }
           setDeck(freshDeck);
           setFrameIdx(0);
-          if (freshDeck.length > 1) {
-            preloadFrameImages(freshDeck[1]);
-          }
           if (manual) {
             setTimerResetTick(function (n) {
               return n + 1;
@@ -518,7 +513,6 @@ export function PhotosDashboard(props: PhotosDashboardProps) {
       schedulePrevClear();
     }
     setFrameIdx(nextIdx);
-    preloadFrameImages(curDeck[(nextIdx + 1) % curDeck.length]);
 
     if (manual) {
       setTimerResetTick(function (n) {

@@ -78,6 +78,69 @@ export interface ParticleScene {
   flashAlpha: number;
   nextFlashIn: number;
   rand: () => number;
+  cloudSprite: HTMLCanvasElement | null;
+  cloudTintKey: string;
+  fogSprite: HTMLCanvasElement | null;
+  snowSprite: HTMLCanvasElement | null;
+}
+
+function makeRadialSprite(
+  size: number,
+  innerRatio: number,
+  stops: Array<[number, string]>
+): HTMLCanvasElement | null {
+  if (typeof document === 'undefined') return null;
+  var c = document.createElement('canvas');
+  c.width = size;
+  c.height = size;
+  var sctx = c.getContext('2d');
+  if (!sctx) return null;
+  var half = size * 0.5;
+  var g = sctx.createRadialGradient(half, half, half * innerRatio, half, half, half);
+  for (var i = 0; i < stops.length; i++) {
+    g.addColorStop(stops[i][0], stops[i][1]);
+  }
+  sctx.fillStyle = g;
+  sctx.fillRect(0, 0, size, size);
+  return c;
+}
+
+function getCloudSprite(scene: ParticleScene, tint: [number, number, number]): HTMLCanvasElement | null {
+  var r = Math.round(tint[0]);
+  var g = Math.round(tint[1]);
+  var b = Math.round(tint[2]);
+  var key = String(r) + ',' + String(g) + ',' + String(b);
+  if (scene.cloudSprite && scene.cloudTintKey === key) {
+    return scene.cloudSprite;
+  }
+  scene.cloudTintKey = key;
+  scene.cloudSprite = makeRadialSprite(64, 0.1, [
+    [0, 'rgba(' + key + ',1)'],
+    [0.55, 'rgba(' + key + ',0.48)'],
+    [1, 'rgba(' + key + ',0)'],
+  ]);
+  return scene.cloudSprite;
+}
+
+function getFogSprite(scene: ParticleScene): HTMLCanvasElement | null {
+  if (!scene.fogSprite) {
+    scene.fogSprite = makeRadialSprite(64, 0.1, [
+      [0, 'rgba(218,230,242,1)'],
+      [0.6, 'rgba(205,220,235,0.42)'],
+      [1, 'rgba(205,220,235,0)'],
+    ]);
+  }
+  return scene.fogSprite;
+}
+
+function getSnowSprite(scene: ParticleScene): HTMLCanvasElement | null {
+  if (!scene.snowSprite) {
+    scene.snowSprite = makeRadialSprite(16, 0, [
+      [0, 'rgba(255,255,255,1)'],
+      [1, 'rgba(224,242,255,0)'],
+    ]);
+  }
+  return scene.snowSprite;
 }
 
 function seededRand(seed: number): () => number {
@@ -182,6 +245,10 @@ export function createParticleScene(): ParticleScene {
     flashAlpha: 0,
     nextFlashIn: 7 + rand() * 9,
     rand: rand,
+    cloudSprite: null,
+    cloudTintKey: '',
+    fogSprite: null,
+    snowSprite: null,
   };
 }
 
@@ -249,14 +316,12 @@ function drawSun(
   ctx.translate(x, y);
   ctx.rotate(elapsed * 0.06);
   var rayCount = 10;
+  var stepAngle = (Math.PI * 2) / rayCount;
+  var rayGrad = ctx.createLinearGradient(0, 0, radius * 4.6, 0);
+  rayGrad.addColorStop(0, rgbString(glowRGB, 0.24 * visibility));
+  rayGrad.addColorStop(1, rgbString(glowRGB, 0));
+  ctx.fillStyle = rayGrad;
   for (var i = 0; i < rayCount; i++) {
-    var angle = (i / rayCount) * Math.PI * 2;
-    ctx.save();
-    ctx.rotate(angle);
-    var rayGrad = ctx.createLinearGradient(0, 0, radius * 4.6, 0);
-    rayGrad.addColorStop(0, rgbString(glowRGB, 0.24 * visibility));
-    rayGrad.addColorStop(1, rgbString(glowRGB, 0));
-    ctx.fillStyle = rayGrad;
     ctx.beginPath();
     ctx.moveTo(0, -radius * 0.22);
     ctx.lineTo(radius * 4.6, -radius * 0.65);
@@ -264,7 +329,7 @@ function drawSun(
     ctx.lineTo(0, radius * 0.22);
     ctx.closePath();
     ctx.fill();
-    ctx.restore();
+    ctx.rotate(stepAngle);
   }
   ctx.restore();
 
@@ -306,6 +371,9 @@ export function renderAtmosphereFrame(
 
   // 2. Twinkling starfield + occasional shooting star (night / dusk)
   if (sky.starAlpha > 0.03) {
+    ctx.fillStyle = '#ebf5ff';
+    ctx.strokeStyle = '#ebf5ff';
+    ctx.lineWidth = 0.7;
     for (var i = 0; i < scene.stars.length; i++) {
       var st = scene.stars[i];
       var twinkle = 0.45 + 0.55 * Math.sin(elapsed * st.speed + st.phase);
@@ -314,7 +382,7 @@ export function renderAtmosphereFrame(
 
       var sx = st.x * width;
       var sy = st.y * height;
-      ctx.fillStyle = 'rgba(235,245,255,' + a.toFixed(3) + ')';
+      ctx.globalAlpha = a;
       ctx.beginPath();
       ctx.arc(sx, sy, st.r, 0, Math.PI * 2);
       ctx.fill();
@@ -322,8 +390,7 @@ export function renderAtmosphereFrame(
       // Subtle 4-point glint on the brightest stars
       if (st.sparkle && a > 0.45) {
         var glintLen = st.r * 3.1 * twinkle;
-        ctx.strokeStyle = 'rgba(235,245,255,' + (a * 0.45).toFixed(3) + ')';
-        ctx.lineWidth = 0.7;
+        ctx.globalAlpha = a * 0.45;
         ctx.beginPath();
         ctx.moveTo(sx - glintLen, sy);
         ctx.lineTo(sx + glintLen, sy);
@@ -332,6 +399,7 @@ export function renderAtmosphereFrame(
         ctx.stroke();
       }
     }
+    ctx.globalAlpha = 1;
 
     // Occasional gentle shooting star on clear/partly cloudy nights
     if (!isNightQuiet && sky.starAlpha > 0.35 && (weatherKind === 'clear' || weatherKind === 'partly-cloudy')) {
@@ -425,6 +493,7 @@ export function renderAtmosphereFrame(
   var effectiveCloudFactor = Math.max(cloudCover / 100, weatherCloudFloor);
   var visibleClouds = Math.max(3, Math.round(scene.clouds.length * effectiveCloudFactor));
 
+  var cloudSprite = getCloudSprite(scene, sky.cloudTint);
   for (var c = 0; c < visibleClouds; c++) {
     var cl = scene.clouds[c];
     cl.x += cl.speed * windFactor * dt;
@@ -436,27 +505,19 @@ export function renderAtmosphereFrame(
     var baseCy = (weatherKind === 'fog' ? cl.y + 0.18 : cl.y) * height;
     var cAlpha = sky.cloudAlpha * cl.alpha * (0.55 + 0.45 * effectiveCloudFactor);
 
-    for (var l = 0; l < cl.lobes.length; l++) {
-      var lobe = cl.lobes[l];
-      var lx = baseCx + lobe.ox * width * cl.scale;
-      var ly = baseCy + lobe.oy * height * cl.scale;
-      var rx = lobe.rx * width * cl.scale;
-      var ry = lobe.ry * height * cl.scale;
-
-      ctx.save();
-      ctx.translate(lx, ly);
-      ctx.scale(1, ry / rx);
-      var cGrad = ctx.createRadialGradient(0, 0, rx * 0.1, 0, 0, rx);
-      cGrad.addColorStop(0, rgbString(sky.cloudTint, cAlpha));
-      cGrad.addColorStop(0.55, rgbString(sky.cloudTint, cAlpha * 0.48));
-      cGrad.addColorStop(1, rgbString(sky.cloudTint, 0));
-      ctx.fillStyle = cGrad;
-      ctx.beginPath();
-      ctx.arc(0, 0, rx, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
+    if (cloudSprite) {
+      ctx.globalAlpha = cAlpha;
+      for (var l = 0; l < cl.lobes.length; l++) {
+        var lobe = cl.lobes[l];
+        var lx = baseCx + lobe.ox * width * cl.scale;
+        var ly = baseCy + lobe.oy * height * cl.scale;
+        var rx = lobe.rx * width * cl.scale;
+        var ry = lobe.ry * height * cl.scale;
+        ctx.drawImage(cloudSprite, lx - rx, ly - ry, rx * 2, ry * 2);
+      }
     }
   }
+  ctx.globalAlpha = 1;
 
   // 5. Flowing wind ribbons / atmospheric breeze wisps
   var windCount =
@@ -495,29 +556,23 @@ export function renderAtmosphereFrame(
 
   // 6. Rolling low-altitude mist banks for Fog
   if (weatherKind === 'fog') {
+    var fogSprite = getFogSprite(scene);
     for (var f = 0; f < scene.fogBands.length; f++) {
       var fb = scene.fogBands[f];
       fb.x += fb.speed * windFactor * dt;
       if (fb.x - fb.w * 0.5 > 1.15) {
         fb.x = -fb.w * 0.5 - 0.1;
       }
-      var fx = fb.x * width;
-      var fy = fb.y * height;
-      var frx = fb.w * width * 0.5;
-      var fry = fb.h * height;
-      ctx.save();
-      ctx.translate(fx, fy);
-      ctx.scale(1, fry / frx);
-      var fGrad = ctx.createRadialGradient(0, 0, frx * 0.1, 0, 0, frx);
-      fGrad.addColorStop(0, 'rgba(218,230,242,' + fb.alpha.toFixed(3) + ')');
-      fGrad.addColorStop(0.6, 'rgba(205,220,235,' + (fb.alpha * 0.42).toFixed(3) + ')');
-      fGrad.addColorStop(1, 'rgba(205,220,235,0)');
-      ctx.fillStyle = fGrad;
-      ctx.beginPath();
-      ctx.arc(0, 0, frx, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
+      if (fogSprite) {
+        var fx = fb.x * width;
+        var fy = fb.y * height;
+        var frx = fb.w * width * 0.5;
+        var fry = fb.h * height;
+        ctx.globalAlpha = fb.alpha;
+        ctx.drawImage(fogSprite, fx - frx, fy - fry, frx * 2, fry * 2);
+      }
     }
+    ctx.globalAlpha = 1;
   }
 
   // 7. Precipitation: Rain / Drizzle / Storm / Snow
@@ -538,19 +593,31 @@ export function renderAtmosphereFrame(
       if (d.x < -0.06) {
         d.x += 1.12;
       }
+    }
 
-      var x1 = d.x * width;
-      var y1 = d.y * height;
-      var dy = d.len * height;
-      var dx = -dy * slant * 1.15;
-      ctx.lineWidth = weatherKind === 'drizzle' ? 0.9 : 0.85 + d.depth * 0.9;
-      ctx.strokeStyle =
-        sky.isNight < 0.35
-          ? 'rgba(56,92,138,' + (d.alpha * 0.72).toFixed(3) + ')'
-          : 'rgba(214,234,255,' + d.alpha.toFixed(3) + ')';
+    // Batch drops into 3 depth buckets (3 stroke calls instead of up to 105)
+    var isDayRain = sky.isNight < 0.35;
+    var bucketDepths = [0.17, 0.5, 0.83];
+    for (var b = 0; b < 3; b++) {
+      var lo = b / 3;
+      var hi = (b + 1) / 3;
+      var repDepth = bucketDepths[b];
+      var repAlpha = 0.24 + repDepth * 0.44;
+      ctx.lineWidth = weatherKind === 'drizzle' ? 0.9 : 0.85 + repDepth * 0.9;
+      ctx.strokeStyle = isDayRain
+        ? 'rgba(56,92,138,' + (repAlpha * 0.72).toFixed(3) + ')'
+        : 'rgba(214,234,255,' + repAlpha.toFixed(3) + ')';
       ctx.beginPath();
-      ctx.moveTo(x1, y1);
-      ctx.lineTo(x1 + dx, y1 + dy);
+      for (var rb = 0; rb < dropCount; rb++) {
+        var db = scene.drops[rb];
+        if (db.depth < lo || (b < 2 ? db.depth >= hi : false)) continue;
+        var x1 = db.x * width;
+        var y1 = db.y * height;
+        var dy = db.len * height;
+        var dx = -dy * slant * 1.15;
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x1 + dx, y1 + dy);
+      }
       ctx.stroke();
     }
 
@@ -568,6 +635,7 @@ export function renderAtmosphereFrame(
       }
     }
   } else if (weatherKind === 'snow') {
+    var snowSprite = getSnowSprite(scene);
     for (var s = 0; s < 78; s++) {
       var fl = scene.drops[s];
       fl.y += (0.09 + fl.depth * 0.12) * dt;
@@ -578,17 +646,15 @@ export function renderAtmosphereFrame(
       if (fl.x > 1.05) fl.x -= 1.1;
       if (fl.x < -0.05) fl.x += 1.1;
 
-      var fx2 = fl.x * width;
-      var fy2 = fl.y * height;
-      var fr = 1.2 + fl.depth * 2.1;
-      var flGrad = ctx.createRadialGradient(fx2, fy2, 0, fx2, fy2, fr * 1.6);
-      flGrad.addColorStop(0, 'rgba(255,255,255,' + Math.min(0.95, fl.alpha * 1.35).toFixed(3) + ')');
-      flGrad.addColorStop(1, 'rgba(224,242,255,0)');
-      ctx.fillStyle = flGrad;
-      ctx.beginPath();
-      ctx.arc(fx2, fy2, fr * 1.6, 0, Math.PI * 2);
-      ctx.fill();
+      if (snowSprite) {
+        var fx2 = fl.x * width;
+        var fy2 = fl.y * height;
+        var sr = (1.2 + fl.depth * 2.1) * 1.6;
+        ctx.globalAlpha = Math.min(0.95, fl.alpha * 1.35);
+        ctx.drawImage(snowSprite, fx2 - sr, fy2 - sr, sr * 2, sr * 2);
+      }
     }
+    ctx.globalAlpha = 1;
   }
 
   // 8. Subtle bottom scrim only at night/twilight so daytime stays bright & airy

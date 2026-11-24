@@ -71,6 +71,25 @@ function buildMoonLitPath(moonPhase: number, r: number): string {
   );
 }
 
+function skyCloseEnough(a: SkyState, b: SkyState): boolean {
+  return (
+    Math.abs(a.top[0] - b.top[0]) < 0.25 &&
+    Math.abs(a.top[1] - b.top[1]) < 0.25 &&
+    Math.abs(a.top[2] - b.top[2]) < 0.25 &&
+    Math.abs(a.mid[0] - b.mid[0]) < 0.25 &&
+    Math.abs(a.mid[1] - b.mid[1]) < 0.25 &&
+    Math.abs(a.mid[2] - b.mid[2]) < 0.25 &&
+    Math.abs(a.bottom[0] - b.bottom[0]) < 0.25 &&
+    Math.abs(a.bottom[1] - b.bottom[1]) < 0.25 &&
+    Math.abs(a.bottom[2] - b.bottom[2]) < 0.25 &&
+    Math.abs(a.starAlpha - b.starAlpha) < 0.002 &&
+    Math.abs(a.cloudAlpha - b.cloudAlpha) < 0.002 &&
+    Math.abs(a.isNight - b.isNight) < 0.002 &&
+    Math.abs(a.orbX - b.orbX) < 0.001 &&
+    Math.abs(a.orbY - b.orbY) < 0.001
+  );
+}
+
 export function AtmosphereCanvas(props: AtmosphereCanvasProps) {
   var canvasRef = useRef<HTMLCanvasElement>(null);
   var sceneRef = useRef<ReturnType<typeof createParticleScene> | null>(null);
@@ -141,13 +160,20 @@ export function AtmosphereCanvas(props: AtmosphereCanvasProps) {
       }
 
       var p0 = propsRef.current;
-      var currentSky: SkyState = computeTargetSky(
+      var targetSky: SkyState = computeTargetSky(
         p0.minutesSinceMidnight,
         p0.sunriseMinutes,
         p0.sunsetMinutes,
         p0.weatherKind,
         p0.cloudCover
       );
+      var currentSky: SkyState = targetSky;
+      var skySettled = true;
+      var lastMin = p0.minutesSinceMidnight;
+      var lastSunrise = p0.sunriseMinutes;
+      var lastSunset = p0.sunsetMinutes;
+      var lastKind = p0.weatherKind;
+      var lastCloud = p0.cloudCover;
 
       syncCanvasSize();
       window.addEventListener('resize', syncCanvasSize);
@@ -169,16 +195,36 @@ export function AtmosphereCanvas(props: AtmosphereCanvasProps) {
         lastRenderTime = now;
         var elapsed = (now - startTime) / 1000;
 
-        var targetSky = computeTargetSky(
-          p.minutesSinceMidnight,
-          p.sunriseMinutes,
-          p.sunsetMinutes,
-          p.weatherKind,
-          p.cloudCover
-        );
+        if (
+          p.minutesSinceMidnight !== lastMin ||
+          p.sunriseMinutes !== lastSunrise ||
+          p.sunsetMinutes !== lastSunset ||
+          p.weatherKind !== lastKind ||
+          p.cloudCover !== lastCloud
+        ) {
+          lastMin = p.minutesSinceMidnight;
+          lastSunrise = p.sunriseMinutes;
+          lastSunset = p.sunsetMinutes;
+          lastKind = p.weatherKind;
+          lastCloud = p.cloudCover;
+          targetSky = computeTargetSky(
+            p.minutesSinceMidnight,
+            p.sunriseMinutes,
+            p.sunsetMinutes,
+            p.weatherKind,
+            p.cloudCover
+          );
+          skySettled = false;
+        }
 
-        // Smooth atmospheric crossfade (~2.5s settle time)
-        currentSky = lerpSkyState(currentSky, targetSky, Math.min(1, dt * 1.4));
+        // Smooth atmospheric crossfade (~2.5s settle time), then idle without allocations
+        if (!skySettled) {
+          currentSky = lerpSkyState(currentSky, targetSky, Math.min(1, dt * 1.4));
+          if (skyCloseEnough(currentSky, targetSky)) {
+            currentSky = targetSky;
+            skySettled = true;
+          }
+        }
 
         if (canvas && ctx) {
           renderAtmosphereFrame(
@@ -233,72 +279,75 @@ export function AtmosphereCanvas(props: AtmosphereCanvasProps) {
         ? 0.85
         : 0;
   var moonOpacity = skyNow.isNight > 0.35 ? skyNow.isNight * moonClear : 0;
-  var illum = 0.5 * (1 - Math.cos(props.moonPhase * Math.PI * 2));
-  var isFull = Math.abs(props.moonPhase - 0.5) < 0.015;
-  var isNew = props.moonPhase < 0.015 || props.moonPhase > 0.985;
-  var litPath = buildMoonLitPath(props.moonPhase, 44);
+  var showMoon = moonOpacity > 0.01;
+  var illum = showMoon ? 0.5 * (1 - Math.cos(props.moonPhase * Math.PI * 2)) : 0;
+  var isFull = showMoon && Math.abs(props.moonPhase - 0.5) < 0.015;
+  var isNew = showMoon && (props.moonPhase < 0.015 || props.moonPhase > 0.985);
+  var litPath = showMoon && !isFull && !isNew ? buildMoonLitPath(props.moonPhase, 44) : '';
 
   return (
     <div class="atmosphere-layer" aria-hidden="true">
       <canvas ref={canvasRef} class="atmosphere-canvas" />
-      <div
-        class="celestial-moon"
-        style={{
-          left: (skyNow.orbX * 100).toFixed(2) + '%',
-          top: (skyNow.orbY * 100).toFixed(2) + '%',
-          opacity: moonOpacity.toFixed(3),
-        }}
-      >
-        <svg viewBox="-50 -50 100 100" class="celestial-moon-svg">
-          <defs>
-            <radialGradient id="glance-moon-lit" cx="38%" cy="34%" r="70%">
-              <stop offset="0%" stop-color="#ffffff" />
-              <stop offset="65%" stop-color="#eaf2ff" />
-              <stop offset="100%" stop-color="#c4d9f7" />
-            </radialGradient>
-            <clipPath id="glance-moon-lit-clip">
-              {isFull ? (
-                <circle cx="0" cy="0" r="44" />
-              ) : isNew ? (
-                <circle cx="0" cy="0" r="0" />
-              ) : (
-                <path d={litPath} />
-              )}
-            </clipPath>
-          </defs>
+      {showMoon ? (
+        <div
+          class="celestial-moon"
+          style={{
+            left: (skyNow.orbX * 100).toFixed(2) + '%',
+            top: (skyNow.orbY * 100).toFixed(2) + '%',
+            opacity: moonOpacity.toFixed(3),
+          }}
+        >
+          <svg viewBox="-50 -50 100 100" class="celestial-moon-svg">
+            <defs>
+              <radialGradient id="glance-moon-lit" cx="38%" cy="34%" r="70%">
+                <stop offset="0%" stop-color="#ffffff" />
+                <stop offset="65%" stop-color="#eaf2ff" />
+                <stop offset="100%" stop-color="#c4d9f7" />
+              </radialGradient>
+              <clipPath id="glance-moon-lit-clip">
+                {isFull ? (
+                  <circle cx="0" cy="0" r="44" />
+                ) : isNew ? (
+                  <circle cx="0" cy="0" r="0" />
+                ) : (
+                  <path d={litPath} />
+                )}
+              </clipPath>
+            </defs>
 
-          {/* Dark side with subtle earthshine */}
-          <circle cx="0" cy="0" r="44" fill="rgba(12, 22, 48, 0.82)" />
-          <circle cx="0" cy="0" r="44" fill="rgba(170, 200, 245, 0.12)" />
+            {/* Dark side with subtle earthshine */}
+            <circle cx="0" cy="0" r="44" fill="rgba(12, 22, 48, 0.82)" />
+            <circle cx="0" cy="0" r="44" fill="rgba(170, 200, 245, 0.12)" />
 
-          {/* Illuminated phase */}
-          {isFull ? (
-            <circle cx="0" cy="0" r="44" fill="url(#glance-moon-lit)" />
-          ) : isNew ? null : (
-            <path d={litPath} fill="url(#glance-moon-lit)" />
-          )}
+            {/* Illuminated phase */}
+            {isFull ? (
+              <circle cx="0" cy="0" r="44" fill="url(#glance-moon-lit)" />
+            ) : isNew ? null : (
+              <path d={litPath} fill="url(#glance-moon-lit)" />
+            )}
 
-          {/* Subtle lunar maria clipped strictly to illuminated region */}
-          {illum > 0.1 ? (
-            <g clip-path="url(#glance-moon-lit-clip)" fill="rgba(140, 166, 206, 0.22)">
-              <circle cx="-11" cy="-8" r="11" />
-              <circle cx="10" cy="7" r="9.5" />
-              <circle cx="4" cy="-16" r="6.5" />
-              <circle cx="-4" cy="15" r="7" />
-            </g>
-          ) : null}
+            {/* Subtle lunar maria clipped strictly to illuminated region */}
+            {illum > 0.1 ? (
+              <g clip-path="url(#glance-moon-lit-clip)" fill="rgba(140, 166, 206, 0.22)">
+                <circle cx="-11" cy="-8" r="11" />
+                <circle cx="10" cy="7" r="9.5" />
+                <circle cx="4" cy="-16" r="6.5" />
+                <circle cx="-4" cy="15" r="7" />
+              </g>
+            ) : null}
 
-          {/* Crisp thin rim */}
-          <circle
-            cx="0"
-            cy="0"
-            r="43.6"
-            fill="none"
-            stroke="rgba(220, 236, 255, 0.28)"
-            stroke-width="0.9"
-          />
-        </svg>
-      </div>
+            {/* Crisp thin rim */}
+            <circle
+              cx="0"
+              cy="0"
+              r="43.6"
+              fill="none"
+              stroke="rgba(220, 236, 255, 0.28)"
+              stroke-width="0.9"
+            />
+          </svg>
+        </div>
+      ) : null}
     </div>
   );
 }

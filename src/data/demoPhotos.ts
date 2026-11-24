@@ -40,12 +40,16 @@ var DEMO_PHOTOS: PhotoItem[] = [
   demoPhoto('l29', 1400, 934, 'Oct 18, 2026', 'Dolomites, Italy'),
 ];
 
-export function isPhotosDemoMode(): boolean {
+var PHOTOS_DEMO_MODE = (function () {
   try {
     return /[?&]demo=photos(&|$)/i.test(window.location.search || '');
   } catch (_err) {
     return false;
   }
+})();
+
+export function isPhotosDemoMode(): boolean {
+  return PHOTOS_DEMO_MODE;
 }
 
 export function getDemoPhotosResponse(): PhotosResponse {

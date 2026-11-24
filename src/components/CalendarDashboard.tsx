@@ -152,12 +152,16 @@ class MonthPanel extends Component<MonthPanelProps> {
 var HIDDEN_CALS_STORAGE_KEY = 'glance:hiddenCalendars:v1';
 
 // Demo mode (?demo=calendar): the API serves generated sample calendars
-function isCalendarDemoMode(): boolean {
+var CALENDAR_DEMO_MODE = (function () {
   try {
     return /[?&]demo=calendar(&|$)/i.test(window.location.search || '');
   } catch (_err) {
     return false;
   }
+})();
+
+function isCalendarDemoMode(): boolean {
+  return CALENDAR_DEMO_MODE;
 }
 
 function readHiddenCalendars(): { [id: string]: boolean } {
@@ -244,7 +248,6 @@ export function CalendarDashboard(props: CalendarDashboardProps) {
     x: number;
     y: number;
     t: number;
-    width: number;
     axis: '' | 'x' | 'y';
     dx: number;
   } | null>(null);
@@ -513,12 +516,11 @@ export function CalendarDashboard(props: CalendarDashboardProps) {
   }
 
   function dragStart(x: number, y: number) {
-    var viewport = weeksViewportRef.current;
-    if (!viewport || isAnimatingRef.current) {
+    if (!weeksViewportRef.current || isAnimatingRef.current) {
       dragRef.current = null;
       return;
     }
-    dragRef.current = { x: x, y: y, t: Date.now(), width: viewport.offsetWidth, axis: '', dx: 0 };
+    dragRef.current = { x: x, y: y, t: Date.now(), axis: '', dx: 0 };
   }
 
   // Returns true once the gesture is a horizontal month drag (caller then
@@ -554,7 +556,7 @@ export function CalendarDashboard(props: CalendarDashboardProps) {
   }
 
   function shiftMonth(delta: number, fromStrip?: boolean) {
-    var d = new Date(viewYear, viewMonth - 1 + delta, 1);
+    var d = new Date(viewYearRef.current, viewMonthRef.current - 1 + delta, 1);
     var ny = d.getFullYear();
     var nm = d.getMonth() + 1;
     if (ny < 1900 || ny > 2100) return;
@@ -562,8 +564,9 @@ export function CalendarDashboard(props: CalendarDashboardProps) {
     setSlideDir(fromStrip ? '' : delta > 0 ? 'next' : 'prev');
     setViewYear(ny);
     setViewMonth(nm);
-    if (ny === today.year && nm === today.month) {
-      setSelectedDateKey(today.dateKey);
+    var curToday = prevTodayRef.current;
+    if (ny === curToday.year && nm === curToday.month) {
+      setSelectedDateKey(curToday.dateKey);
     } else {
       setSelectedDateKey(toDateKey(ny, nm, 1));
     }
@@ -598,13 +601,13 @@ export function CalendarDashboard(props: CalendarDashboardProps) {
     typeof props.idleResetSeconds === 'number' && props.idleResetSeconds >= 5
       ? props.idleResetSeconds
       : 60;
-  var atTodayNow =
+  var isAtToday =
     viewYear === today.year &&
     viewMonth === today.month &&
     selectedDateKey === today.dateKey;
   useEffect(
     function () {
-      if (atTodayNow) {
+      if (isAtToday) {
         return;
       }
       var id = window.setTimeout(function () {
@@ -623,7 +626,7 @@ export function CalendarDashboard(props: CalendarDashboardProps) {
         window.clearTimeout(id);
       };
     },
-    [atTodayNow, viewYear, viewMonth, selectedDateKey, idleResetSec, props.activityTick]
+    [isAtToday, viewYear, viewMonth, selectedDateKey, idleResetSec, props.activityTick]
   );
 
   function jumpToTrip(trip: CalendarTrip) {
@@ -832,10 +835,6 @@ export function CalendarDashboard(props: CalendarDashboardProps) {
     }
   }
 
-  var isAtToday =
-    viewYear === today.year &&
-    viewMonth === today.month &&
-    selectedDateKey === today.dateKey;
   var calendars = data && data.calendars ? data.calendars : [];
   var isConfigured = data ? data.configured : true;
   var multiCal = calendars.length > 1;
