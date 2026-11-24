@@ -88,7 +88,7 @@ type newsCacheEntry struct {
 // NewsHandler serves GET /api/news on Vercel (and locally via cmd/devserver).
 func NewsHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
-		writeNewsError(w, http.StatusMethodNotAllowed, "method not allowed")
+		auth.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 	if !auth.RequireAuth(w, r) {
@@ -97,7 +97,7 @@ func NewsHandler(w http.ResponseWriter, r *http.Request) {
 
 	cfg, _, _, err := config.LoadNormalizedConfig()
 	if err != nil {
-		writeNewsError(w, http.StatusInternalServerError, fmt.Sprintf("invalid config: %v", err))
+		auth.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("invalid config: %v", err))
 		return
 	}
 	tzName := "America/Los_Angeles"
@@ -213,11 +213,12 @@ func cachedNews(key string, ttl time.Duration, force bool, fetch func() (interfa
 	newsCacheMu.Lock()
 	defer newsCacheMu.Unlock()
 	if err != nil {
-		entry.failedAt = time.Now()
-		entry.lastErr = err
-		newsCache[key] = entry
-		if hasValue {
-			return entry.value, nil
+		cur := newsCache[key]
+		cur.failedAt = time.Now()
+		cur.lastErr = err
+		newsCache[key] = cur
+		if cur.value != nil {
+			return cur.value, nil
 		}
 		return nil, err
 	}
@@ -324,8 +325,11 @@ func parseNewsFeed(body []byte) (parsedNewsFeed, error) {
 			if err := dec.DecodeElement(&e, &start); err != nil {
 				continue
 			}
-			if item, ok := newsItemFromEntry(e); ok && len(out.items) < newsItemsPerFeed {
+			if item, ok := newsItemFromEntry(e); ok {
 				out.items = append(out.items, item)
+				if sawRoot && len(out.items) >= newsItemsPerFeed {
+					return out, nil
+				}
 			}
 		}
 	}
@@ -365,15 +369,16 @@ func newsItemFromEntry(e feedEntry) (NewsItem, bool) {
 	}
 
 	summary := cleanFeedText(firstNonEmpty(e.Description, e.Summary))
-	if utf8.RuneCountInString(summary) < newsMinSummary || strings.HasPrefix(summary, title) {
+	summaryRunes := utf8.RuneCountInString(summary)
+	if summaryRunes < newsMinSummary || strings.HasPrefix(summary, title) {
 		summary = ""
-	} else if utf8.RuneCountInString(summary) > newsSummaryRunes {
+	} else if summaryRunes > newsSummaryRunes {
 		summary = string([]rune(summary)[:newsSummaryRunes]) + "…"
 	}
 
 	item := NewsItem{Title: title, URL: link, Source: source, Summary: summary}
 	if t, ok := parseFeedTime(firstNonEmpty(e.PubDate, e.Published, e.Date, e.Updated)); ok {
-		item.PublishedMs = t.UnixNano() / int64(time.Millisecond)
+		item.PublishedMs = t.UnixMilli()
 	}
 	return item, true
 }
@@ -424,11 +429,4 @@ func newsDomain(raw string) string {
 		return ""
 	}
 	return strings.TrimPrefix(strings.ToLower(u.Host), "www.")
-}
-
-func writeNewsError(w http.ResponseWriter, status int, message string) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-store")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(map[string]string{"error": message})
 }

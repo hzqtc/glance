@@ -95,7 +95,7 @@ type PhotoLocationsResponse struct {
 // PhotosHandler serves GET /api/photos on Vercel (and locally via cmd/devserver).
 func PhotosHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
-		writePhotosError(w, http.StatusMethodNotAllowed, "method not allowed")
+		auth.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 	if !auth.RequireAuth(w, r) {
@@ -130,21 +130,29 @@ func PhotosHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			for _, item := range items {
+				if len(allPhotos) >= maxPhotosPerRequest {
+					break
+				}
 				if seenURLs[item.ID] {
 					continue
 				}
 				seenURLs[item.ID] = true
-				if loc, ok := getCachedPhotoLocation(item.baseURL); ok && loc != "" {
-					item.Location = loc
-				}
 				allPhotos = append(allPhotos, item)
-				if len(allPhotos) >= maxPhotosPerRequest {
-					break
-				}
 			}
 		}(idx, albumURL)
 	}
 	wg.Wait()
+
+	if len(allPhotos) > 0 {
+		now := time.Now()
+		photosCacheMu.Lock()
+		for i := range allPhotos {
+			if entry, ok := photoLocationCache[allPhotos[i].baseURL]; ok && entry.location != "" && now.Sub(entry.fetchedAt) < photoLocationCacheTTL {
+				allPhotos[i].Location = entry.location
+			}
+		}
+		photosCacheMu.Unlock()
+	}
 
 	if allPhotos == nil {
 		allPhotos = []PhotoItem{}
@@ -636,18 +644,18 @@ func fetchPhotoLocation(baseURL string) string {
 	return loc
 }
 
+var exifSignatures = []struct {
+	magic []byte
+	order binary.ByteOrder
+}{
+	{magic: []byte{'E', 'x', 'i', 'f', 0, 0, 'I', 'I', 0x2a, 0x00}, order: binary.LittleEndian},
+	{magic: []byte{'E', 'x', 'i', 'f', 0, 0, 'M', 'M', 0x00, 0x2a}, order: binary.BigEndian},
+}
+
 // extractEXIFGPS scans a JPEG or HEIC header prefix for an EXIF TIFF payload
 // containing a valid GPS IFD (tag 0x8825) and returns decimal (lat, lon).
 func extractEXIFGPS(data []byte) (float64, float64, bool) {
-	signatures := []struct {
-		magic []byte
-		order binary.ByteOrder
-	}{
-		{magic: []byte{'E', 'x', 'i', 'f', 0, 0, 'I', 'I', 0x2a, 0x00}, order: binary.LittleEndian},
-		{magic: []byte{'E', 'x', 'i', 'f', 0, 0, 'M', 'M', 0x00, 0x2a}, order: binary.BigEndian},
-	}
-
-	for _, sig := range signatures {
+	for _, sig := range exifSignatures {
 		offset := 0
 		for {
 			rel := bytes.Index(data[offset:], sig.magic)
@@ -874,8 +882,6 @@ func formatReverseGeocodeLabel(p bigDataCloudReverseResp) string {
 
 func cleanCountryName(countryCode, rawName string) string {
 	switch countryCode {
-	case "US":
-		return "US"
 	case "GB":
 		return "UK"
 	case "KR":
@@ -946,11 +952,8 @@ func containsVideoMetadata(node any, depth int) bool {
 }
 
 func jsonInt(v any) (int, bool) {
-	f, ok := v.(float64)
-	if !ok || math.IsNaN(f) || math.IsInf(f, 0) || f != math.Trunc(f) {
-		return 0, false
-	}
-	return int(f), true
+	n, ok := jsonInt64(v)
+	return int(n), ok
 }
 
 func jsonInt64(v any) (int64, bool) {
@@ -963,13 +966,4 @@ func jsonInt64(v any) (int64, bool) {
 
 func isASCIIWhitespace(b byte) bool {
 	return b == ' ' || b == '\t' || b == '\n' || b == '\r'
-}
-
-func writePhotosError(w http.ResponseWriter, status int, message string) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.Header().Set("Cache-Control", "private, no-store")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(map[string]string{
-		"error": message,
-	})
 }

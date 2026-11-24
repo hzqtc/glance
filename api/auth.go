@@ -30,18 +30,12 @@ func AuthHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		_ = json.NewEncoder(w).Encode(map[string]string{
-			"error": "method not allowed",
-		})
+		auth.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
 	if auth.IsMisconfigured() {
-		w.WriteHeader(http.StatusServiceUnavailable)
-		_ = json.NewEncoder(w).Encode(map[string]string{
-			"error": auth.MisconfiguredMessage(),
-		})
+		auth.WriteJSONError(w, http.StatusServiceUnavailable, auth.MisconfiguredMessage())
 		return
 	}
 
@@ -60,19 +54,13 @@ func AuthHandler(w http.ResponseWriter, r *http.Request) {
 			secs = 1
 		}
 		w.Header().Set("Retry-After", strconv.Itoa(secs))
-		w.WriteHeader(http.StatusTooManyRequests)
-		_ = json.NewEncoder(w).Encode(map[string]string{
-			"error": "Too many incorrect attempts. Try again in a few minutes.",
-		})
+		auth.WriteJSONError(w, http.StatusTooManyRequests, "Too many incorrect attempts. Try again in a few minutes.")
 		return
 	}
 
 	var payload authVerifyRequest
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&payload); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(map[string]string{
-			"error": "invalid request body",
-		})
+		auth.WriteJSONError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
@@ -83,25 +71,17 @@ func AuthHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		locked := auth.RecordFailure(r)
 		if locked {
-			w.WriteHeader(http.StatusTooManyRequests)
-			_ = json.NewEncoder(w).Encode(map[string]string{
-				"error": "Too many incorrect attempts. Try again in 5 minutes.",
-			})
+			w.Header().Set("Retry-After", strconv.Itoa(5*60))
+			auth.WriteJSONError(w, http.StatusTooManyRequests, "Too many incorrect attempts. Try again in 5 minutes.")
 			return
 		}
-		w.WriteHeader(http.StatusUnauthorized)
-		_ = json.NewEncoder(w).Encode(map[string]string{
-			"error": "Incorrect PIN",
-		})
+		auth.WriteJSONError(w, http.StatusUnauthorized, "Incorrect PIN")
 		return
 	}
 
 	auth.ClearFailures(r)
 	if !auth.SetSessionCookie(w, r) {
-		w.WriteHeader(http.StatusInternalServerError)
-		_ = json.NewEncoder(w).Encode(map[string]string{
-			"error": "failed to issue session",
-		})
+		auth.WriteJSONError(w, http.StatusInternalServerError, "failed to issue session")
 		return
 	}
 	w.WriteHeader(http.StatusOK)

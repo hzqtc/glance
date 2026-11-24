@@ -119,6 +119,9 @@ func setupSummaryTest(t *testing.T, m *summaryMocks) {
 	t.Cleanup(func() {
 		newsHTTPClient, articleHTTPClient, geminiHTTPClient = origNews, origArticle, origGemini
 		resetNewsCache()
+		summaryCacheMu.Lock()
+		summaryCache = map[string]summaryCacheEntry{}
+		summaryCacheMu.Unlock()
 	})
 	t.Setenv("GLANCE_PASSCODE", "")
 	t.Setenv("VERCEL", "")

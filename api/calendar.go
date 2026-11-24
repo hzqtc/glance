@@ -32,7 +32,7 @@ type icsCacheEntry struct {
 }
 
 type calendarSource struct {
-	ID       string `json:"id"`
+	ID       string `json:"-"`
 	Name     string `json:"name"`
 	Color    string `json:"color"`
 	URL      string `json:"url"`
@@ -99,7 +99,7 @@ var defaultCalendarPalette = []string{
 // CalendarHandler serves GET /api/calendar on Vercel (and locally via cmd/devserver).
 func CalendarHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
-		writeCalendarError(w, http.StatusMethodNotAllowed, "method not allowed")
+		auth.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 	if !auth.RequireAuth(w, r) {
@@ -108,7 +108,7 @@ func CalendarHandler(w http.ResponseWriter, r *http.Request) {
 
 	cfg, version, _, err := config.LoadNormalizedConfig()
 	if err != nil {
-		writeCalendarError(w, http.StatusInternalServerError, fmt.Sprintf("invalid config: %v", err))
+		auth.WriteJSONError(w, http.StatusInternalServerError, fmt.Sprintf("invalid config: %v", err))
 		return
 	}
 
@@ -161,9 +161,9 @@ func CalendarHandler(w http.ResponseWriter, r *http.Request) {
 		wg            sync.WaitGroup
 	)
 
-	for _, src := range sources {
+	for idx, src := range sources {
 		wg.Add(1)
-		go func(s calendarSource) {
+		go func(calIdx int, s calendarSource) {
 			defer wg.Done()
 			var (
 				parsed        []rawICSEvent
@@ -186,22 +186,18 @@ func CalendarHandler(w http.ResponseWriter, r *http.Request) {
 				calName = extractedName
 			}
 
-			winEvs := expandEventsForWindow(parsed, s.ID, calName, s.Color, winStart, winEnd, loc)
-			trips := extractUpcomingTrips(parsed, s.ID, calName, s.Color, nowLocal, loc)
+			overrides := buildRecurrenceOverrides(parsed)
+			winEvs := expandEventsForWindowWithOverrides(parsed, overrides, s.ID, calName, s.Color, winStart, winEnd, loc)
+			trips := extractUpcomingTripsWithOverrides(parsed, overrides, s.ID, calName, s.Color, nowLocal, loc)
 
 			mu.Lock()
 			allEvents = append(allEvents, winEvs...)
 			upcomingTrips = append(upcomingTrips, trips...)
 			if calName != s.Name {
-				for i := range calendars {
-					if calendars[i].ID == s.ID {
-						calendars[i].Name = calName
-						break
-					}
-				}
+				calendars[calIdx].Name = calName
 			}
 			mu.Unlock()
-		}(src)
+		}(idx, src)
 	}
 	wg.Wait()
 
@@ -282,8 +278,9 @@ func parseCalendarSourcesFromEnv() []calendarSource {
 	}
 
 	// Format 2: Comma-, space-, or newline-separated URLs (or single URL)
-	replacer := strings.NewReplacer("\r\n", "\n", ",", "\n", " ", "\n")
-	parts := strings.Split(replacer.Replace(raw), "\n")
+	parts := strings.FieldsFunc(raw, func(r rune) bool {
+		return r == ',' || r == ' ' || r == '\t' || r == '\n' || r == '\r'
+	})
 	idx := 0
 	for _, p := range parts {
 		u := normalizeCalendarURL(p)
@@ -412,7 +409,6 @@ type rawICSEvent struct {
 	End          time.Time
 	HasEnd       bool
 	Duration     time.Duration
-	HasDuration  bool
 	AllDay       bool
 	RRule        string
 	ExDates      map[int64]bool
@@ -422,21 +418,45 @@ type rawICSEvent struct {
 }
 
 func unfoldICSLines(raw string) []string {
-	normalized := strings.ReplaceAll(raw, "\r\n", "\n")
-	normalized = strings.ReplaceAll(normalized, "\r", "\n")
-	rawLines := strings.Split(normalized, "\n")
-	out := make([]string, 0, len(rawLines))
-	for _, line := range rawLines {
+	var out []string
+	var cur strings.Builder
+	hasCur := false
+
+	flush := func() {
+		if hasCur && cur.Len() > 0 {
+			out = append(out, cur.String())
+		}
+		cur.Reset()
+		hasCur = false
+	}
+
+	n := len(raw)
+	for i := 0; i < n; {
+		start := i
+		for i < n && raw[i] != '\n' && raw[i] != '\r' {
+			i++
+		}
+		line := raw[start:i]
+		if i < n {
+			if raw[i] == '\r' && i+1 < n && raw[i+1] == '\n' {
+				i += 2
+			} else {
+				i++
+			}
+		}
 		if len(line) > 0 && (line[0] == ' ' || line[0] == '\t') {
-			if len(out) > 0 {
-				out[len(out)-1] += line[1:]
+			if hasCur {
+				cur.WriteString(line[1:])
 			}
 			continue
 		}
+		flush()
 		if line != "" {
-			out = append(out, line)
+			cur.WriteString(line)
+			hasCur = true
 		}
 	}
+	flush()
 	return out
 }
 
@@ -478,16 +498,13 @@ func parseICSEventsFromLines(lines []string, defaultLoc *time.Location) []rawICS
 			continue
 		}
 		if upper == "BEGIN:VEVENT" {
-			cur = &rawICSEvent{
-				ExDates:   make(map[int64]bool),
-				ExDayKeys: make(map[string]bool),
-			}
+			cur = &rawICSEvent{}
 			continue
 		}
 		if upper == "END:VEVENT" {
 			if cur != nil && !cur.Start.IsZero() && !strings.EqualFold(cur.Status, "CANCELLED") {
 				if !cur.HasEnd {
-					if cur.HasDuration {
+					if cur.Duration != 0 {
 						cur.End = cur.Start.Add(cur.Duration)
 					} else if cur.AllDay {
 						cur.End = cur.Start.AddDate(0, 0, 1)
@@ -537,11 +554,14 @@ func parseICSEventsFromLines(lines []string, defaultLoc *time.Location) []rawICS
 		case "DURATION":
 			if d, ok := parseICSDuration(val); ok {
 				cur.Duration = d
-				cur.HasDuration = true
 			}
 		case "RRULE":
 			cur.RRule = strings.TrimSpace(val)
 		case "EXDATE":
+			if cur.ExDates == nil {
+				cur.ExDates = make(map[int64]bool)
+				cur.ExDayKeys = make(map[string]bool)
+			}
 			for _, part := range strings.Split(val, ",") {
 				if t, allDay, ok := parseICSDateTime(strings.TrimSpace(part), params, defaultLoc); ok {
 					cur.ExDates[t.UTC().Unix()] = true
@@ -563,6 +583,9 @@ func parseICSEventsFromLines(lines []string, defaultLoc *time.Location) []rawICS
 }
 
 func parseICSPropAndParams(propPart string) (string, map[string]string) {
+	if !strings.ContainsRune(propPart, ';') {
+		return strings.ToUpper(strings.TrimSpace(propPart)), nil
+	}
 	parts := strings.Split(propPart, ";")
 	name := strings.ToUpper(strings.TrimSpace(parts[0]))
 	params := make(map[string]string, len(parts)-1)
@@ -695,26 +718,39 @@ func parseICSDuration(s string) (time.Duration, bool) {
 	return total, total != 0
 }
 
+var (
+	tzLocationCache sync.Map
+	ianaTZPrefixes  = []string{"America/", "Europe/", "Asia/", "Pacific/", "Australia/", "Africa/", "Atlantic/"}
+)
+
 func loadTimezoneSafe(name string) *time.Location {
 	clean := strings.Trim(strings.TrimSpace(name), `"`)
 	if clean == "" {
 		return time.UTC
 	}
-	if mapped, ok := windowsTimezoneMap[strings.ToLower(clean)]; ok {
-		clean = mapped
+	if cached, ok := tzLocationCache.Load(clean); ok {
+		return cached.(*time.Location)
 	}
-	if loc, err := time.LoadLocation(clean); err == nil {
-		return loc
+	lookup := clean
+	if mapped, ok := windowsTimezoneMap[strings.ToLower(lookup)]; ok {
+		lookup = mapped
 	}
-	// Handle slash-prefixed or full-path TZIDs like "/freeassociation.sourceforge.net/America/Los_Angeles"
-	for _, prefix := range []string{"America/", "Europe/", "Asia/", "Pacific/", "Australia/", "Africa/", "Atlantic/"} {
-		if idx := strings.Index(clean, prefix); idx >= 0 {
-			if loc, err := time.LoadLocation(clean[idx:]); err == nil {
-				return loc
+	loc := time.UTC
+	if loaded, err := time.LoadLocation(lookup); err == nil {
+		loc = loaded
+	} else {
+		// Handle slash-prefixed or full-path TZIDs like "/freeassociation.sourceforge.net/America/Los_Angeles"
+		for _, prefix := range ianaTZPrefixes {
+			if idx := strings.Index(lookup, prefix); idx >= 0 {
+				if loaded, err := time.LoadLocation(lookup[idx:]); err == nil {
+					loc = loaded
+					break
+				}
 			}
 		}
 	}
-	return time.UTC
+	tzLocationCache.Store(clean, loc)
+	return loc
 }
 
 var windowsTimezoneMap = map[string]string{
@@ -735,15 +771,7 @@ var windowsTimezoneMap = map[string]string{
 	"coordinated universal time": "UTC",
 }
 
-// expandEventsForWindow expands single & recurring VEVENTs into CalendarEvent slices
-// intersecting [winStart, winEnd) in the display timezone.
-func expandEventsForWindow(
-	rawEvents []rawICSEvent,
-	calID, calName, color string,
-	winStart, winEnd time.Time,
-	loc *time.Location,
-) []CalendarEvent {
-	// Index RECURRENCE-ID overrides so recurring masters skip replaced dates
+func buildRecurrenceOverrides(rawEvents []rawICSEvent) map[string]map[string]bool {
 	overrides := make(map[string]map[string]bool)
 	for _, ev := range rawEvents {
 		if ev.RecurrenceID != nil && ev.UID != "" {
@@ -754,6 +782,27 @@ func expandEventsForWindow(
 			overrides[ev.UID][strconv.FormatInt(ev.RecurrenceID.UTC().Unix(), 10)] = true
 		}
 	}
+	return overrides
+}
+
+// expandEventsForWindow expands single & recurring VEVENTs into CalendarEvent slices
+// intersecting [winStart, winEnd) in the display timezone.
+func expandEventsForWindow(
+	rawEvents []rawICSEvent,
+	calID, calName, color string,
+	winStart, winEnd time.Time,
+	loc *time.Location,
+) []CalendarEvent {
+	return expandEventsForWindowWithOverrides(rawEvents, buildRecurrenceOverrides(rawEvents), calID, calName, color, winStart, winEnd, loc)
+}
+
+func expandEventsForWindowWithOverrides(
+	rawEvents []rawICSEvent,
+	overrides map[string]map[string]bool,
+	calID, calName, color string,
+	winStart, winEnd time.Time,
+	loc *time.Location,
+) []CalendarEvent {
 
 	var out []CalendarEvent
 	for _, ev := range rawEvents {
@@ -823,8 +872,8 @@ func emitEventOccurrences(
 					Location:     ev.Location,
 					Date:         dateStr,
 					AllDay:       true,
-					StartMs:      curDay.UnixNano() / int64(time.Millisecond),
-					EndMs:        curDay.AddDate(0, 0, 1).UnixNano() / int64(time.Millisecond),
+					StartMs:      curDay.UnixMilli(),
+					EndMs:        curDay.AddDate(0, 0, 1).UnixMilli(),
 				})
 			}
 			curDay = curDay.AddDate(0, 0, 1)
@@ -842,8 +891,8 @@ func emitEventOccurrences(
 		Location:     ev.Location,
 		Date:         dateStr,
 		AllDay:       false,
-		StartMs:      start.UnixNano() / int64(time.Millisecond),
-		EndMs:        end.UnixNano() / int64(time.Millisecond),
+		StartMs:      start.UnixMilli(),
+		EndMs:        end.UnixMilli(),
 		StartTime:    startLocal.Format("15:04"),
 		EndTime:      endLocal.Format("15:04"),
 	})
@@ -1103,6 +1152,7 @@ func monthlyCandidates(
 	daysInMonth := time.Date(year, month+1, 0, 0, 0, 0, 0, loc).Day()
 
 	if len(byDay) > 0 {
+		firstWd := time.Date(year, month, 1, 0, 0, 0, 0, loc).Weekday()
 		var out []time.Time
 		for _, spec := range byDay {
 			if len(spec) < 2 {
@@ -1114,15 +1164,16 @@ func monthlyCandidates(
 				continue
 			}
 			ordStr := spec[:len(spec)-2]
-			var matchingDays []int
-			for d := 1; d <= daysInMonth; d++ {
-				if time.Date(year, month, d, 0, 0, 0, 0, loc).Weekday() == wd {
-					matchingDays = append(matchingDays, d)
-				}
+			var matchingDays [5]int
+			matchCount := 0
+			firstDay := 1 + (int(wd)-int(firstWd)+7)%7
+			for d := firstDay; d <= daysInMonth; d += 7 {
+				matchingDays[matchCount] = d
+				matchCount++
 			}
 			if ordStr == "" {
-				for _, d := range matchingDays {
-					out = append(out, time.Date(year, month, d, hr, mn, sc, 0, loc))
+				for i := 0; i < matchCount; i++ {
+					out = append(out, time.Date(year, month, matchingDays[i], hr, mn, sc, 0, loc))
 				}
 				continue
 			}
@@ -1134,9 +1185,9 @@ func monthlyCandidates(
 			if ord > 0 {
 				targetIdx = ord - 1
 			} else {
-				targetIdx = len(matchingDays) + ord
+				targetIdx = matchCount + ord
 			}
-			if targetIdx >= 0 && targetIdx < len(matchingDays) {
+			if targetIdx >= 0 && targetIdx < matchCount {
 				out = append(out, time.Date(year, month, matchingDays[targetIdx], hr, mn, sc, 0, loc))
 			}
 		}
@@ -1271,49 +1322,57 @@ func containsWholeWord(lower, word string) bool {
 	}
 }
 
-func isTripEvent(title string, allDay bool, days int, dur time.Duration) bool {
+const (
+	tripKindNone = iota
+	tripKindLodging
+	tripKindTravel
+)
+
+func classifyTripTitle(title string) int {
 	lower := strings.ToLower(strings.TrimSpace(title))
 	if lower == "" {
-		return false
+		return tripKindNone
 	}
 
 	// Explicit "Stay at ..." / hotel stay events (all-day or multi-day timed check-in/out)
 	for _, pfx := range strongStayPrefixes {
 		if strings.HasPrefix(lower, pfx) || strings.Contains(lower, " "+pfx) {
-			return allDay || dur >= 18*time.Hour
+			return tripKindLodging
 		}
 	}
 
 	// Hotel / lodging brand or venue keywords
-	hasLodging := false
 	for _, kw := range lodgingKeywords {
 		if strings.Contains(lower, kw) {
-			hasLodging = true
-			break
+			return tripKindLodging
 		}
 	}
-	if !hasLodging && (containsWholeWord(lower, "inn") || containsWholeWord(lower, "villa") || containsWholeWord(lower, "cabin")) {
-		hasLodging = true
-	}
-	if hasLodging {
-		return allDay || dur >= 18*time.Hour
+	if containsWholeWord(lower, "inn") || containsWholeWord(lower, "villa") || containsWholeWord(lower, "cabin") {
+		return tripKindLodging
 	}
 
 	// General travel/trip keywords require multi-day span to avoid 1-day errands/reminders
-	hasTravel := containsWholeWord(lower, "trip")
-	if !hasTravel {
-		for _, kw := range travelKeywords {
-			if strings.Contains(lower, kw) {
-				hasTravel = true
-				break
-			}
+	if containsWholeWord(lower, "trip") {
+		return tripKindTravel
+	}
+	for _, kw := range travelKeywords {
+		if strings.Contains(lower, kw) {
+			return tripKindTravel
 		}
 	}
-	if hasTravel {
-		return (allDay && days >= 2) || (!allDay && dur >= 24*time.Hour)
-	}
 
-	return false
+	return tripKindNone
+}
+
+func isTripEvent(title string, allDay bool, days int, dur time.Duration) bool {
+	switch classifyTripTitle(title) {
+	case tripKindLodging:
+		return allDay || dur >= 18*time.Hour
+	case tripKindTravel:
+		return (allDay && days >= 2) || (!allDay && dur >= 24*time.Hour)
+	default:
+		return false
+	}
 }
 
 func cleanTripDisplayName(title string) string {
@@ -1348,22 +1407,21 @@ func extractUpcomingTrips(
 	nowLocal time.Time,
 	loc *time.Location,
 ) []CalendarTrip {
+	return extractUpcomingTripsWithOverrides(rawEvents, buildRecurrenceOverrides(rawEvents), calID, calName, color, nowLocal, loc)
+}
+
+func extractUpcomingTripsWithOverrides(
+	rawEvents []rawICSEvent,
+	overrides map[string]map[string]bool,
+	calID, calName, color string,
+	nowLocal time.Time,
+	loc *time.Location,
+) []CalendarTrip {
 	todayStart := time.Date(nowLocal.Year(), nowLocal.Month(), nowLocal.Day(), 0, 0, 0, 0, loc)
 	horizonEnd := todayStart.AddDate(1, 0, 0)
 
-	overrides := make(map[string]map[string]bool)
-	for _, ev := range rawEvents {
-		if ev.RecurrenceID != nil && ev.UID != "" {
-			if overrides[ev.UID] == nil {
-				overrides[ev.UID] = make(map[string]bool)
-			}
-			overrides[ev.UID][ev.RecurrenceDK] = true
-			overrides[ev.UID][strconv.FormatInt(ev.RecurrenceID.UTC().Unix(), 10)] = true
-		}
-	}
-
 	var trips []CalendarTrip
-	consider := func(ev rawICSEvent, start, end time.Time) {
+	consider := func(ev rawICSEvent, kind int, start, end time.Time) {
 		if !end.After(todayStart) || !start.Before(horizonEnd) {
 			return
 		}
@@ -1396,7 +1454,9 @@ func extractUpcomingTrips(
 			days = calendarDaysSpan(startDay, endInclDay.AddDate(0, 0, 1))
 		}
 
-		if !isTripEvent(ev.Summary, ev.AllDay, days, dur) {
+		isTrip := (kind == tripKindLodging && (ev.AllDay || dur >= 18*time.Hour)) ||
+			(kind == tripKindTravel && ((ev.AllDay && days >= 2) || (!ev.AllDay && dur >= 24*time.Hour)))
+		if !isTrip {
 			return
 		}
 
@@ -1417,6 +1477,10 @@ func extractUpcomingTrips(
 	}
 
 	for _, ev := range rawEvents {
+		kind := classifyTripTitle(ev.Summary)
+		if kind == tripKindNone {
+			continue
+		}
 		dur := ev.End.Sub(ev.Start)
 		if dur <= 0 {
 			if ev.AllDay {
@@ -1426,7 +1490,7 @@ func extractUpcomingTrips(
 			}
 		}
 		if ev.RRule == "" {
-			consider(ev, ev.Start, ev.End)
+			consider(ev, kind, ev.Start, ev.End)
 			continue
 		}
 		starts := expandRRuleStarts(ev, todayStart.Add(-dur), horizonEnd, loc)
@@ -1442,7 +1506,7 @@ func extractUpcomingTrips(
 			if ov != nil && (ov[dayKey] || ov[strconv.FormatInt(st.UTC().Unix(), 10)]) {
 				continue
 			}
-			consider(ev, st, st.Add(dur))
+			consider(ev, kind, st, st.Add(dur))
 		}
 	}
 
@@ -1477,15 +1541,6 @@ func normalizeUpcomingTrips(trips []CalendarTrip) []CalendarTrip {
 		}
 	}
 	return out
-}
-
-func writeCalendarError(w http.ResponseWriter, status int, message string) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.Header().Set("Cache-Control", "private, no-store")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(map[string]string{
-		"error": message,
-	})
 }
 
 // ---------------------------------------------------------------------------

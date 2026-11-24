@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -52,6 +53,7 @@ AF_initDataCallback({key: 'ds:1', hash: '2', data:[null,[
 		photosHTTPClient = origClient
 		photosCacheMu.Lock()
 		photosCache = map[string]photosCacheEntry{}
+		photoBaseURLByID = map[string]string{}
 		photosCacheMu.Unlock()
 	}()
 
@@ -156,6 +158,7 @@ func TestFetchAlbumPhotosDetectsGoogleSignInRedirect(t *testing.T) {
 		photosHTTPClient = origClient
 		photosCacheMu.Lock()
 		photosCache = map[string]photosCacheEntry{}
+		photoBaseURLByID = map[string]string{}
 		photosCacheMu.Unlock()
 	}()
 
@@ -311,7 +314,10 @@ AF_initDataCallback({key: 'ds:1', hash: '2', data:[null,[
 </script></body></html>`
 
 	exifPayload := buildMockExifGPSPayload(binary.BigEndian, "N", 37, 17, 2800, "W", 121, 59, 1700)
-	var rangeSeen string
+	var (
+		rangeMu   sync.Mutex
+		rangeSeen string
+	)
 
 	origPhotosClient := photosHTTPClient
 	origGeoClient := geoHTTPClient
@@ -324,7 +330,9 @@ AF_initDataCallback({key: 'ds:1', hash: '2', data:[null,[
 					Body:       io.NopCloser(bytes.NewBufferString(mockHTML)),
 				}, nil
 			}
+			rangeMu.Lock()
 			rangeSeen = r.Header.Get("Range")
+			rangeMu.Unlock()
 			if strings.Contains(r.URL.Path, "AP1GczGeoPhoto001") {
 				return &http.Response{
 					StatusCode: http.StatusPartialContent,

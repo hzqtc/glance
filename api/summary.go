@@ -43,6 +43,7 @@ const (
 	geminiDefaultModel  = "gemini-flash-lite-latest"
 	summaryCacheTTL     = 24 * time.Hour
 	summaryFailureTTL   = 10 * time.Minute
+	maxSummaryCacheSize = 256
 	articleMaxBytes     = 3 << 20
 	articleMaxTextRunes = 6000
 	minParagraphRunes   = 25
@@ -63,7 +64,7 @@ var (
 	articleRegionRe   = regexp.MustCompile(`(?is)<article\b[^>]*>(.*?)</article>`)
 	articlePRe        = regexp.MustCompile(`(?is)<p\b[^>]*>(.*?)</p>`)
 	articleMetaRe     = regexp.MustCompile(`(?is)<meta\b[^>]*>`)
-	articleAttrRe     = regexp.MustCompile(`(?is)\b(name|property|content|charset)\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)`)
+	articleAttrRe     = regexp.MustCompile(`(?is)\b(name|property|content)\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)`)
 	contentCharsetRe  = regexp.MustCompile(`(?i)charset=["']?([\w-]+)`)
 )
 
@@ -75,7 +76,7 @@ type summaryCacheEntry struct {
 // SummaryHandler serves GET /api/summary on Vercel (and locally via cmd/devserver).
 func SummaryHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeNewsError(w, http.StatusMethodNotAllowed, "method not allowed")
+		auth.WriteJSONError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 	if !auth.RequireAuth(w, r) {
@@ -83,16 +84,16 @@ func SummaryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	apiKey := geminiAPIKey()
 	if apiKey == "" {
-		writeNewsError(w, http.StatusNotFound, "TL;DR is disabled (GEMINI_API_KEY is not set)")
+		auth.WriteJSONError(w, http.StatusNotFound, "TL;DR is disabled (GEMINI_API_KEY is not set)")
 		return
 	}
 	articleURL := strings.TrimSpace(r.URL.Query().Get("url"))
 	if !isHTTPURL(articleURL) {
-		writeNewsError(w, http.StatusBadRequest, "invalid url")
+		auth.WriteJSONError(w, http.StatusBadRequest, "invalid url")
 		return
 	}
 	if !isConfiguredNewsItem(articleURL) {
-		writeNewsError(w, http.StatusForbidden, "url is not an item in the configured news feeds")
+		auth.WriteJSONError(w, http.StatusForbidden, "url is not an item in the configured news feeds")
 		return
 	}
 
@@ -127,10 +128,15 @@ func isConfiguredNewsItem(articleURL string) bool {
 	if lookup() {
 		return true
 	}
+	var wg sync.WaitGroup
 	for _, src := range sources {
-		u := src.URL
-		_, _ = cachedNews(u, newsCacheTTL, false, func() (interface{}, error) { return fetchNewsFeed(u) })
+		wg.Add(1)
+		go func(u string) {
+			defer wg.Done()
+			_, _ = cachedNews(u, newsCacheTTL, false, func() (interface{}, error) { return fetchNewsFeed(u) })
+		}(src.URL)
 	}
+	wg.Wait()
 	return lookup()
 }
 
@@ -153,8 +159,23 @@ func summarizeCached(apiKey, articleURL string) SummaryResponse {
 		}
 	}
 	resp := summarizeArticle(apiKey, articleURL)
+	now := time.Now()
 	summaryCacheMu.Lock()
-	summaryCache[articleURL] = summaryCacheEntry{at: time.Now(), resp: resp}
+	if len(summaryCache) >= maxSummaryCacheSize {
+		for k, e := range summaryCache {
+			ttl := summaryCacheTTL
+			if e.resp.TLDR == "" {
+				ttl = summaryFailureTTL
+			}
+			if now.Sub(e.at) >= ttl {
+				delete(summaryCache, k)
+			}
+		}
+		if len(summaryCache) >= maxSummaryCacheSize {
+			summaryCache = map[string]summaryCacheEntry{}
+		}
+	}
+	summaryCache[articleURL] = summaryCacheEntry{at: now, resp: resp}
 	summaryCacheMu.Unlock()
 	return resp
 }
@@ -217,11 +238,12 @@ func fetchArticleText(articleURL string) (string, string, error) {
 	if cs := declaredCharset(res.Header.Get("Content-Type"), body); cs != "" && cs != "utf-8" && cs != "utf8" {
 		return "", "", failSummary("unsupported page encoding", "charset %s", cs)
 	}
-	title, text := extractArticle(string(body))
+	page := string(body)
+	title, text := extractArticle(page)
 	if text == "" {
 		// Describe what came back (e.g. a bot-check page served with HTTP 200)
 		return "", "", failSummary("no article text found", "HTTP %d, %s, page title %q",
-			res.StatusCode, formatByteSize(len(body)), pageTitle(string(body)))
+			res.StatusCode, formatByteSize(len(body)), pageTitle(page))
 	}
 	return title, text, nil
 }
@@ -266,19 +288,25 @@ func extractArticle(page string) (string, string) {
 	title, description := articleMeta(page)
 	cleaned := articleDropRe.ReplaceAllString(articleCommentRe.ReplaceAllString(page, " "), " ")
 
-	paragraphs := articleParagraphs(cleaned)
+	var paragraphs []string
 	if m := articleRegionRe.FindStringSubmatch(cleaned); m != nil {
 		if inArticle := articleParagraphs(m[1]); len(inArticle) >= 2 {
 			paragraphs = inArticle
 		}
 	}
+	if len(paragraphs) == 0 {
+		paragraphs = articleParagraphs(cleaned)
+	}
 	var b strings.Builder
+	totalRunes := 0
 	for _, p := range paragraphs {
-		if utf8.RuneCountInString(b.String())+utf8.RuneCountInString(p) > articleMaxTextRunes {
+		pRunes := utf8.RuneCountInString(p)
+		if totalRunes+pRunes > articleMaxTextRunes {
 			break
 		}
 		b.WriteString(p)
 		b.WriteString("\n")
+		totalRunes += pRunes + 1
 	}
 	text := strings.TrimSpace(b.String())
 	if text == "" {
@@ -326,24 +354,35 @@ func hasSentenceEnd(p string) bool {
 	return strings.ContainsAny(p, ".!?。！？")
 }
 
-// articleMeta returns og:title/<title> and og:description/description.
+// articleMeta returns og:title and og:description/description from <meta> tags.
 func articleMeta(page string) (string, string) {
 	var title, desc string
 	for _, tag := range articleMetaRe.FindAllString(page, -1) {
-		attrs := map[string]string{}
+		var name, prop, content string
 		for _, a := range articleAttrRe.FindAllStringSubmatch(tag, -1) {
-			attrs[strings.ToLower(a[1])] = strings.Trim(a[2], `"'`)
+			val := strings.Trim(a[2], `"'`)
+			switch strings.ToLower(a[1]) {
+			case "name":
+				name = val
+			case "property":
+				prop = val
+			case "content":
+				content = val
+			}
 		}
-		key := strings.ToLower(attrs["property"] + attrs["name"])
+		key := strings.ToLower(prop + name)
 		switch key {
 		case "og:title":
 			if title == "" {
-				title = cleanFeedText(attrs["content"])
+				title = cleanFeedText(content)
 			}
 		case "og:description", "description":
 			if desc == "" {
-				desc = cleanFeedText(attrs["content"])
+				desc = cleanFeedText(content)
 			}
+		}
+		if title != "" && desc != "" {
+			break
 		}
 	}
 	return title, desc
