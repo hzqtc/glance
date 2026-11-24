@@ -4,7 +4,7 @@
   "idleResetSeconds": 60,
   "nightMode": {
     "enabled": true,
-    "startHour": 22,
+    "startHour": 23,
     "endHour": 7,
     "dimOpacity": 0.55
   },
