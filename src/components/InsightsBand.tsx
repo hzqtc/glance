@@ -56,16 +56,14 @@ export function InsightsBand(props: InsightsBandProps) {
   var dewVal = typeof weather.dewPointC === 'number' ? weather.dewPointC : null;
   var dewDesc = dewVal !== null ? describeDewPoint(dewVal) : null;
 
-  // Today's rain total / sunshine hours and any low-visibility note sit on the
-  // Air & Conditions card; the forecast card gets a look at the days ahead.
-  var todaySummary = formatDailySummary(
+  // Today's rain total / sunshine hours sit in the Air & Conditions bottom row;
+  // low-visibility notes sit in its header, and the forecast card gets the week outlook.
+  var todayStat = formatDailySummary(
     weather.precipSumMm,
     weather.sunshineSeconds,
     props.units
   );
   var lowVis = formatLowVisibility(weather.visibilityM, props.units);
-  var conditionsSub =
-    todaySummary && lowVis ? todaySummary + ' · ' + lowVis : todaySummary || lowVis;
   var weekOutlook = formatWeekOutlook(daily, props.units);
 
   return (
@@ -127,7 +125,7 @@ export function InsightsBand(props: InsightsBandProps) {
       >
         <div class="insights-header">
           <span class="insights-title">Air &amp; Conditions</span>
-          {conditionsSub ? <span class="insights-sub">{conditionsSub}</span> : null}
+          {lowVis ? <span class="insights-sub">{lowVis}</span> : null}
         </div>
 
         <div class="atmos-metrics">
@@ -211,12 +209,22 @@ export function InsightsBand(props: InsightsBandProps) {
                 {formatWind(weather.windKmh, props.units)}
               </span>
             </div>
-            <div class="daylight-item daylight-item-right">
+            <div
+              class={
+                todayStat ? 'daylight-item' : 'daylight-item daylight-item-right'
+              }
+            >
               <span class="daylight-item-label">Humidity</span>
               <span class="daylight-item-value">
                 {String(weather.humidity) + '%'}
               </span>
             </div>
+            {todayStat ? (
+              <div class="daylight-item daylight-item-right">
+                <span class="daylight-item-label">{todayStat.label}</span>
+                <span class="daylight-item-value">{todayStat.value}</span>
+              </div>
+            ) : null}
           </div>
         </div>
       </div>

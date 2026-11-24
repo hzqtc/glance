@@ -528,6 +528,7 @@
   text-transform: uppercase;
   color: var(--text-muted);
   margin-bottom: 3px;
+  white-space: nowrap;
 }
 
 .daylight-item-value {
@@ -535,6 +536,7 @@
   font-weight: 500;
   color: var(--text-primary);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .daylight-item-value-rated {

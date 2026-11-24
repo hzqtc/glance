@@ -104,24 +104,29 @@ export function formatLowVisibility(
   return 'Vis ' + (mi < 2 ? mi.toFixed(1) : String(Math.round(mi))) + ' mi';
 }
 
+export interface DailyStat {
+  label: string;
+  value: string;
+}
+
 export function formatDailySummary(
   precipSumMm: number | undefined,
   sunshineSeconds: number | undefined,
   units: TempUnit
-): string | null {
+): DailyStat | null {
   if (typeof precipSumMm === 'number' && precipSumMm >= 0.5) {
     if (units === 'C') {
       var mmStr = precipSumMm < 10 ? precipSumMm.toFixed(1) : String(Math.round(precipSumMm));
-      return mmStr + ' mm rain today';
+      return { label: 'Rain', value: mmStr + ' mm' };
     }
     var inches = precipSumMm / 25.4;
     var inStr = inches < 1 ? inches.toFixed(2) : inches.toFixed(1);
-    return inStr + ' in rain today';
+    return { label: 'Rain', value: inStr + ' in' };
   }
-  if (typeof sunshineSeconds === 'number' && sunshineSeconds >= 3600) {
+  if (typeof sunshineSeconds === 'number' && sunshineSeconds >= 0) {
     var hrs = Math.round((sunshineSeconds / 3600) * 2) / 2;
     var hrStr = hrs % 1 === 0 ? String(hrs) : hrs.toFixed(1);
-    return hrStr + 'h sun today';
+    return { label: 'Sun', value: hrStr + 'h' };
   }
   return null;
 }
