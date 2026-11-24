@@ -12,7 +12,9 @@ Captured at the iPad mini 2's 1024×768 landscape resolution (Retina 2×).
 | **Calendar** (demo mode) | **World** |
 | ![Calendar dashboard: month grid of color-coded Work, Personal, and Family events with Chinese lunar dates and US holidays, today's agenda, and a trip countdown](docs/screenshots/calendar.jpg) | ![World dashboard: day/night map with city arcs, ISS orbit, earthquakes, and FX currency cards](docs/screenshots/world.jpg) |
 | **Headlines** | **Photos** (demo mode) |
-| ![Headlines dashboard: one column per RSS feed — Hacker News, Bay Area local news, and Chinese headlines](docs/screenshots/news.jpg) | ![Photos frame: auto-collage of one portrait and two landscape stock photos](docs/screenshots/photos.jpg) |
+| ![Headlines dashboard: one column per RSS feed — Hacker News, Bay Area local news, and Chinese headlines](docs/screenshots/news.jpg) | ![Photos frame: full-bleed stock photo with capture date and location overlay](docs/screenshots/photos.jpg) |
+| **Night Ambient** | |
+| ![Night ambient mode: minimal analog clock with ticking second hand alongside date, current weather, and sunrise countdown](docs/screenshots/ambient.jpg) | |
 
 ## Features
 
@@ -146,6 +148,7 @@ npx vercel --prod
 ## Tests & Build
 
 ```bash
-npm run test:api   # Go unit tests
-npm run build      # TypeScript check + Vite Safari 12 production build
+npm run test:api     # Go unit tests
+npm run build        # TypeScript check + Vite Safari 12 production build
+npm run screenshots  # Refresh docs/screenshots/*.jpg using local servers + headless Chrome
 ```

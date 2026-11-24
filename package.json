@@ -8,6 +8,7 @@
     "dev:api": "go run ./cmd/devserver",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host",
+    "screenshots": "node scripts/screenshots.mjs",
     "test:api": "go test -v ./..."
   },
   "dependencies": {
