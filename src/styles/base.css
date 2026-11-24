@@ -32,17 +32,7 @@
 
 /* Adaptive surface contrast across Night / Twilight / Day skies */
 .theme-night {
-  --text-primary: rgba(255, 255, 255, 0.97);
-  --text-secondary: rgba(255, 255, 255, 0.84);
   --text-muted: rgba(210, 226, 252, 0.72);
-  --surface-ribbon: rgba(28, 46, 82, 0.26);
-  --surface-card: rgba(24, 42, 76, 0.3);
-  --surface-card-active: rgba(46, 74, 124, 0.46);
-  --divider-line: rgba(196, 220, 255, 0.16);
-  --card-shadow: rgba(0, 0, 0, 0.12);
-  --card-shadow-active: rgba(0, 0, 0, 0.18);
-  --badge-bg: rgba(255, 255, 255, 0.14);
-  --track-bg: rgba(255, 255, 255, 0.2);
 }
 
 .theme-twilight {
@@ -91,13 +81,11 @@
 .theme-day .badge-home {
   color: #065f46;
   background-color: rgba(16, 185, 129, 0.16);
-  border-color: rgba(16, 185, 129, 0.38);
 }
 
 .theme-day .badge-day {
   color: #92400e;
   background-color: rgba(245, 158, 11, 0.18);
-  border-color: rgba(217, 119, 6, 0.38);
 }
 
 .theme-day .headsup-rain {

@@ -1352,12 +1352,7 @@ function DashboardShell(props: DashboardShellProps) {
             )}
 
             {cityRows.length > 0 ? (
-              <section
-                class={
-                  isMultiCityGrid ? 'cities-grid cities-grid-multi' : 'cities-grid'
-                }
-                aria-label="Cities"
-              >
+              <section class="cities-grid" aria-label="Cities">
                 {cityRows.map(function (rowCities, rowIdx) {
                   var rowClass =
                     cities.length >= 4

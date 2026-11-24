@@ -28,7 +28,6 @@
 
   .world-header,
   .world-fx-row {
-    padding-right: calc(56px + env(safe-area-inset-right));
     padding-left: calc(24px + env(safe-area-inset-left));
   }
 
@@ -272,21 +271,8 @@
 /* Compact adjustments for tighter landscape heights */
 @media (max-height: 700px) {
   .dashboard-content {
-    padding: 12px 56px 10px 24px;
-    padding-top: calc(10px + env(safe-area-inset-top));
-    padding-right: calc(56px + env(safe-area-inset-right));
     padding-bottom: 10px;
     padding-bottom: max(10px, calc(env(safe-area-inset-bottom) - 4px));
-    padding-left: calc(24px + env(safe-area-inset-left));
-  }
-
-  .world-content {
-    padding-right: 0;
-    padding-left: 0;
-  }
-
-  .hero-top {
-    margin-bottom: 10px;
   }
 
   .hero-clock-digits {
@@ -304,11 +290,6 @@
   .hourly-ribbon,
   .insights-card {
     padding: 10px 16px;
-  }
-
-  .insights-band,
-  .cities-grid {
-    margin-top: 10px;
   }
 
   .city-card {
@@ -487,8 +468,6 @@
   }
 
   .stock-logo-hero {
-    width: 34px;
-    height: 34px;
     border-radius: 9px;
     margin-right: 9px;
   }
@@ -498,22 +477,9 @@
     font-size: 36px;
   }
 
-  .stocks-hero-name,
-  .stocks-hero-change {
-    font-size: 15px;
-  }
-
   .stocks-chart-card {
     padding: 8px 13px 8px 13px;
     min-height: 145px;
-  }
-
-  .stocks-grid {
-    margin-top: 8px;
-  }
-
-  .stocks-row-next {
-    margin-top: 6px;
   }
 
   .stock-card {

@@ -1,5 +1,5 @@
 /* ==========================================================================
-   Photos Frame Dashboard (Slide 4: Pure Edge-to-Edge Smart Auto-Collage)
+   Photos Frame Dashboard (Slide 5: Pure Edge-to-Edge Smart Auto-Collage)
    ========================================================================== */
 .photos-slide {
   position: relative;
@@ -95,7 +95,6 @@
   height: 124%;
   object-fit: cover;
   filter: blur(28px) brightness(0.45);
-  -webkit-filter: blur(28px) brightness(0.45);
   transform: scale(1.08);
   pointer-events: none;
 }
@@ -201,7 +200,6 @@
 .collage-tile-third > .photo-meta-overlay,
 .collage-bento-hero > .photo-meta-overlay,
 .collage-bento-cell-last > .photo-meta-overlay {
-  bottom: 10px;
   bottom: max(10px, calc(env(safe-area-inset-bottom) - 4px));
 }
 

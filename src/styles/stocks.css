@@ -13,10 +13,8 @@
   --surface-ribbon: rgba(28, 44, 74, 0.38);
   --surface-card: rgba(24, 38, 66, 0.44);
   --surface-card-active: rgba(44, 68, 112, 0.62);
-  --divider-line: rgba(196, 220, 255, 0.14);
   --card-shadow: rgba(0, 0, 0, 0.18);
   --card-shadow-active: rgba(0, 0, 0, 0.28);
-  --active-dot-color: #93c5fd;
   color: var(--text-primary);
   background: linear-gradient(155deg, #0b1322 0%, #101b30 52%, #0a101d 100%);
 }

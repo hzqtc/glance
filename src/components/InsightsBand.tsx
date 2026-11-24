@@ -116,13 +116,7 @@ export function InsightsBand(props: InsightsBandProps) {
         </div>
       </div>
 
-      <div
-        class={
-          aqiVal !== null && aqiVal >= 101
-            ? 'insights-card insights-atmosphere insights-alert-aqi'
-            : 'insights-card insights-atmosphere'
-        }
-      >
+      <div class="insights-card insights-atmosphere">
         <div class="insights-header">
           <span class="insights-title">Air &amp; Conditions</span>
           {lowVis ? <span class="insights-sub">{lowVis}</span> : null}

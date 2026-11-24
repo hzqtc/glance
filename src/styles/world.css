@@ -11,8 +11,6 @@
   --text-muted: rgba(186, 206, 234, 0.68);
   --surface-ribbon: rgba(24, 38, 68, 0.44);
   --surface-card: rgba(20, 34, 62, 0.48);
-  --surface-card-active: rgba(42, 66, 112, 0.64);
-  --divider-line: rgba(196, 220, 255, 0.14);
   --card-shadow: rgba(0, 0, 0, 0.18);
   color: var(--text-primary);
   background: linear-gradient(155deg, #091120 0%, #0e1a32 52%, #080f1d 100%);
@@ -147,10 +145,6 @@
   flex: 1;
   min-height: 0;
   width: 100%;
-  padding: 0;
-  border-radius: 0;
-  background-color: transparent;
-  box-shadow: none;
   display: flex;
   align-items: center;
   justify-content: center;

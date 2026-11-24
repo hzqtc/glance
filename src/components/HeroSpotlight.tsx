@@ -300,7 +300,7 @@ export function HeroSpotlight(props: HeroSpotlightProps) {
       </div>
 
       {weather && ribbonItems.length > 0 ? (
-        <div class={rainHeadsUp ? 'hourly-ribbon hourly-ribbon-rain' : 'hourly-ribbon'}>
+        <div class="hourly-ribbon">
           <div class="hourly-slots">
             {ribbonItems.map(function (item) {
               if (item.kind === 'sun') {

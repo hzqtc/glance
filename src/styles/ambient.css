@@ -15,7 +15,6 @@
   color: rgba(203, 213, 225, 0.78);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  -webkit-animation: ambientFadeIn 1.2s ease both;
   animation: ambientFadeIn 1.2s ease both;
 }
 
@@ -216,15 +215,6 @@
   .ambient-weather {
     margin-top: 28px;
     padding-top: 26px;
-  }
-}
-
-@-webkit-keyframes ambientFadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
   }
 }
 
