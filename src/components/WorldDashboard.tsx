@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import type {
   AuroraStatus,
   CityConfig,
@@ -29,7 +29,7 @@ import {
   projectLat,
   projectLonLat,
 } from '../utils/astronomy';
-import { formatHourOffset, getCityClock } from '../utils/time';
+import { getCityClock } from '../utils/time';
 import { formatTemp, formatWind } from '../utils/weather';
 import { formatStockPct } from '../utils/stocks';
 
@@ -237,37 +237,38 @@ function formatTimeAgo(timeMs: number, nowMs: number): string {
 }
 
 export function WorldDashboard(props: WorldDashboardProps) {
+  var initialCacheRef = useRef<WorldResponse | null | undefined>(undefined);
+  if (initialCacheRef.current === undefined) {
+    initialCacheRef.current = readCachedWorld();
+  }
+  var initialCache = initialCacheRef.current;
+
   var _fxState = useState<FXQuote[]>(function () {
-    var cached = readCachedWorld();
-    return cached && cached.fx ? cached.fx : [];
+    return initialCache && initialCache.fx ? initialCache.fx : [];
   });
   var fxQuotes = _fxState[0];
   var setFxQuotes = _fxState[1];
 
   var _issOrbitState = useState<ISSOrbit | null>(function () {
-    var cached = readCachedWorld();
-    return cached && cached.iss ? cached.iss : null;
+    return initialCache && initialCache.iss ? initialCache.iss : null;
   });
   var issOrbit = _issOrbitState[0];
   var setIssOrbit = _issOrbitState[1];
 
   var _quakesState = useState<EarthquakeEvent[]>(function () {
-    var cached = readCachedWorld();
-    return cached && cached.quakes ? cached.quakes : [];
+    return initialCache && initialCache.quakes ? initialCache.quakes : [];
   });
   var quakes = _quakesState[0];
   var setQuakes = _quakesState[1];
 
   var _auroraState = useState<AuroraStatus | null>(function () {
-    var cached = readCachedWorld();
-    return cached && cached.aurora ? cached.aurora : null;
+    return initialCache && initialCache.aurora ? initialCache.aurora : null;
   });
   var aurora = _auroraState[0];
   var setAurora = _auroraState[1];
 
   var _stormsState = useState<TropicalStorm[]>(function () {
-    var cached = readCachedWorld();
-    return cached && cached.storms ? cached.storms : [];
+    return initialCache && initialCache.storms ? initialCache.storms : [];
   });
   var storms = _stormsState[0];
   var setStorms = _stormsState[1];
@@ -300,58 +301,38 @@ export function WorldDashboard(props: WorldDashboardProps) {
   var selectedStormId = _selectedStormState[0];
   var setSelectedStormId = _selectedStormState[1];
 
-  // Read saved layer toggles once on mount
-  var storedLayers = useState<WorldLayerPrefs>(readStoredWorldLayers)[0];
+  var _layersState = useState<WorldLayerPrefs>(readStoredWorldLayers);
+  var layers = _layersState[0];
+  var setLayers = _layersState[1];
+  var showArcs = layers.arcs;
+  var showCelestial = layers.celestial;
+  var showISS = layers.iss;
+  var showQuakes = layers.quakes;
+  var showAurora = layers.aurora;
+  var showStorms = layers.storms;
 
-  var _showArcsState = useState<boolean>(function () {
-    return storedLayers.arcs;
-  });
-  var showArcs = _showArcsState[0];
-  var setShowArcs = _showArcsState[1];
-
-  var _showCelestialState = useState<boolean>(function () {
-    return storedLayers.celestial;
-  });
-  var showCelestial = _showCelestialState[0];
-  var setShowCelestial = _showCelestialState[1];
-
-  var _showISSState = useState<boolean>(function () {
-    return storedLayers.iss;
-  });
-  var showISS = _showISSState[0];
-  var setShowISS = _showISSState[1];
-
-  var _showQuakesState = useState<boolean>(function () {
-    return storedLayers.quakes;
-  });
-  var showQuakes = _showQuakesState[0];
-  var setShowQuakes = _showQuakesState[1];
-
-  var _showAuroraState = useState<boolean>(function () {
-    return storedLayers.aurora;
-  });
-  var showAurora = _showAuroraState[0];
-  var setShowAurora = _showAuroraState[1];
-
-  var _showStormsState = useState<boolean>(function () {
-    return storedLayers.storms;
-  });
-  var showStorms = _showStormsState[0];
-  var setShowStorms = _showStormsState[1];
-
-  useEffect(
-    function () {
-      writeStoredWorldLayers({
-        arcs: showArcs,
-        celestial: showCelestial,
-        iss: showISS,
-        quakes: showQuakes,
-        aurora: showAurora,
-        storms: showStorms,
-      });
-    },
-    [showArcs, showCelestial, showISS, showQuakes, showAurora, showStorms]
-  );
+  function toggleLayer(key: keyof WorldLayerPrefs) {
+    setLayers(function (prev) {
+      var nextVal = !prev[key];
+      if (!nextVal) {
+        if (key === 'iss') setSelectedISS(false);
+        else if (key === 'quakes') setSelectedQuakeId(null);
+        else if (key === 'aurora') setSelectedAuroraPt(null);
+        else if (key === 'storms') setSelectedStormId(null);
+      }
+      var next: WorldLayerPrefs = {
+        arcs: prev.arcs,
+        celestial: prev.celestial,
+        iss: prev.iss,
+        quakes: prev.quakes,
+        aurora: prev.aurora,
+        storms: prev.storms,
+      };
+      next[key] = nextVal;
+      writeStoredWorldLayers(next);
+      return next;
+    });
+  }
 
   var _issNowState = useState<number>(function () {
     return Date.now();
@@ -544,51 +525,149 @@ export function WorldDashboard(props: WorldDashboardProps) {
   );
 
   // Center the map horizontally on the Home city's longitude from the very first frame
-  var cities = props.cities || [];
+  var cities = props.cities;
   var homeCity = cities.length > 0 ? cities[0] : null;
-  var homeWeather = homeCity ? props.weatherById[homeCity.id] : undefined;
-  var homeOffsetSec = homeWeather ? homeWeather.utcOffsetSeconds : 0;
+  var homeLon = homeCity ? homeCity.lon : null;
   var fallbackHomeLonRef = useRef<number | null>(null);
   if (fallbackHomeLonRef.current === null) {
     fallbackHomeLonRef.current = readStoredHomeLon();
   }
-  if (homeCity && fallbackHomeLonRef.current !== homeCity.lon) {
-    fallbackHomeLonRef.current = homeCity.lon;
-    writeStoredHomeLon(homeCity.lon);
-  }
-  var mapCenterLon = homeCity ? homeCity.lon : fallbackHomeLonRef.current;
-  var mapLeftLon = getMapLeftLon(mapCenterLon);
-  var landShiftX =
-    ((((MAP_LEFT_LON - mapLeftLon) % 360) + 360) % 360 / 360) * MAP_W;
-  var landTileOffsets = [landShiftX - MAP_W, landShiftX];
+  useEffect(
+    function () {
+      if (homeLon !== null && fallbackHomeLonRef.current !== homeLon) {
+        fallbackHomeLonRef.current = homeLon;
+        writeStoredHomeLon(homeLon);
+      }
+    },
+    [homeLon]
+  );
+  var mapCenterLon = homeLon !== null ? homeLon : fallbackHomeLonRef.current;
 
-  // Astronomical & ISS orbital calculations
-  var sun = getSubsolarPoint(props.nowMs);
-  var moon = getSublunarPoint(props.nowMs);
-  var sunPt = projectLonLat(sun.lon, sun.lat, MAP_W, MAP_H, mapCenterLon);
-  var moonPt = projectLonLat(moon.lon, moon.lat, MAP_W, MAP_H, mapCenterLon);
-  var term = buildTerminatorPaths(sun.lat, sun.lon, MAP_W, MAP_H, mapCenterLon);
+  // Astronomical calculations (recompute only when nowMs or map center changes — not on 5s ISS ticks)
+  var celestial = useMemo(
+    function () {
+      var sunPos = getSubsolarPoint(props.nowMs);
+      var moonPos = getSublunarPoint(props.nowMs);
+      return {
+        sun: sunPos,
+        sunPt: projectLonLat(sunPos.lon, sunPos.lat, MAP_W, MAP_H, mapCenterLon),
+        moonPt: projectLonLat(moonPos.lon, moonPos.lat, MAP_W, MAP_H, mapCenterLon),
+        term: buildTerminatorPaths(sunPos.lat, sunPos.lon, MAP_W, MAP_H, mapCenterLon),
+      };
+    },
+    [props.nowMs, mapCenterLon]
+  );
+  var sun = celestial.sun;
+  var sunPt = celestial.sunPt;
+  var moonPt = celestial.moonPt;
+  var term = celestial.term;
   var isMoonFull = Math.abs(props.moonPhase - 0.5) < 0.02;
   var isMoonNew = props.moonPhase < 0.02 || props.moonPhase > 0.98;
-  var moonLitPath = buildSmallMoonLitPath(props.moonPhase, 6.2);
+  var moonLitPath = useMemo(
+    function () {
+      return buildSmallMoonLitPath(props.moonPhase, 6.2);
+    },
+    [props.moonPhase]
+  );
 
-  var auroraOval =
-    showAurora && aurora
-      ? buildAuroraOvalPaths(aurora.kp, sun.lon, MAP_W, MAP_H, mapCenterLon)
-      : null;
+  var auroraOval = useMemo(
+    function () {
+      return showAurora && aurora
+        ? buildAuroraOvalPaths(aurora.kp, sun.lon, MAP_W, MAP_H, mapCenterLon)
+        : null;
+    },
+    [showAurora, aurora, sun.lon, mapCenterLon]
+  );
 
   var effectiveIssMs = Math.max(props.nowMs, issNowMs);
-  var issTrack =
-    showISS && issOrbit
-      ? buildISSTrack(issOrbit, effectiveIssMs, MAP_W, MAP_H, mapCenterLon)
-      : null;
+  var issTrack = useMemo(
+    function () {
+      return props.isActive && showISS && issOrbit
+        ? buildISSTrack(issOrbit, effectiveIssMs, MAP_W, MAP_H, mapCenterLon)
+        : null;
+    },
+    [props.isActive, showISS, issOrbit, effectiveIssMs, mapCenterLon]
+  );
   var issLabelLeft = issTrack ? issTrack.x > MAP_W - 110 : false;
   var issFootprintClosed = issTrack ? issTrack.footprintSegments.length === 1 : false;
 
-  // Prepare city pins (deduplicate cities within < 18px of Home so Bay Area labels never collide)
-  var homePt = homeCity
-    ? projectLonLat(homeCity.lon, homeCity.lat, MAP_W, MAP_H, mapCenterLon)
-    : null;
+  // Static city pin positions, great-circle arcs, and collision-free label sides (recomputed only when cities/center change)
+  var staticPins = useMemo(
+    function () {
+      var home = cities.length > 0 ? cities[0] : null;
+      var homePt = home
+        ? projectLonLat(home.lon, home.lat, MAP_W, MAP_H, mapCenterLon)
+        : null;
+      var out: Array<{
+        city: CityConfig;
+        isHome: boolean;
+        x: number;
+        y: number;
+        arc: ReturnType<typeof computeGreatCircleArc> | null;
+        labelSide: 'left' | 'right';
+      }> = [];
+
+      for (var i = 0; i < cities.length; i++) {
+        var c = cities[i];
+        var isHome = i === 0;
+        var pt = projectLonLat(c.lon, c.lat, MAP_W, MAP_H, mapCenterLon);
+
+        // Skip pins virtually on top of Home (e.g., a neighbouring city ~1px away)
+        if (!isHome && homePt) {
+          var dxHome = pt.x - homePt.x;
+          var dyHome = pt.y - homePt.y;
+          if (Math.sqrt(dxHome * dxHome + dyHome * dyHome) < 18) {
+            continue;
+          }
+        }
+
+        var arc =
+          !isHome && home
+            ? computeGreatCircleArc(
+                home.lat,
+                home.lon,
+                c.lat,
+                c.lon,
+                MAP_W,
+                MAP_H,
+                mapCenterLon
+              )
+            : null;
+
+        out.push({
+          city: c,
+          isHome: isHome,
+          x: pt.x,
+          y: pt.y,
+          arc: arc,
+          labelSide: 'right',
+        });
+      }
+
+      // Smart horizontal label placement so neighboring pins (e.g. Shanghai & Tokyo) never overlap
+      for (var pIdx = 0; pIdx < out.length; pIdx++) {
+        var curPin = out[pIdx];
+        var hasCloseEastNeighbor = false;
+        for (var qIdx = 0; qIdx < out.length; qIdx++) {
+          if (pIdx === qIdx) continue;
+          var other = out[qIdx];
+          if (
+            other.x > curPin.x &&
+            other.x - curPin.x < 120 &&
+            Math.abs(other.y - curPin.y) < 42
+          ) {
+            hasCloseEastNeighbor = true;
+            break;
+          }
+        }
+        curPin.labelSide =
+          hasCloseEastNeighbor || curPin.x > MAP_W - 145 ? 'left' : 'right';
+      }
+
+      return out;
+    },
+    [cities, mapCenterLon]
+  );
 
   interface CityPinData {
     city: CityConfig;
@@ -598,86 +677,30 @@ export function WorldDashboard(props: WorldDashboardProps) {
     timeLabel: string;
     tempLabel: string;
     isDay: boolean;
-    offsetLabel: string;
     arc: ReturnType<typeof computeGreatCircleArc> | null;
     labelSide: 'left' | 'right';
   }
 
   var pins: CityPinData[] = [];
-
-  for (var i = 0; i < cities.length; i++) {
-    var c = cities[i];
-    var isHome = i === 0;
-    var pt = projectLonLat(c.lon, c.lat, MAP_W, MAP_H, mapCenterLon);
-    var w = props.weatherById[c.id];
+  for (var i = 0; i < staticPins.length; i++) {
+    var spBase = staticPins[i];
+    var w = props.weatherById[spBase.city.id];
     var clk = getCityClock(props.nowMs, w ? w.utcOffsetSeconds : undefined, props.timeFormat);
     var isDay = w ? w.isDay : clk.hour24 >= 6 && clk.hour24 < 19;
-
-    // Skip pins virtually on top of Home (e.g., a neighbouring city ~1px away)
-    if (!isHome && homePt) {
-      var dxHome = pt.x - homePt.x;
-      var dyHome = pt.y - homePt.y;
-      if (Math.sqrt(dxHome * dxHome + dyHome * dyHome) < 18) {
-        continue;
-      }
-    }
-
-    var arc =
-      !isHome && homeCity
-        ? computeGreatCircleArc(
-            homeCity.lat,
-            homeCity.lon,
-            c.lat,
-            c.lon,
-            MAP_W,
-            MAP_H,
-            mapCenterLon
-          )
-        : null;
-
     var timeLabel =
       clk.hoursDisplay + ':' + clk.minutesDisplay + (clk.ampm ? ' ' + clk.ampm : '');
     var tempLabel = w ? formatTemp(w.tempC, props.units) : '';
-    var offsetLabel =
-      !isHome && w && homeWeather
-        ? formatHourOffset(w.utcOffsetSeconds, homeOffsetSec)
-        : '';
-
     pins.push({
-      city: c,
-      isHome: isHome,
-      x: pt.x,
-      y: pt.y,
+      city: spBase.city,
+      isHome: spBase.isHome,
+      x: spBase.x,
+      y: spBase.y,
       timeLabel: timeLabel,
       tempLabel: tempLabel,
       isDay: isDay,
-      offsetLabel: offsetLabel,
-      arc: arc,
-      labelSide: 'right',
+      arc: spBase.arc,
+      labelSide: spBase.labelSide,
     });
-  }
-
-  // Smart horizontal label placement so neighboring pins (e.g. Shanghai & Tokyo) never overlap
-  for (var pIdx = 0; pIdx < pins.length; pIdx++) {
-    var curPin = pins[pIdx];
-    var hasCloseEastNeighbor = false;
-    for (var qIdx = 0; qIdx < pins.length; qIdx++) {
-      if (pIdx === qIdx) continue;
-      var other = pins[qIdx];
-      if (
-        other.x > curPin.x &&
-        other.x - curPin.x < 120 &&
-        Math.abs(other.y - curPin.y) < 42
-      ) {
-        hasCloseEastNeighbor = true;
-        break;
-      }
-    }
-    if (hasCloseEastNeighbor || curPin.x > MAP_W - 145) {
-      curPin.labelSide = 'left';
-    } else {
-      curPin.labelSide = 'right';
-    }
   }
 
   var selectedPin: CityPinData | null = null;
@@ -816,11 +839,103 @@ export function WorldDashboard(props: WorldDashboardProps) {
     };
   }
 
-  // Graticule coordinates (82°N to 58°S, true 30° meridians)
-  var latLines = [-30, 0, 30, 60];
-  var lonSteps = [-180, -150, -120, -90, -60, -30, 0, 30, 60, 90, 120, 150];
-  var tropicNorthY = projectLat(23.44, MAP_H);
-  var tropicSouthY = projectLat(-23.44, MAP_H);
+  // Static graticule + Natural Earth 110m landmass tiles (rebuilt only if mapCenterLon changes)
+  var staticMapLayers = useMemo(
+    function () {
+      var mapLeftLon = getMapLeftLon(mapCenterLon);
+      var landShiftX =
+        ((((MAP_LEFT_LON - mapLeftLon) % 360) + 360) % 360 / 360) * MAP_W;
+      var landTileOffsets = [landShiftX - MAP_W, landShiftX];
+      var latLines = [-30, 0, 30, 60];
+      var lonSteps = [-180, -150, -120, -90, -60, -30, 0, 30, 60, 90, 120, 150];
+      var tropicNorthY = projectLat(23.44, MAP_H);
+      var tropicSouthY = projectLat(-23.44, MAP_H);
+
+      return (
+        <g>
+          {/* Subtle graticule lines */}
+          <g class="world-graticule" aria-hidden="true">
+            {latLines.map(function (lat) {
+              var y = projectLat(lat, MAP_H);
+              return (
+                <line
+                  key={'lat-' + String(lat)}
+                  x1="0"
+                  y1={y.toFixed(1)}
+                  x2={String(MAP_W)}
+                  y2={y.toFixed(1)}
+                  stroke={lat === 0 ? 'rgba(214, 234, 255, 0.24)' : 'rgba(214, 234, 255, 0.1)'}
+                  stroke-width={lat === 0 ? '1' : '0.8'}
+                  stroke-dasharray={lat === 0 ? '5 5' : undefined}
+                />
+              );
+            })}
+            {lonSteps.map(function (lon) {
+              var x = projectLonLat(lon, 0, MAP_W, MAP_H, mapCenterLon).x;
+              return (
+                <line
+                  key={'lon-' + String(lon)}
+                  x1={x.toFixed(1)}
+                  y1="0"
+                  x2={x.toFixed(1)}
+                  y2={String(MAP_H)}
+                  stroke={lon === 0 ? 'rgba(214, 234, 255, 0.16)' : 'rgba(214, 234, 255, 0.08)'}
+                  stroke-width="0.8"
+                />
+              );
+            })}
+            {/* Tropics of Cancer & Capricorn */}
+            <line
+              x1="0"
+              y1={tropicNorthY.toFixed(1)}
+              x2={String(MAP_W)}
+              y2={tropicNorthY.toFixed(1)}
+              stroke="rgba(253, 224, 71, 0.14)"
+              stroke-width="0.7"
+              stroke-dasharray="2 5"
+            />
+            <line
+              x1="0"
+              y1={tropicSouthY.toFixed(1)}
+              x2={String(MAP_W)}
+              y2={tropicSouthY.toFixed(1)}
+              stroke="rgba(253, 224, 71, 0.14)"
+              stroke-width="0.7"
+              stroke-dasharray="2 5"
+            />
+          </g>
+
+          {/* High-detail Natural Earth 110m landmasses & subtle country borders (tiled seamlessly for Home centering) */}
+          <g class="world-land-layer">
+            {landTileOffsets.map(function (tx, tIdx) {
+              return (
+                <g
+                  key={'land-tile-' + String(tIdx)}
+                  transform={'translate(' + tx.toFixed(2) + ',0)'}
+                >
+                  <path
+                    d={WORLD_LAND_PATH}
+                    fill="rgba(210, 234, 255, 0.46)"
+                    stroke="rgba(236, 246, 255, 0.72)"
+                    stroke-width="0.75"
+                    stroke-linejoin="round"
+                  />
+                  <path
+                    d={WORLD_BORDER_PATH}
+                    fill="none"
+                    stroke="rgba(220, 238, 255, 0.26)"
+                    stroke-width="0.55"
+                    stroke-linejoin="round"
+                  />
+                </g>
+              );
+            })}
+          </g>
+        </g>
+      );
+    },
+    [mapCenterLon]
+  );
 
   // Before the first /api/world response, show placeholder cards for the
   // configured (or city-derived) pairs so the row doesn't jump on load.
@@ -865,9 +980,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
                     : 'ctrl-btn ctrl-btn-mode ctrl-btn-world-icon'
                 }
                 onClick={function () {
-                  setShowArcs(function (v) {
-                    return !v;
-                  });
+                  toggleLayer('arcs');
                 }}
                 aria-pressed={showArcs}
                 aria-label="Toggle flight routes"
@@ -896,9 +1009,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
                     : 'ctrl-btn ctrl-btn-mode ctrl-btn-world-icon'
                 }
                 onClick={function () {
-                  setShowCelestial(function (v) {
-                    return !v;
-                  });
+                  toggleLayer('celestial');
                 }}
                 aria-pressed={showCelestial}
                 aria-label="Toggle Sun and Moon markers"
@@ -935,12 +1046,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
                     : 'ctrl-btn ctrl-btn-mode ctrl-btn-world-icon'
                 }
                 onClick={function () {
-                  setShowISS(function (v) {
-                    if (v) {
-                      setSelectedISS(false);
-                    }
-                    return !v;
-                  });
+                  toggleLayer('iss');
                 }}
                 aria-pressed={showISS}
                 aria-label="Toggle International Space Station and orbit"
@@ -973,12 +1079,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
                     : 'ctrl-btn ctrl-btn-mode ctrl-btn-world-icon'
                 }
                 onClick={function () {
-                  setShowQuakes(function (v) {
-                    if (v) {
-                      setSelectedQuakeId(null);
-                    }
-                    return !v;
-                  });
+                  toggleLayer('quakes');
                 }}
                 aria-pressed={showQuakes}
                 aria-label="Toggle recent earthquakes"
@@ -1007,12 +1108,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
                     : 'ctrl-btn ctrl-btn-mode ctrl-btn-world-icon'
                 }
                 onClick={function () {
-                  setShowAurora(function (v) {
-                    if (v) {
-                      setSelectedAuroraPt(null);
-                    }
-                    return !v;
-                  });
+                  toggleLayer('aurora');
                 }}
                 aria-pressed={showAurora}
                 aria-label="Toggle Aurora Oval and geomagnetic Kp activity"
@@ -1044,12 +1140,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
                     : 'ctrl-btn ctrl-btn-mode ctrl-btn-world-icon'
                 }
                 onClick={function () {
-                  setShowStorms(function (v) {
-                    if (v) {
-                      setSelectedStormId(null);
-                    }
-                    return !v;
-                  });
+                  toggleLayer('storms');
                 }}
                 aria-pressed={showStorms}
                 aria-label="Toggle active tropical cyclones and hurricanes"
@@ -1175,84 +1266,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
               <rect x="0" y="0" width={MAP_W} height={MAP_H} fill="url(#world-ocean-day)" />
               <rect x="0" y="0" width={MAP_W} height={MAP_H} fill="url(#world-daylight-bloom)" />
 
-              {/* Subtle graticule lines */}
-              <g class="world-graticule" aria-hidden="true">
-                {latLines.map(function (lat) {
-                  var y = projectLat(lat, MAP_H);
-                  return (
-                    <line
-                      key={'lat-' + String(lat)}
-                      x1="0"
-                      y1={y.toFixed(1)}
-                      x2={String(MAP_W)}
-                      y2={y.toFixed(1)}
-                      stroke={lat === 0 ? 'rgba(214, 234, 255, 0.24)' : 'rgba(214, 234, 255, 0.1)'}
-                      stroke-width={lat === 0 ? '1' : '0.8'}
-                      stroke-dasharray={lat === 0 ? '5 5' : undefined}
-                    />
-                  );
-                })}
-                {lonSteps.map(function (lon) {
-                  var x = projectLonLat(lon, 0, MAP_W, MAP_H, mapCenterLon).x;
-                  return (
-                    <line
-                      key={'lon-' + String(lon)}
-                      x1={x.toFixed(1)}
-                      y1="0"
-                      x2={x.toFixed(1)}
-                      y2={String(MAP_H)}
-                      stroke={lon === 0 ? 'rgba(214, 234, 255, 0.16)' : 'rgba(214, 234, 255, 0.08)'}
-                      stroke-width="0.8"
-                    />
-                  );
-                })}
-                {/* Tropics of Cancer & Capricorn */}
-                <line
-                  x1="0"
-                  y1={tropicNorthY.toFixed(1)}
-                  x2={String(MAP_W)}
-                  y2={tropicNorthY.toFixed(1)}
-                  stroke="rgba(253, 224, 71, 0.14)"
-                  stroke-width="0.7"
-                  stroke-dasharray="2 5"
-                />
-                <line
-                  x1="0"
-                  y1={tropicSouthY.toFixed(1)}
-                  x2={String(MAP_W)}
-                  y2={tropicSouthY.toFixed(1)}
-                  stroke="rgba(253, 224, 71, 0.14)"
-                  stroke-width="0.7"
-                  stroke-dasharray="2 5"
-                />
-              </g>
-
-              {/* High-detail Natural Earth 110m landmasses & subtle country borders (tiled seamlessly for Home centering) */}
-              <g class="world-land-layer">
-                {landTileOffsets.map(function (tx, tIdx) {
-                  return (
-                    <g
-                      key={'land-tile-' + String(tIdx)}
-                      transform={'translate(' + tx.toFixed(2) + ',0)'}
-                    >
-                      <path
-                        d={WORLD_LAND_PATH}
-                        fill="rgba(210, 234, 255, 0.46)"
-                        stroke="rgba(236, 246, 255, 0.72)"
-                        stroke-width="0.75"
-                        stroke-linejoin="round"
-                      />
-                      <path
-                        d={WORLD_BORDER_PATH}
-                        fill="none"
-                        stroke="rgba(220, 238, 255, 0.26)"
-                        stroke-width="0.55"
-                        stroke-linejoin="round"
-                      />
-                    </g>
-                  );
-                })}
-              </g>
+              {staticMapLayers}
 
               {/* High-contrast twilight ribbon, deep night shadow hemisphere, & golden terminator */}
               <path d={term.twilightPath} fill="url(#world-twilight-fill)" />

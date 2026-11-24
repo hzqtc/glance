@@ -91,32 +91,36 @@ export function StocksDashboard(props: StocksDashboardProps) {
   var defaultSymbol = props.defaultSymbol || 'GOOG';
   var defaultRange: StockRange = props.defaultRange || '1d';
 
+  var initialCacheRef = useRef<StocksResponse | null | undefined>(undefined);
+  if (initialCacheRef.current === undefined) {
+    initialCacheRef.current = readCachedStocks();
+  }
+  var initialCache = initialCacheRef.current;
+
   var _heroState = useState<StockHero | null>(function () {
-    var cached = readCachedStocks();
-    return cached ? cached.hero : null;
+    return initialCache ? initialCache.hero : null;
   });
   var hero = _heroState[0];
   var setHero = _heroState[1];
 
   var _quotesState = useState<StockQuote[]>(function () {
-    var cached = readCachedStocks();
-    return cached && cached.quotes ? cached.quotes : [];
+    return initialCache && initialCache.quotes ? initialCache.quotes : [];
   });
   var quotes = _quotesState[0];
   var setQuotes = _quotesState[1];
 
   var _symbolState = useState<string>(function () {
-    var cached = readCachedStocks();
-    return cached && cached.hero ? cached.hero.symbol : defaultSymbol;
+    return initialCache && initialCache.hero ? initialCache.hero.symbol : defaultSymbol;
   });
   var selectedSymbol = _symbolState[0];
   var setSelectedSymbol = _symbolState[1];
 
   var _rangeState = useState<StockRange>(function () {
-    var cached = readCachedStocks();
     var stored = readStoredRange();
     if (stored) return stored;
-    return cached && cached.hero && cached.hero.range ? cached.hero.range : defaultRange;
+    return initialCache && initialCache.hero && initialCache.hero.range
+      ? initialCache.hero.range
+      : defaultRange;
   });
   var selectedRange = _rangeState[0];
   var setSelectedRange = _rangeState[1];

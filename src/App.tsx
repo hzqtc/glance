@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import type {
   CarouselScheduleStep,
   CityConfig,
   CityWeather,
+  FXPairConfig,
+  NightModeConfig,
   StockCardMetric,
   TempUnit,
   WeatherKind,
@@ -161,6 +163,16 @@ function getDemoOverride(): DemoOverride | null {
   return null;
 }
 
+var EMPTY_CITIES: CityConfig[] = [];
+var EMPTY_FX_PAIRS: FXPairConfig[] = [];
+var DEFAULT_NIGHT_MODE: NightModeConfig = {
+  enabled: true,
+  startHour: 23,
+  endHour: 7,
+  dimOpacity: 0.55,
+};
+var DEMO_OVERRIDE = getDemoOverride();
+
 function readCachedWeather(): WeatherResponse | null {
   try {
     var raw = window.localStorage.getItem(WEATHER_STORAGE_KEY);
@@ -287,10 +299,10 @@ function setThemeColorMeta(hex: string): void {
     if (meta && meta.getAttribute('content') !== hex) {
       meta.setAttribute('content', hex);
     }
-    if (document.documentElement && document.documentElement.style.backgroundColor !== hex) {
+    if (document.documentElement) {
       document.documentElement.style.backgroundColor = hex;
     }
-    if (document.body && document.body.style.backgroundColor !== hex) {
+    if (document.body) {
       document.body.style.backgroundColor = hex;
     }
   } catch (_err) {
@@ -441,9 +453,13 @@ function DashboardShell(props: DashboardShellProps) {
   var activeSlide = _slideState[0];
   var setActiveSlide = _slideState[1];
 
+  var prevSavedSlideRef = useRef<number>(activeSlide);
   useEffect(
     function () {
-      writeStoredActiveSlide(activeSlide);
+      if (prevSavedSlideRef.current !== activeSlide) {
+        prevSavedSlideRef.current = activeSlide;
+        writeStoredActiveSlide(activeSlide);
+      }
     },
     [activeSlide]
   );
@@ -824,18 +840,18 @@ function DashboardShell(props: DashboardShellProps) {
     };
   }, []);
 
-  var cities = data && data.config ? data.config.cities : [];
+  var cities = data && data.config ? data.config.cities : EMPTY_CITIES;
   var fxPairs =
     data && data.config && data.config.world && data.config.world.fxPairs
       ? data.config.world.fxPairs
-      : [];
+      : EMPTY_FX_PAIRS;
   var configUnits: TempUnit = data && data.config ? data.config.units : 'F';
   var units: TempUnit = unitOverride || configUnits;
   var timeFormat = data && data.config ? data.config.timeFormat : '12h';
   var nightMode =
     data && data.config && data.config.nightMode
       ? data.config.nightMode
-      : { enabled: true, startHour: 23, endHour: 7, dimOpacity: 0.55 };
+      : DEFAULT_NIGHT_MODE;
   var idleResetSec =
     data &&
     data.config &&
@@ -895,11 +911,52 @@ function DashboardShell(props: DashboardShellProps) {
   var rotationScheduleRef = useRef<ResolvedRotationStep[]>(rotationSchedule);
   rotationScheduleRef.current = rotationSchedule;
 
-  // Auto-rotate dashboards along the configured schedule (default: photo 30s -> weather 15s -> photo 30s -> stocks 15s -> photo 30s -> calendar 15s)
+  var weatherById = useMemo(
+    function () {
+      var map: { [id: string]: CityWeather } = {};
+      if (data && data.weather) {
+        for (var i = 0; i < data.weather.length; i++) {
+          map[data.weather[i].cityId] = data.weather[i];
+        }
+      }
+      return map;
+    },
+    [data]
+  );
+
+  var homeCity = cities.length > 0 ? cities[0] : null;
+  var homeWeather = homeCity ? weatherById[homeCity.id] : undefined;
+  var homeClock = getCityClock(
+    nowMs,
+    homeWeather ? homeWeather.utcOffsetSeconds : undefined,
+    timeFormat
+  );
+
+  var demo = DEMO_OVERRIDE;
+  var isNightQuiet = Boolean(
+    !(demo && demo.disableNightQuiet) &&
+      nightMode &&
+      nightMode.enabled &&
+      isNightQuietHours(homeClock.hour24, nightMode.startHour, nightMode.endHour)
+  );
+
+  // Night ambient mode (config "ambient"): during night hours show the calm clock
+  // screen unless the dashboards were woken by a tap within resumeAfterSeconds
+  // (any activity while awake extends that).
+  var ambientCfg = data && data.config ? data.config.ambient : undefined;
+  var ambientEnabled = !ambientCfg || ambientCfg.enabled !== false;
+  ambientResumeMsRef.current =
+    ambientCfg && ambientCfg.resumeAfterSeconds >= 10 ? ambientCfg.resumeAfterSeconds * 1000 : 60 * 1000;
+  var ambientVisible = Boolean(
+    ((ambientEnabled && isNightQuiet) || (demo && demo.forceAmbient)) && ambientWakeUntil === 0
+  );
+  ambientVisibleRef.current = ambientVisible;
+
+  // Auto-rotate dashboards along the configured schedule (pauses completely during night ambient mode)
   useEffect(
     function () {
       var schedule = rotationScheduleRef.current;
-      if (!autoRotate || schedule.length === 0) {
+      if (!autoRotate || ambientVisible || schedule.length === 0) {
         setIsRotatePaused(false);
         setRotateTargetMs(0);
         return;
@@ -935,7 +992,6 @@ function DashboardShell(props: DashboardShellProps) {
         var delayMs = paused ? pauseLeft : currentStepSeconds * 1000;
         setRotateTargetMs(paused ? 0 : now + delayMs);
         timerId = window.setTimeout(function () {
-          // Hold rotation while hidden or behind the night ambient screen
           if (document.hidden || ambientVisibleRef.current) {
             scheduleNext();
             return;
@@ -960,22 +1016,7 @@ function DashboardShell(props: DashboardShellProps) {
         }
       };
     },
-    [autoRotate, rotateIntervalSec, rotationScheduleKey, manualPauseSec, activeSlide, pauseBump]
-  );
-
-  var weatherById: { [id: string]: CityWeather } = {};
-  if (data && data.weather) {
-    for (var i = 0; i < data.weather.length; i++) {
-      weatherById[data.weather[i].cityId] = data.weather[i];
-    }
-  }
-
-  var homeCity = cities.length > 0 ? cities[0] : null;
-  var homeWeather = homeCity ? weatherById[homeCity.id] : undefined;
-  var homeClock = getCityClock(
-    nowMs,
-    homeWeather ? homeWeather.utcOffsetSeconds : undefined,
-    timeFormat
+    [autoRotate, ambientVisible, rotateIntervalSec, rotationScheduleKey, manualPauseSec, activeSlide, pauseBump]
   );
 
   var activeCity = homeCity;
@@ -1010,26 +1051,6 @@ function DashboardShell(props: DashboardShellProps) {
     },
     [selectedCityId, homeCityId, idleResetSec, activityTick]
   );
-
-  var demo = getDemoOverride();
-  var isNightQuiet = Boolean(
-    !(demo && demo.disableNightQuiet) &&
-      nightMode &&
-      nightMode.enabled &&
-      isNightQuietHours(homeClock.hour24, nightMode.startHour, nightMode.endHour)
-  );
-
-  // Night ambient mode (config "ambient"): during night hours show the calm clock
-  // screen unless the dashboards were woken by a tap within resumeAfterSeconds
-  // (any activity while awake extends that).
-  var ambientCfg = data && data.config ? data.config.ambient : undefined;
-  var ambientEnabled = !ambientCfg || ambientCfg.enabled !== false;
-  ambientResumeMsRef.current =
-    ambientCfg && ambientCfg.resumeAfterSeconds >= 10 ? ambientCfg.resumeAfterSeconds * 1000 : 60 * 1000;
-  var ambientVisible = Boolean(
-    ((ambientEnabled && isNightQuiet) || (demo && demo.forceAmbient)) && ambientWakeUntil === 0
-  );
-  ambientVisibleRef.current = ambientVisible;
 
   function wakeFromAmbient() {
     var until = Date.now() + ambientResumeMsRef.current;
@@ -1112,24 +1133,29 @@ function DashboardShell(props: DashboardShellProps) {
   var moonPhase = getMoonPhase(nowMs);
 
   // Sync iPadOS/Safari <meta name="theme-color"> to the active slide's top sky color
-  var currentSky = computeTargetSky(
-    canvasMinutes,
-    sunriseMin,
-    sunsetMin,
-    canvasWeatherKind,
-    canvasCloudCover
-  );
-  var topThemeColor =
-    activeSlide === 0
-      ? '#' +
-        toHex2(currentSky.top[0]) +
-        toHex2(currentSky.top[1]) +
-        toHex2(currentSky.top[2])
-      : activeSlide === PHOTOS_SLIDE
-        ? '#060911'
-        : activeSlide === 3
-          ? '#091120'
-          : '#0b1322';
+  var topThemeColor: string;
+  if (ambientVisible) {
+    topThemeColor = '#020409';
+  } else if (activeSlide === 0) {
+    var currentSky = computeTargetSky(
+      canvasMinutes,
+      sunriseMin,
+      sunsetMin,
+      canvasWeatherKind,
+      canvasCloudCover
+    );
+    topThemeColor =
+      '#' +
+      toHex2(currentSky.top[0]) +
+      toHex2(currentSky.top[1]) +
+      toHex2(currentSky.top[2]);
+  } else if (activeSlide === PHOTOS_SLIDE) {
+    topThemeColor = '#060911';
+  } else if (activeSlide === 3) {
+    topThemeColor = '#091120';
+  } else {
+    topThemeColor = '#0b1322';
+  }
   useEffect(
     function () {
       setThemeColorMeta(topThemeColor);
@@ -1403,8 +1429,8 @@ function DashboardShell(props: DashboardShellProps) {
         {/* Slide 1: Stocks Dashboard */}
         <section class="carousel-slide" aria-hidden={activeSlide !== 1}>
           <StocksDashboard
-            isActive={activeSlide === 1}
-            preload={preloadReady}
+            isActive={activeSlide === 1 && !ambientVisible}
+            preload={preloadReady && !ambientVisible}
             timeFormat={timeFormat}
             cardMetric={stockMetric}
             defaultSymbol={defaultStockSymbol}
@@ -1431,8 +1457,8 @@ function DashboardShell(props: DashboardShellProps) {
         {/* Slide 2: Calendar Dashboard */}
         <section class="carousel-slide" aria-hidden={activeSlide !== 2}>
           <CalendarDashboard
-            isActive={activeSlide === 2}
-            preload={preloadReady}
+            isActive={activeSlide === 2 && !ambientVisible}
+            preload={preloadReady && !ambientVisible}
             nowMs={nowMs}
             timeFormat={timeFormat}
             idleResetSeconds={idleResetSec}
@@ -1445,8 +1471,8 @@ function DashboardShell(props: DashboardShellProps) {
         {/* Slide 3: World Day/Night Map & FX */}
         <section class="carousel-slide" aria-hidden={activeSlide !== 3}>
           <WorldDashboard
-            isActive={activeSlide === 3}
-            preload={preloadReady}
+            isActive={activeSlide === 3 && !ambientVisible}
+            preload={preloadReady && !ambientVisible}
             cities={cities}
             fxPairs={fxPairs}
             weatherById={weatherById}
@@ -1461,11 +1487,11 @@ function DashboardShell(props: DashboardShellProps) {
             onUnauthorized={props.onUnauthorized}
           />
         </section>
-        {/* Slide 4: Headlines (Hacker News, local news, 百度热搜) */}
+        {/* Slide 4: Headlines (configurable RSS feeds) */}
         <section class="carousel-slide" aria-hidden={activeSlide !== NEWS_SLIDE}>
           <NewsDashboard
-            isActive={activeSlide === NEWS_SLIDE}
-            preload={preloadReady}
+            isActive={activeSlide === NEWS_SLIDE && !ambientVisible}
+            preload={preloadReady && !ambientVisible}
             nowMs={nowMs}
             isRefreshing={isRefreshing}
             onRefresh={handleRefresh}
@@ -1475,8 +1501,8 @@ function DashboardShell(props: DashboardShellProps) {
         {/* Slide 5: Photos Frame */}
         <section class="carousel-slide" aria-hidden={activeSlide !== PHOTOS_SLIDE}>
           <PhotosDashboard
-            isActive={activeSlide === PHOTOS_SLIDE}
-            preload={preloadReady}
+            isActive={activeSlide === PHOTOS_SLIDE && !ambientVisible}
+            preload={preloadReady && !ambientVisible}
             slideIntervalSeconds={photoSlideIntervalSec}
             isRefreshing={isRefreshing}
             onRefresh={handleRefresh}
@@ -1731,7 +1757,7 @@ function DashboardShell(props: DashboardShellProps) {
 
         <RotateCountdown
           targetMs={rotateTargetMs}
-          visible={autoRotate && !isRotatePaused}
+          visible={autoRotate && !isRotatePaused && !ambientVisible}
           light={isLightRail}
           photos={activeSlide === PHOTOS_SLIDE}
         />
