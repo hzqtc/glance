@@ -57,25 +57,29 @@ self.addEventListener('fetch', function (event) {
   }
 
   var url = req.url || '';
+  var apiPrefix = self.location.origin + '/api/';
 
-  /* Never cache /api/auth, private /api/calendar, or private /api/photos responses */
+  /* Never cache /api/auth, /api/summary, private /api/calendar, or private /api/photos responses */
   if (
-    url.indexOf('/api/auth') !== -1 ||
-    url.indexOf('/api/calendar') !== -1 ||
-    url.indexOf('/api/photos') !== -1
+    url.indexOf(apiPrefix + 'auth') === 0 ||
+    url.indexOf(apiPrefix + 'calendar') === 0 ||
+    url.indexOf(apiPrefix + 'photos') === 0 ||
+    url.indexOf(apiPrefix + 'summary') === 0
   ) {
     return;
   }
 
-  /* Network-first for the other APIs (weather, stocks, world, news) with cached fallback during Wi-Fi blips */
-  if (url.indexOf('/api/') !== -1) {
+  /* Network-first for the other same-origin APIs (weather, stocks, world, news) with cached fallback during Wi-Fi blips */
+  if (url.indexOf(apiPrefix) === 0) {
     event.respondWith(
       fetch(req).then(function (resp) {
         if (resp && resp.status === 200) {
           var clone = resp.clone();
-          caches.open(API_CACHE).then(function (cache) {
-            cache.put(req, clone);
-          });
+          event.waitUntil(
+            caches.open(API_CACHE).then(function (cache) {
+              return cache.put(req, clone);
+            })
+          );
         }
         return resp;
       }).catch(function () {
@@ -91,9 +95,11 @@ self.addEventListener('fetch', function (event) {
       fetch(req).then(function (resp) {
         if (resp && resp.status === 200) {
           var clone = resp.clone();
-          caches.open(CACHE_NAME).then(function (cache) {
-            cache.put(req, clone);
-          });
+          event.waitUntil(
+            caches.open(CACHE_NAME).then(function (cache) {
+              return cache.put(req, clone);
+            })
+          );
         }
         return resp;
       }).catch(function () {
@@ -123,9 +129,11 @@ self.addEventListener('fetch', function (event) {
       return fetch(req).then(function (resp) {
         if (resp && resp.status === 200) {
           var clone = resp.clone();
-          caches.open(CACHE_NAME).then(function (cache) {
-            cache.put(req, clone);
-          });
+          event.waitUntil(
+            caches.open(CACHE_NAME).then(function (cache) {
+              return cache.put(req, clone);
+            })
+          );
         }
         return resp;
       });

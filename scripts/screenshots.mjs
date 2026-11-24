@@ -183,15 +183,33 @@ function connectCDP(wsUrl) {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(wsUrl);
     let nextId = 1;
+    let opened = false;
     const pending = new Map();
     const listeners = new Map();
 
+    const rejectAllPending = (err) => {
+      for (const [, entry] of pending) {
+        clearTimeout(entry.timer);
+        entry.rej(err);
+      }
+      pending.clear();
+    };
+
     ws.addEventListener('open', () => {
+      opened = true;
       resolve({
-        send(method, params = {}) {
+        send(method, params = {}, timeoutMs = 20000) {
           return new Promise((res, rej) => {
+            if (ws.readyState !== WebSocket.OPEN) {
+              rej(new Error(`CDP socket not open for ${method}`));
+              return;
+            }
             const id = nextId++;
-            pending.set(id, { res, rej });
+            const timer = setTimeout(() => {
+              pending.delete(id);
+              rej(new Error(`Timed out waiting for CDP response to ${method}`));
+            }, timeoutMs);
+            pending.set(id, { res, rej, timer });
             ws.send(JSON.stringify({ id, method, params }));
           });
         },
@@ -218,11 +236,18 @@ function connectCDP(wsUrl) {
       });
     });
 
-    ws.addEventListener('error', (err) => reject(err));
+    ws.addEventListener('error', (err) => {
+      if (!opened) reject(err);
+      rejectAllPending(new Error('CDP WebSocket error'));
+    });
+    ws.addEventListener('close', () => {
+      rejectAllPending(new Error('CDP WebSocket closed unexpectedly'));
+    });
     ws.addEventListener('message', (ev) => {
       const msg = JSON.parse(String(ev.data));
       if (msg.id && pending.has(msg.id)) {
-        const { res, rej } = pending.get(msg.id);
+        const { res, rej, timer } = pending.get(msg.id);
+        clearTimeout(timer);
         pending.delete(msg.id);
         if (msg.error) rej(new Error(msg.error.message || JSON.stringify(msg.error)));
         else res(msg.result);
@@ -275,6 +300,12 @@ function startStaticProxyServer(apiPort) {
   return http.createServer(async (req, res) => {
     const reqUrl = req.url || '/';
     const urlPath = reqUrl.split('?')[0];
+
+    if (urlPath === '/_prime') {
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+      res.end('<!doctype html><title>prime</title>');
+      return;
+    }
 
     if (urlPath.startsWith('/api/')) {
       try {
@@ -343,7 +374,25 @@ async function main() {
   let webServer;
   let cdp;
 
-  const cleanup = () => {
+  const stopChild = (proc) => {
+    if (!proc || proc.exitCode !== null) return Promise.resolve();
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        try { proc.kill('SIGKILL'); } catch {}
+        resolve();
+      }, 2000);
+      proc.once('exit', () => {
+        clearTimeout(timer);
+        resolve();
+      });
+      try { proc.kill('SIGTERM'); } catch {
+        clearTimeout(timer);
+        resolve();
+      }
+    });
+  };
+
+  const cleanupSync = () => {
     try { cdp?.close(); } catch {}
     try { chromeProc?.kill('SIGTERM'); } catch {}
     try { apiProc?.kill('SIGTERM'); } catch {}
@@ -351,12 +400,19 @@ async function main() {
     try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
   };
 
+  const cleanup = async () => {
+    try { cdp?.close(); } catch {}
+    try { webServer?.close(); } catch {}
+    await Promise.all([stopChild(chromeProc), stopChild(apiProc)]);
+    try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
+  };
+
   process.on('SIGINT', () => {
-    cleanup();
+    cleanupSync();
     process.exit(130);
   });
   process.on('SIGTERM', () => {
-    cleanup();
+    cleanupSync();
     process.exit(143);
   });
 
@@ -388,11 +444,13 @@ async function main() {
     delete apiEnv.CALENDAR_ICS_URLS;
     delete apiEnv.PHOTOS_ALBUM_URL;
     delete apiEnv.PHOTOS_ALBUM_URLS;
+    delete apiEnv.GEMINI_API_KEY;
+    delete apiEnv.GEMINI_MODEL;
 
     apiProc = spawn(apiBin, [], {
       cwd: tmpDir,
       env: apiEnv,
-      stdio: ['ignore', 'pipe', 'pipe'],
+      stdio: ['ignore', 'ignore', 'pipe'],
     });
     apiProc.stderr.on('data', (chunk) => {
       process.stderr.write(`[api] ${chunk}`);
@@ -430,15 +488,16 @@ async function main() {
       if (chromeStderr.length < 4096) chromeStderr += String(chunk);
     });
 
+    let targetsResp;
     try {
-      await waitForHttp(`http://127.0.0.1:${cdpPort}/json/list`, 15000);
+      targetsResp = await waitForHttp(`http://127.0.0.1:${cdpPort}/json/list`, 15000);
     } catch (err) {
       if (chromeStderr.trim()) {
         console.error(`[chrome stderr]\n${chromeStderr.trim()}`);
       }
       throw err;
     }
-    const targets = await (await fetch(`http://127.0.0.1:${cdpPort}/json/list`)).json();
+    const targets = await targetsResp.json();
     const pageTarget = targets.find((t) => t.type === 'page') || targets[0];
     cdp = await connectCDP(pageTarget.webSocketDebuggerUrl);
 
@@ -451,9 +510,9 @@ async function main() {
       mobile: false,
     });
 
-    // Prime origin so localStorage can select each slide before navigation.
+    // Prime origin on a lightweight blank page so localStorage can select each slide before navigation.
     const primeLoad = cdp.once('Page.loadEventFired');
-    await cdp.send('Page.navigate', { url: `${baseUrl}/` });
+    await cdp.send('Page.navigate', { url: `${baseUrl}/_prime` });
     await primeLoad;
 
     fs.mkdirSync(OUT_DIR, { recursive: true });
@@ -485,7 +544,7 @@ async function main() {
       console.log(`Captured ${path.relative(REPO_ROOT, outPath)} (${kb} KB)`);
     }
   } finally {
-    cleanup();
+    await cleanup();
   }
 }
 
