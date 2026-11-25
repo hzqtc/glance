@@ -83,8 +83,8 @@
   display: inline-flex;
   flex-direction: row;
   align-items: center;
-  height: 32px;
-  padding: 0 5px;
+  height: 36px;
+  padding: 0 6px;
   border-radius: 999px;
   background-color: var(--surface-ribbon);
 }
@@ -94,15 +94,15 @@
   flex-direction: row;
   align-items: center;
   justify-content: center;
-  min-width: 28px;
-  height: 26px;
-  padding: 0 7px;
+  min-width: 34px;
+  height: 30px;
+  padding: 0 9px;
   border: none;
   border-radius: 999px;
   background: transparent;
   color: var(--text-secondary);
   font-family: inherit;
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 500;
   line-height: 1;
   vertical-align: middle;
@@ -115,7 +115,7 @@
 }
 
 .cal-nav-btn:not(:last-child) {
-  margin-right: 2px;
+  margin-right: 3px;
 }
 
 .cal-nav-btn:active {
@@ -133,10 +133,10 @@
 }
 
 .cal-nav-today {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.03em;
-  padding: 0 11px;
+  padding: 0 13px;
   background-color: rgba(56, 189, 248, 0.2);
   color: #bae6fd;
 }

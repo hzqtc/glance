@@ -23,8 +23,8 @@
 .carousel-rail-wrap {
   position: fixed;
   top: 50%;
-  right: 10px;
-  right: calc(10px + env(safe-area-inset-right));
+  right: 8px;
+  right: calc(8px + env(safe-area-inset-right));
   transform: translate3d(0, -50%, 0);
   z-index: 6;
 }
@@ -34,8 +34,8 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  width: 32px;
-  padding: 5px 0;
+  width: 40px;
+  padding: 6px 0;
   border-radius: 999px;
   background-color: rgba(28, 46, 82, 0.38);
   color: rgba(255, 255, 255, 0.78);
@@ -68,8 +68,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
+  width: 34px;
+  height: 34px;
   padding: 0;
   border: none;
   border-radius: 999px;
@@ -83,8 +83,13 @@
   transition: background-color 0.2s ease, color 0.2s ease, opacity 0.2s ease, transform 0.15s ease;
 }
 
+.rail-btn .ctrl-svg {
+  width: 18px;
+  height: 18px;
+}
+
 .rail-btn:not(:last-child) {
-  margin-bottom: 4px;
+  margin-bottom: 5px;
 }
 
 .rail-btn:active {
@@ -122,13 +127,13 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 32px;
-  height: 20px;
-  padding: 0 5px;
+  min-width: 40px;
+  height: 22px;
+  padding: 0 6px;
   border-radius: 999px;
   background-color: rgba(28, 46, 82, 0.38);
   color: rgba(255, 255, 255, 0.78);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.01em;
   line-height: 1;
@@ -196,9 +201,9 @@
   max-width: 1280px;
   height: 100%;
   margin: 0 auto;
-  padding: 26px 56px 22px 26px;
+  padding: 26px 62px 22px 26px;
   padding-top: calc(26px + env(safe-area-inset-top));
-  padding-right: calc(56px + env(safe-area-inset-right));
+  padding-right: calc(62px + env(safe-area-inset-right));
   padding-bottom: calc(22px + env(safe-area-inset-bottom));
   padding-left: calc(26px + env(safe-area-inset-left));
   display: flex;
@@ -227,8 +232,8 @@
   display: inline-flex;
   flex-direction: row;
   align-items: center;
-  height: 28px;
-  padding: 0 5px;
+  height: 36px;
+  padding: 0 6px;
   border-radius: 999px;
   background-color: var(--surface-ribbon);
   opacity: 0.62;
@@ -241,7 +246,7 @@
 }
 
 .top-controls > :not(:last-child) {
-  margin-right: 2px;
+  margin-right: 4px;
 }
 
 .ctrl-btn {
@@ -249,14 +254,14 @@
   flex-direction: row;
   align-items: center;
   justify-content: center;
-  height: 24px;
-  padding: 0 10px;
+  height: 30px;
+  padding: 0 12px;
   border: none;
   border-radius: 999px;
   background: transparent;
   color: var(--text-secondary);
   font-family: inherit;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 500;
   letter-spacing: 0.04em;
   cursor: pointer;
@@ -272,7 +277,13 @@
 }
 
 .ctrl-btn-icon {
-  padding: 0 9px;
+  min-width: 32px;
+  padding: 0 10px;
+}
+
+.top-controls .ctrl-svg {
+  width: 16px;
+  height: 16px;
 }
 
 .ctrl-mode-group {
@@ -282,10 +293,10 @@
 }
 
 .ctrl-btn-mode {
-  min-width: 26px;
-  height: 22px;
-  padding: 0 8px;
-  font-size: 12px;
+  min-width: 32px;
+  height: 28px;
+  padding: 0 10px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text-muted);
   transition: background-color 0.2s ease, color 0.2s ease, transform 0.15s ease;

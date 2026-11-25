@@ -1,9 +1,9 @@
 /* Targeted vertical fit tuning for iPad mini 6 (1133x744 + Home Indicator) without affecting iPad mini 2 (1024x768) */
 @media (max-height: 750px) {
   .dashboard-content {
-    padding: 18px 56px 12px 24px;
+    padding: 18px 62px 12px 24px;
     padding-top: calc(10px + env(safe-area-inset-top));
-    padding-right: calc(56px + env(safe-area-inset-right));
+    padding-right: calc(62px + env(safe-area-inset-right));
     padding-bottom: 12px;
     padding-bottom: max(12px, calc(env(safe-area-inset-bottom) - 4px));
     padding-left: calc(24px + env(safe-area-inset-left));
