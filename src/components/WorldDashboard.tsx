@@ -770,20 +770,28 @@ export function WorldDashboard(props: WorldDashboardProps) {
       stroke: 'rgba(244, 63, 94, 0.65)',
       textColor: '#ffe4e6',
     };
-  } else if (selectedAuroraPt && aurora && showAurora) {
+  } else if (selectedAuroraPt && aurora && showAurora && auroraOval) {
+    var auroraStroke =
+      aurora.kp >= 7
+        ? 'rgba(244, 63, 94, 0.7)'
+        : aurora.kp >= 5
+          ? 'rgba(192, 132, 252, 0.68)'
+          : 'rgba(52, 211, 153, 0.62)';
+    var auroraText =
+      aurora.kp >= 7 ? '#ffe4e6' : aurora.kp >= 5 ? '#f3e8ff' : '#d1fae5';
     activePopover = {
       x: selectedAuroraPt.x,
       y: selectedAuroraPt.y,
+      title: 'Aurora · Kp ' + aurora.kp.toFixed(1) + ' (' + aurora.scale + ')',
       lines: [
-        'Aurora · Kp ' +
-          aurora.kp.toFixed(1) +
-          ' (' +
-          aurora.scale +
-          ') · 24h peak ' +
-          aurora.maxKp24h.toFixed(1),
+        '24h peak Kp ' +
+          aurora.maxKp24h.toFixed(1) +
+          ' · Nightside reach ~' +
+          String(auroraOval.equatorwardLat) +
+          '°',
       ],
-      stroke: 'rgba(52, 211, 153, 0.62)',
-      textColor: '#d1fae5',
+      stroke: auroraStroke,
+      textColor: auroraText,
     };
   } else if (selectedQuake) {
     var selQuakePt = projectLonLat(
@@ -1237,11 +1245,19 @@ export function WorldDashboard(props: WorldDashboardProps) {
               <linearGradient id="world-aurora-grad" x1="0" y1="0" x2="0" y2="1">
                 <stop
                   offset="0%"
-                  stop-color={auroraOval && auroraOval.isStorm ? '#c084fc' : '#34d399'}
-                  stop-opacity="0.72"
+                  stop-color={auroraOval ? auroraOval.coreTop : '#34d399'}
+                  stop-opacity="0.78"
                 />
-                <stop offset="55%" stop-color="#34d399" stop-opacity="0.88" />
-                <stop offset="100%" stop-color="#10b981" stop-opacity="0.38" />
+                <stop
+                  offset="55%"
+                  stop-color={auroraOval ? auroraOval.coreMid : '#10b981'}
+                  stop-opacity="0.92"
+                />
+                <stop
+                  offset="100%"
+                  stop-color={auroraOval ? auroraOval.coreBot : '#059669'}
+                  stop-opacity="0.45"
+                />
               </linearGradient>
 
               <clipPath id="world-map-clip">
@@ -1310,29 +1326,29 @@ export function WorldDashboard(props: WorldDashboardProps) {
                   {auroraOval.northOuter ? (
                     <path
                       d={auroraOval.northOuter}
-                      fill={auroraOval.isStorm ? '#a855f7' : '#10b981'}
-                      opacity={(auroraOval.intensity * 0.28).toFixed(2)}
+                      fill={auroraOval.outerFill}
+                      opacity={auroraOval.outerOpacity.toFixed(2)}
                     />
                   ) : null}
                   {auroraOval.northCore ? (
                     <path
                       d={auroraOval.northCore}
                       fill="url(#world-aurora-grad)"
-                      opacity={(auroraOval.intensity * 0.62).toFixed(2)}
+                      opacity={auroraOval.coreOpacity.toFixed(2)}
                     />
                   ) : null}
                   {auroraOval.southOuter ? (
                     <path
                       d={auroraOval.southOuter}
-                      fill={auroraOval.isStorm ? '#a855f7' : '#10b981'}
-                      opacity={(auroraOval.intensity * 0.28).toFixed(2)}
+                      fill={auroraOval.outerFill}
+                      opacity={auroraOval.outerOpacity.toFixed(2)}
                     />
                   ) : null}
                   {auroraOval.southCore ? (
                     <path
                       d={auroraOval.southCore}
                       fill="url(#world-aurora-grad)"
-                      opacity={(auroraOval.intensity * 0.62).toFixed(2)}
+                      opacity={auroraOval.coreOpacity.toFixed(2)}
                     />
                   ) : null}
                 </g>

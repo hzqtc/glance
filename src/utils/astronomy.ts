@@ -671,8 +671,13 @@ interface AuroraOvalPaths {
   northCore: string;
   southOuter: string;
   southCore: string;
-  intensity: number; // 0..1 visual intensity from Kp
-  isStorm: boolean;
+  outerFill: string;
+  coreTop: string;
+  coreMid: string;
+  coreBot: string;
+  outerOpacity: number;
+  coreOpacity: number;
+  equatorwardLat: number;
 }
 
 function solvePolarRingLat(
@@ -717,10 +722,10 @@ function buildAuroraBandPolygon(
     // Nightside expansion factor: 0 at solar noon, 1 at solar midnight
     var nightFactor = 0.5 * (1 - Math.cos((lon - sunLon) * DEG2RAD));
     var centerColat = 15.2 + 2.25 * clampedKp + 4.4 * nightFactor;
-    var halfWidth = (2.6 + 0.48 * clampedKp) * widthScale;
+    var halfWidth = (1.8 + 0.78 * clampedKp) * widthScale;
 
     var innerColat = Math.max(9.5, centerColat - halfWidth);
-    var outerColat = Math.min(54, centerColat + halfWidth);
+    var outerColat = Math.min(56, centerColat + halfWidth);
 
     var innerLat = solvePolarRingLat(poleLatDeg, poleLonDeg, innerColat, lon);
     var outerLat = solvePolarRingLat(poleLatDeg, poleLonDeg, outerColat, lon);
@@ -760,6 +765,8 @@ function buildAuroraBandPolygon(
 /**
  * Computes geomagnetic northern and southern aurora ovals (Feldstein-Starkov
  * dipole model expanded dynamically by live NOAA planetary Kp & solar midnight).
+ * Band width, opacity, and color depth all scale with Kp so activity level is
+ * readable at a glance.
  */
 export function buildAuroraOvalPaths(
   kp: number,
@@ -769,13 +776,53 @@ export function buildAuroraOvalPaths(
   centerLon?: number
 ): AuroraOvalPaths {
   var clampedKp = Math.max(0, Math.min(9, kp));
-  var intensity = Math.max(0.28, Math.min(0.95, 0.28 + (clampedKp / 8) * 0.67));
+  var norm = clampedKp / 9;
+
+  // Color depth progression across NOAA Kp tiers:
+  // Quiet (<3): soft teal-emerald -> Active (3-4.9): rich vivid emerald
+  // Minor/Mod storm (5-6.9): violet-crowned emerald -> Strong/Extreme (>=7): crimson-magenta & violet
+  var outerFill: string;
+  var coreTop: string;
+  var coreMid: string;
+  var coreBot: string;
+  if (clampedKp >= 7) {
+    outerFill = '#f43f5e';
+    coreTop = '#fb7185';
+    coreMid = '#c084fc';
+    coreBot = '#34d399';
+  } else if (clampedKp >= 5) {
+    outerFill = '#a855f7';
+    coreTop = '#c084fc';
+    coreMid = '#22c55e';
+    coreBot = '#10b981';
+  } else if (clampedKp >= 3) {
+    outerFill = '#10b981';
+    coreTop = '#4ade80';
+    coreMid = '#10b981';
+    coreBot = '#059669';
+  } else {
+    outerFill = '#0d9488';
+    coreTop = '#5eead4';
+    coreMid = '#2dd4bf';
+    coreBot = '#0f766e';
+  }
+
+  var outerOpacity = 0.14 + norm * 0.28;
+  var coreOpacity = 0.30 + norm * 0.58;
+  var nightOuterColat = 15.2 + 2.25 * clampedKp + 4.4 + (1.8 + 0.78 * clampedKp);
+  var equatorwardLat = Math.max(30, Math.min(75, Math.round(90 - nightOuterColat)));
+
   return {
-    northOuter: buildAuroraBandPolygon(80.8, -72.8, clampedKp, sunLon, 1.45, mapW, mapH, centerLon),
-    northCore: buildAuroraBandPolygon(80.8, -72.8, clampedKp, sunLon, 0.72, mapW, mapH, centerLon),
-    southOuter: buildAuroraBandPolygon(-80.8, 107.2, clampedKp, sunLon, 1.45, mapW, mapH, centerLon),
-    southCore: buildAuroraBandPolygon(-80.8, 107.2, clampedKp, sunLon, 0.72, mapW, mapH, centerLon),
-    intensity: intensity,
-    isStorm: clampedKp >= 5,
+    northOuter: buildAuroraBandPolygon(80.8, -72.8, clampedKp, sunLon, 1.48, mapW, mapH, centerLon),
+    northCore: buildAuroraBandPolygon(80.8, -72.8, clampedKp, sunLon, 0.74, mapW, mapH, centerLon),
+    southOuter: buildAuroraBandPolygon(-80.8, 107.2, clampedKp, sunLon, 1.48, mapW, mapH, centerLon),
+    southCore: buildAuroraBandPolygon(-80.8, 107.2, clampedKp, sunLon, 0.74, mapW, mapH, centerLon),
+    outerFill: outerFill,
+    coreTop: coreTop,
+    coreMid: coreMid,
+    coreBot: coreBot,
+    outerOpacity: outerOpacity,
+    coreOpacity: coreOpacity,
+    equatorwardLat: equatorwardLat,
   };
 }
