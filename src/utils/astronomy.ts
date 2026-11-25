@@ -373,6 +373,69 @@ export function formatUTCClock(nowMs: number): string {
   return pad2(d.getUTCHours()) + ':' + pad2(d.getUTCMinutes()) + ' UTC';
 }
 
+export function formatLatLon(lat: number, lon: number): string {
+  var latStr = Math.abs(lat).toFixed(1) + '°' + (lat >= 0 ? 'N' : 'S');
+  var lonStr = Math.abs(lon).toFixed(1) + '°' + (lon >= 0 ? 'E' : 'W');
+  return latStr + ', ' + lonStr;
+}
+
+export function formatDeclination(lat: number): string {
+  var sign = lat >= 0 ? '+' : '-';
+  return sign + Math.abs(lat).toFixed(1) + '°';
+}
+
+export interface MoonPhaseInfo {
+  name: string;
+  illuminationPct: number;
+  ageDays: number;
+  tideLabel: string;
+}
+
+export function describeMoonPhase(phase: number): MoonPhaseInfo {
+  var p = ((phase % 1) + 1) % 1;
+  var illum = Math.round(0.5 * (1 - Math.cos(p * Math.PI * 2)) * 100);
+  var ageDays = p * 29.53058867;
+
+  var name: string;
+  if (p < 0.03 || p >= 0.97) name = 'New Moon';
+  else if (p < 0.22) name = 'Waxing Crescent';
+  else if (p < 0.28) name = 'First Quarter';
+  else if (p < 0.47) name = 'Waxing Gibbous';
+  else if (p < 0.53) name = 'Full Moon';
+  else if (p < 0.72) name = 'Waning Gibbous';
+  else if (p < 0.78) name = 'Last Quarter';
+  else name = 'Waning Crescent';
+
+  var tideLabel: string;
+  if (p < 0.08 || p > 0.92 || Math.abs(p - 0.5) < 0.08) {
+    tideLabel = 'Spring tide';
+  } else if (Math.abs(p - 0.25) < 0.08 || Math.abs(p - 0.75) < 0.08) {
+    tideLabel = 'Neap tide';
+  } else {
+    tideLabel = 'Moderate tide';
+  }
+
+  return {
+    name: name,
+    illuminationPct: illum,
+    ageDays: ageDays,
+    tideLabel: tideLabel,
+  };
+}
+
+export function getOceanBasin(lat: number, lon: number): string {
+  if (lat >= 0) {
+    if (lon >= 100 && lon <= 180) return 'West Pacific';
+    if (lon >= -180 && lon < -80) return 'East Pacific';
+    if (lon >= -100 && lon <= 20) return 'North Atlantic';
+    if (lon > 20 && lon < 100) return 'North Indian';
+    return 'Northern Hemisphere';
+  }
+  if (lon >= 20 && lon < 135) return 'South Indian';
+  if (lon >= 135 || lon < -70) return 'South Pacific';
+  return 'South Atlantic';
+}
+
 interface ISSPosition {
   lat: number;
   lon: number;

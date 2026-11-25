@@ -21,16 +21,26 @@ import {
   buildMoonLitPath,
   buildTerminatorPaths,
   computeGreatCircleArc,
+  describeMoonPhase,
+  formatDeclination,
   formatFXInverseHint,
   formatFXRate,
+  formatLatLon,
   formatUTCClock,
   getMapLeftLon,
+  getOceanBasin,
   getSublunarPoint,
   getSubsolarPoint,
   projectLat,
   projectLonLat,
 } from '../utils/astronomy';
-import { formatTimeAgo, getCityClock } from '../utils/time';
+import {
+  formatClockHHMM,
+  formatTimeAgo,
+  getCityClock,
+  parseMinutesFromHHMM,
+} from '../utils/time';
+import { getChineseLunarDate, getTodayParts } from '../utils/calendar';
 import { formatTemp, formatWind } from '../utils/weather';
 import { formatStockPct, getCurrencySymbol } from '../utils/stocks';
 import { readStorage, readStorageJSON, writeStorage, writeStorageJSON } from '../utils/storage';
@@ -206,6 +216,10 @@ export function WorldDashboard(props: WorldDashboardProps) {
   var selectedStormId = _selectedStormState[0];
   var setSelectedStormId = _selectedStormState[1];
 
+  var _selectedCelestialState = useState<'sun' | 'moon' | null>(null);
+  var selectedCelestial = _selectedCelestialState[0];
+  var setSelectedCelestial = _selectedCelestialState[1];
+
   var _layersState = useState<WorldLayerPrefs>(readStoredWorldLayers);
   var layers = _layersState[0];
   var setLayers = _layersState[1];
@@ -224,6 +238,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
         else if (key === 'quakes') setSelectedQuakeId(null);
         else if (key === 'aurora') setSelectedAuroraPt(null);
         else if (key === 'storms') setSelectedStormId(null);
+        else if (key === 'celestial') setSelectedCelestial(null);
       }
       var next: WorldLayerPrefs = {
         arcs: prev.arcs,
@@ -403,7 +418,8 @@ export function WorldDashboard(props: WorldDashboardProps) {
         !selectedISS &&
         !selectedQuakeId &&
         !selectedAuroraPt &&
-        !selectedStormId
+        !selectedStormId &&
+        !selectedCelestial
       ) {
         return;
       }
@@ -413,6 +429,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
         setSelectedQuakeId(null);
         setSelectedAuroraPt(null);
         setSelectedStormId(null);
+        setSelectedCelestial(null);
       }, idleResetSec * 1000);
       return function () {
         window.clearTimeout(id);
@@ -424,6 +441,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
       selectedQuakeId,
       selectedAuroraPt,
       selectedStormId,
+      selectedCelestial,
       idleResetSec,
       props.activityTick,
     ]
@@ -455,6 +473,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
       var moonPos = getSublunarPoint(props.nowMs);
       return {
         sun: sunPos,
+        moon: moonPos,
         sunPt: projectLonLat(sunPos.lon, sunPos.lat, MAP_W, MAP_H, mapCenterLon),
         moonPt: projectLonLat(moonPos.lon, moonPos.lat, MAP_W, MAP_H, mapCenterLon),
         term: buildTerminatorPaths(sunPos.lat, sunPos.lon, MAP_W, MAP_H, mapCenterLon),
@@ -463,6 +482,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
     [props.nowMs, mapCenterLon]
   );
   var sun = celestial.sun;
+  var moon = celestial.moon;
   var sunPt = celestial.sunPt;
   var moonPt = celestial.moonPt;
   var term = celestial.term;
@@ -644,28 +664,75 @@ export function WorldDashboard(props: WorldDashboardProps) {
     setSelectedQuakeId(null);
     setSelectedAuroraPt(null);
     setSelectedStormId(null);
+    setSelectedCelestial(null);
   }
 
   interface MapPopoverData {
     x: number;
     y: number;
-    text: string;
+    title?: string;
+    lines: string[];
     stroke: string;
     textColor: string;
   }
 
   var activePopover: MapPopoverData | null = null;
-  if (selectedISS && issTrack) {
+  if (selectedCelestial === 'sun' && showCelestial) {
+    var homeCity = cities.length > 0 ? cities[0] : null;
+    var homeWeather = homeCity ? props.weatherById[homeCity.id] : undefined;
+    var sunLines: string[] = [
+      'Subsolar ' + formatLatLon(sun.lat, sun.lon) + ' · Decl ' + formatDeclination(sun.lat),
+    ];
+    if (homeCity && homeWeather && homeWeather.sunrise && homeWeather.sunset) {
+      var srStr = formatClockHHMM(homeWeather.sunrise, props.timeFormat);
+      var ssStr = formatClockHHMM(homeWeather.sunset, props.timeFormat);
+      var srMin = parseMinutesFromHHMM(homeWeather.sunrise, -1);
+      var ssMin = parseMinutesFromHHMM(homeWeather.sunset, -1);
+      var dayDur = '';
+      if (srMin >= 0 && ssMin > srMin) {
+        var dMins = ssMin - srMin;
+        dayDur = ' · ' + String(Math.floor(dMins / 60)) + 'h ' + String(dMins % 60) + 'm';
+      }
+      sunLines.push(homeCity.name + ' ' + srStr + ' – ' + ssStr + dayDur);
+    }
+    activePopover = {
+      x: sunPt.x,
+      y: sunPt.y,
+      title: 'Sun',
+      lines: sunLines,
+      stroke: 'rgba(253, 224, 71, 0.65)',
+      textColor: '#fef08a',
+    };
+  } else if (selectedCelestial === 'moon' && showCelestial) {
+    var mInfo = describeMoonPhase(props.moonPhase);
+    var todayParts = getTodayParts(props.nowMs);
+    var lunar = getChineseLunarDate(todayParts.year, todayParts.month, todayParts.day);
+    var lunarDayStr = lunar
+      ? 'Lunar Day ' + String(lunar.lunarDay) + ' (' + lunar.fullLabel.split(' · ')[0] + ')'
+      : 'Age ' + mInfo.ageDays.toFixed(1) + 'd';
+    activePopover = {
+      x: moonPt.x,
+      y: moonPt.y,
+      title: mInfo.name + ' · ' + String(mInfo.illuminationPct) + '% lit',
+      lines: [
+        'Sublunar ' + formatLatLon(moon.lat, moon.lon) + ' · Decl ' + formatDeclination(moon.lat),
+        lunarDayStr + ' · ' + mInfo.tideLabel,
+      ],
+      stroke: 'rgba(226, 232, 240, 0.58)',
+      textColor: '#f1f5f9',
+    };
+  } else if (selectedISS && issTrack) {
     activePopover = {
       x: issTrack.x,
       y: issTrack.y,
-      text:
+      lines: [
         'ISS · ' +
-        String(Math.round(issTrack.current.altKm)) +
-        ' km · ' +
-        Math.round(issTrack.current.speedKmh).toLocaleString() +
-        ' km/h · ' +
-        (issTrack.current.sunlit ? 'Sunlit' : 'Shadow'),
+          String(Math.round(issTrack.current.altKm)) +
+          ' km · ' +
+          Math.round(issTrack.current.speedKmh).toLocaleString() +
+          ' km/h · ' +
+          (issTrack.current.sunlit ? 'Sunlit' : 'Shadow'),
+      ],
       stroke: 'rgba(232, 121, 249, 0.65)',
       textColor: '#fae8ff',
     };
@@ -677,30 +744,44 @@ export function WorldDashboard(props: WorldDashboardProps) {
       MAP_H,
       mapCenterLon
     );
+    var stormLines: string[] = [
+      formatLatLon(selectedStorm.lat, selectedStorm.lon) +
+        ' · ' +
+        getOceanBasin(selectedStorm.lat, selectedStorm.lon),
+    ];
+    var windParts: string[] = [];
+    if (selectedStorm.windKmh > 0) {
+      var knots = Math.round(selectedStorm.windKmh / 1.852);
+      windParts.push(
+        'Winds ' + formatWind(selectedStorm.windKmh, props.units) + ' (' + String(knots) + ' kt)'
+      );
+    }
+    if (selectedStorm.alertLevel) {
+      windParts.push(selectedStorm.alertLevel + ' alert');
+    }
+    if (windParts.length > 0) {
+      stormLines.push(windParts.join(' · '));
+    }
     activePopover = {
       x: selStormPt.x,
       y: selStormPt.y,
-      text:
-        selectedStorm.name +
-        ' · ' +
-        selectedStorm.category +
-        (selectedStorm.windKmh > 0
-          ? ' · ' + formatWind(selectedStorm.windKmh, props.units)
-          : ''),
-      stroke: 'rgba(244, 63, 94, 0.62)',
+      title: selectedStorm.name + ' · ' + selectedStorm.category,
+      lines: stormLines,
+      stroke: 'rgba(244, 63, 94, 0.65)',
       textColor: '#ffe4e6',
     };
   } else if (selectedAuroraPt && aurora && showAurora) {
     activePopover = {
       x: selectedAuroraPt.x,
       y: selectedAuroraPt.y,
-      text:
+      lines: [
         'Aurora · Kp ' +
-        aurora.kp.toFixed(1) +
-        ' (' +
-        aurora.scale +
-        ') · 24h peak ' +
-        aurora.maxKp24h.toFixed(1),
+          aurora.kp.toFixed(1) +
+          ' (' +
+          aurora.scale +
+          ') · 24h peak ' +
+          aurora.maxKp24h.toFixed(1),
+      ],
       stroke: 'rgba(52, 211, 153, 0.62)',
       textColor: '#d1fae5',
     };
@@ -719,15 +800,16 @@ export function WorldDashboard(props: WorldDashboardProps) {
     activePopover = {
       x: selQuakePt.x,
       y: selQuakePt.y,
-      text:
+      lines: [
         'M' +
-        selectedQuake.mag.toFixed(1) +
-        ' · ' +
-        placeStr +
-        ' · ' +
-        String(Math.round(selectedQuake.depthKm)) +
-        ' km · ' +
-        formatTimeAgo(selectedQuake.timeMs, props.nowMs, true),
+          selectedQuake.mag.toFixed(1) +
+          ' · ' +
+          placeStr +
+          ' · ' +
+          String(Math.round(selectedQuake.depthKm)) +
+          ' km · ' +
+          formatTimeAgo(selectedQuake.timeMs, props.nowMs, true),
+      ],
       stroke: 'rgba(251, 146, 60, 0.62)',
       textColor: '#ffedd5',
     };
@@ -735,10 +817,11 @@ export function WorldDashboard(props: WorldDashboardProps) {
     activePopover = {
       x: selectedPin.arc.midX,
       y: selectedPin.arc.midY,
-      text:
+      lines: [
         selectedPin.arc.distKm.toLocaleString() +
-        ' km · ' +
-        selectedPin.arc.flightLabel,
+          ' km · ' +
+          selectedPin.arc.flightLabel,
+      ],
       stroke: 'rgba(253, 230, 138, 0.58)',
       textColor: '#fef3c7',
     };
@@ -1257,21 +1340,50 @@ export function WorldDashboard(props: WorldDashboardProps) {
 
               {/* Toggleable Subsolar (Sun) & Sublunar (Moon) markers */}
               {showCelestial ? (
-                <g class="world-celestial-layer" aria-hidden="true">
+                <g class="world-celestial-layer">
                   <g
                     class="world-celestial"
                     transform={'translate(' + sunPt.x.toFixed(1) + ',' + sunPt.y.toFixed(1) + ')'}
+                    onClick={function () {
+                      var next: 'sun' | null = selectedCelestial === 'sun' ? null : 'sun';
+                      clearAllSelections();
+                      setSelectedCelestial(next);
+                    }}
                   >
-                    <circle cx="0" cy="0" r="36" fill="url(#world-sun-halo)" />
-                    <circle cx="0" cy="0" r="10" fill="rgba(253, 224, 71, 0.22)" />
+                    <circle cx="0" cy="0" r="24" fill="transparent" />
+                    <circle cx="0" cy="0" r="36" fill="url(#world-sun-halo)" pointer-events="none" />
+                    <circle
+                      cx="0"
+                      cy="0"
+                      r={selectedCelestial === 'sun' ? '13' : '10'}
+                      fill="rgba(253, 224, 71, 0.24)"
+                      stroke={selectedCelestial === 'sun' ? 'rgba(253, 224, 71, 0.72)' : 'none'}
+                      stroke-width="1"
+                    />
                     <circle cx="0" cy="0" r="5.2" fill="#fde047" />
                   </g>
 
                   <g
                     class="world-celestial"
                     transform={'translate(' + moonPt.x.toFixed(1) + ',' + moonPt.y.toFixed(1) + ')'}
+                    onClick={function () {
+                      var next: 'moon' | null = selectedCelestial === 'moon' ? null : 'moon';
+                      clearAllSelections();
+                      setSelectedCelestial(next);
+                    }}
                   >
-                    <circle cx="0" cy="0" r="22" fill="url(#world-moon-halo)" />
+                    <circle cx="0" cy="0" r="24" fill="transparent" />
+                    <circle cx="0" cy="0" r="22" fill="url(#world-moon-halo)" pointer-events="none" />
+                    {selectedCelestial === 'moon' ? (
+                      <circle
+                        cx="0"
+                        cy="0"
+                        r="11.5"
+                        fill="rgba(226, 232, 240, 0.16)"
+                        stroke="rgba(226, 232, 240, 0.65)"
+                        stroke-width="1"
+                      />
+                    ) : null}
                     <circle cx="0" cy="0" r="6.2" fill="rgba(15, 23, 42, 0.85)" stroke="rgba(226, 232, 240, 0.45)" stroke-width="0.7" />
                     {isMoonFull ? (
                       <circle cx="0" cy="0" r="6.2" fill="#e2e8f0" />
@@ -1741,49 +1853,123 @@ export function WorldDashboard(props: WorldDashboardProps) {
                   );
                 })}
               </g>
-              {/* Contextual inline pillbox anchored next to whichever element was tapped */}
+              {/* Contextual inline pillbox / info card anchored next to whichever element was tapped */}
               {activePopover
                 ? (function () {
+                    var isCard = Boolean(activePopover.title) || activePopover.lines.length > 1;
+                    var maxChars = activePopover.title ? activePopover.title.length + 2 : 0;
+                    for (var li = 0; li < activePopover.lines.length; li++) {
+                      // CJK characters are roughly ~1.7x the width of Latin characters
+                      var lineStr = activePopover.lines[li];
+                      var estLen = 0;
+                      for (var ci = 0; ci < lineStr.length; ci++) {
+                        estLen += lineStr.charCodeAt(ci) > 255 ? 1.65 : 1;
+                      }
+                      if (estLen > maxChars) maxChars = estLen;
+                    }
                     var pillW = Math.max(
                       120,
-                      Math.min(370, Math.round(activePopover.text.length * 6.0 + 24))
+                      Math.min(390, Math.round(maxChars * 5.9 + 26))
                     );
                     var halfW = pillW / 2;
                     var px = Math.max(
                       halfW + 14,
                       Math.min(MAP_W - halfW - 14, activePopover.x)
                     );
-                    var py =
-                      activePopover.y < 42
-                        ? Math.min(MAP_H - 18, activePopover.y + 24)
-                        : Math.max(18, activePopover.y - 22);
+
+                    if (!isCard) {
+                      var py =
+                        activePopover.y < 42
+                          ? Math.min(MAP_H - 18, activePopover.y + 24)
+                          : Math.max(18, activePopover.y - 22);
+                      return (
+                        <g
+                          class="world-map-popover"
+                          transform={'translate(' + px.toFixed(1) + ',' + py.toFixed(1) + ')'}
+                          onClick={clearAllSelections}
+                        >
+                          <rect
+                            x={(-halfW).toFixed(1)}
+                            y="-11.5"
+                            width={String(pillW)}
+                            height="23"
+                            rx="11.5"
+                            fill="rgba(9, 17, 32, 0.9)"
+                            stroke={activePopover.stroke}
+                            stroke-width="1"
+                          />
+                          <text
+                            x="0"
+                            y="3.5"
+                            text-anchor="middle"
+                            fill={activePopover.textColor}
+                            font-size="10.5"
+                            font-weight="600"
+                            font-family="-apple-system, BlinkMacSystemFont, Helvetica Neue, sans-serif"
+                          >
+                            {activePopover.lines[0]}
+                          </text>
+                        </g>
+                      );
+                    }
+
+                    var rowCount = (activePopover.title ? 1 : 0) + activePopover.lines.length;
+                    var lineH = 15;
+                    var cardH = 14 + rowCount * lineH;
+                    var halfH = cardH / 2;
+                    var offsetGap = 18;
+                    var cardY =
+                      activePopover.y - offsetGap - cardH < 10
+                        ? Math.min(MAP_H - halfH - 10, activePopover.y + offsetGap + halfH)
+                        : Math.max(halfH + 10, activePopover.y - offsetGap - halfH);
+                    var startY = -halfH + 17;
+
                     return (
                       <g
                         class="world-map-popover"
-                        transform={'translate(' + px.toFixed(1) + ',' + py.toFixed(1) + ')'}
+                        transform={'translate(' + px.toFixed(1) + ',' + cardY.toFixed(1) + ')'}
                         onClick={clearAllSelections}
                       >
                         <rect
                           x={(-halfW).toFixed(1)}
-                          y="-11.5"
+                          y={(-halfH).toFixed(1)}
                           width={String(pillW)}
-                          height="23"
-                          rx="11.5"
-                          fill="rgba(9, 17, 32, 0.9)"
+                          height={String(cardH)}
+                          rx="10"
+                          fill="rgba(9, 17, 32, 0.93)"
                           stroke={activePopover.stroke}
-                          stroke-width="1"
+                          stroke-width="1.1"
                         />
-                        <text
-                          x="0"
-                          y="3.5"
-                          text-anchor="middle"
-                          fill={activePopover.textColor}
-                          font-size="10.5"
-                          font-weight="600"
-                          font-family="-apple-system, BlinkMacSystemFont, Helvetica Neue, sans-serif"
-                        >
-                          {activePopover.text}
-                        </text>
+                        {activePopover.title ? (
+                          <text
+                            x="0"
+                            y={startY.toFixed(1)}
+                            text-anchor="middle"
+                            fill={activePopover.textColor}
+                            font-size="11"
+                            font-weight="700"
+                            font-family="-apple-system, BlinkMacSystemFont, Helvetica Neue, sans-serif"
+                          >
+                            {activePopover.title}
+                          </text>
+                        ) : null}
+                        {activePopover.lines.map(function (line, idx) {
+                          var yPos = startY + (idx + (activePopover && activePopover.title ? 1 : 0)) * lineH;
+                          return (
+                            <text
+                              key={'pop-l-' + String(idx)}
+                              x="0"
+                              y={yPos.toFixed(1)}
+                              text-anchor="middle"
+                              fill="rgba(226, 238, 255, 0.92)"
+                              font-size="10"
+                              font-weight="500"
+                              font-family="-apple-system, BlinkMacSystemFont, Helvetica Neue, sans-serif"
+                            >
+                              {line}
+                            </text>
+                          );
+                        })}
                       </g>
                     );
                   })()

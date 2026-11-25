@@ -619,24 +619,47 @@ func fetchNOAASWPCKp() (*AuroraStatus, error) {
 		return nil, err
 	}
 
-	var rows [][]json.RawMessage
-	if err := json.Unmarshal(body, &rows); err != nil {
-		return nil, err
-	}
-	if len(rows) < 2 {
-		return nil, fmt.Errorf("empty kp table")
-	}
+	kps := make([]float64, 0, 64)
 
-	kps := make([]float64, 0, len(rows)-1)
-	for i := 1; i < len(rows); i++ {
-		if len(rows[i]) < 2 {
-			continue
+	// Current NOAA SWPC schema: array of objects [{"time_tag":..., "Kp": 2.33, ...}]
+	var objRows []struct {
+		Kp    json.RawMessage `json:"Kp"`
+		KpLow json.RawMessage `json:"kp"`
+	}
+	if err := json.Unmarshal(body, &objRows); err == nil && len(objRows) > 0 {
+		for _, row := range objRows {
+			raw := row.Kp
+			if len(raw) == 0 {
+				raw = row.KpLow
+			}
+			if len(raw) == 0 {
+				continue
+			}
+			kp, ok := parseFlexibleFloat(raw)
+			if !ok || kp < 0 || kp > 9.5 {
+				continue
+			}
+			kps = append(kps, math.Round(kp*10)/10)
 		}
-		kp, ok := parseFlexibleFloat(rows[i][1])
-		if !ok || kp < 0 || kp > 9.5 {
-			continue
+	} else {
+		// Legacy NOAA SWPC schema: array of string arrays [["time_tag","Kp",...], ...]
+		var rows [][]json.RawMessage
+		if err := json.Unmarshal(body, &rows); err != nil {
+			return nil, err
 		}
-		kps = append(kps, math.Round(kp*10)/10)
+		if len(rows) < 2 {
+			return nil, fmt.Errorf("empty kp table")
+		}
+		for i := 1; i < len(rows); i++ {
+			if len(rows[i]) < 2 {
+				continue
+			}
+			kp, ok := parseFlexibleFloat(rows[i][1])
+			if !ok || kp < 0 || kp > 9.5 {
+				continue
+			}
+			kps = append(kps, math.Round(kp*10)/10)
+		}
 	}
 	if len(kps) == 0 {
 		return nil, fmt.Errorf("no valid kp rows")

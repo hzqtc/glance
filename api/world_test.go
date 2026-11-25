@@ -102,11 +102,10 @@ func TestWorldHandlerFXRates(t *testing.T) {
 	}
 	auroraHTTPClient = &http.Client{
 		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
-			b, _ := json.Marshal([][]any{
-				{"time_tag", "Kp", "a_running", "station_count"},
-				{"2026-11-22 06:00:00.000", "2.67", "12", "8"},
-				{"2026-11-22 09:00:00.000", "5.33", "56", "8"},
-				{"2026-11-22 12:00:00.000", "4.33", "32", "8"},
+			b, _ := json.Marshal([]map[string]any{
+				{"time_tag": "2026-11-22T06:00:00", "Kp": 2.67, "a_running": 12, "station_count": 8},
+				{"time_tag": "2026-11-22T09:00:00", "Kp": 5.33, "a_running": 56, "station_count": 8},
+				{"time_tag": "2026-11-22T12:00:00", "Kp": 4.33, "a_running": 32, "station_count": 8},
 			})
 			return &http.Response{
 				StatusCode: http.StatusOK,
