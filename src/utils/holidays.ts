@@ -2,10 +2,18 @@
 // Seasonal holiday themes for the Photos frame (US + Chinese festivals)
 // ============================================================================
 //
-// Each theme has a date window. On a holiday's own day ("peak") it beats any
-// other theme's lead-up window; otherwise the earlier entry in HOLIDAY_THEMES
-// wins. Lunar festivals use the bundled Chinese calendar (1900-2100).
+// Each theme has a configurable enabled flag and start/end date window via
+// `photos.holidayThemes` in dashboard.config.json. Supported date formats:
+//   - Solar month-day:     "MM-DD" (e.g. "12-01", wraps across New Year)
+//   - Exact solar date:    "YYYY-MM-DD" (e.g. "2026-12-01")
+//   - Chinese lunar date:  "lunar-MM-DD" (e.g. "lunar-12-23", wraps across 腊月->正月)
+//   - Floating anchor:     "easter", "mothers-day", "fathers-day", "thanksgiving"
+//                          with optional day offset like "easter-7d" or "thanksgiving+4d"
+//
+// On a holiday's own day ("peak") it beats any other theme's lead-up window;
+// otherwise the earlier entry in HOLIDAY_THEMES wins.
 
+import type { HolidayThemeConfig } from '../types';
 import { getChineseLunarDate, toDateKey } from './calendar';
 import type { LunarDateInfo } from './calendar';
 
@@ -44,8 +52,9 @@ interface DayInfo {
 interface HolidayThemeDef {
   id: HolidayThemeId;
   name: string;
-  /** Returns 'peak' on the holiday itself, 'window' during lead-up, or null */
-  match: (d: DayInfo) => 'peak' | 'window' | null;
+  defaultStart: string;
+  defaultEnd: string;
+  isPeak: (d: DayInfo) => boolean;
 }
 
 function dayNumOf(year: number, month: number, day: number): number {
@@ -68,7 +77,7 @@ function easterSunday(year: number): { month: number; day: number } {
   var g = Math.floor((b - f + 1) / 3);
   var h = (19 * a + b - d - g + 15) % 30;
   var i = Math.floor(c / 4);
-  var k = c % 4;
+  var k = c % 100;
   var l = (32 + 2 * e + 2 * i - h - k) % 7;
   var m = Math.floor((a + 11 * h + 22 * l) / 451);
   var month = Math.floor((h + l - 7 * m + 114) / 31);
@@ -76,33 +85,99 @@ function easterSunday(year: number): { month: number; day: number } {
   return { month: month, day: day };
 }
 
-/** Window of [peak - before, peak + after] days around a fixed-per-year solar date */
-function aroundDate(
-  d: DayInfo,
-  peakMonth: number,
-  peakDay: number,
-  before: number,
-  after: number
-): 'peak' | 'window' | null {
-  var diff = d.dayNum - dayNumOf(d.year, peakMonth, peakDay);
-  if (diff === 0) return 'peak';
-  if (diff >= -before && diff <= after) return 'window';
+type ParsedSpec =
+  | { kind: 'lunar'; md: number }
+  | { kind: 'exact'; dayNum: number }
+  | { kind: 'solar'; dayNum: number };
+
+function parseDateSpec(raw: string, year: number): ParsedSpec | null {
+  var s = (raw || '').trim().toLowerCase();
+  if (!s) return null;
+
+  // Lunar month-day: "lunar-MM-DD"
+  var lm = /^lunar-(\d{1,2})-(\d{1,2})$/.exec(s);
+  if (lm) {
+    var lMonth = parseInt(lm[1], 10);
+    var lDay = parseInt(lm[2], 10);
+    if (lMonth >= 1 && lMonth <= 12 && lDay >= 1 && lDay <= 30) {
+      return { kind: 'lunar', md: lMonth * 100 + lDay };
+    }
+    return null;
+  }
+
+  // Exact solar date: "YYYY-MM-DD"
+  var em = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(s);
+  if (em) {
+    var ey = parseInt(em[1], 10);
+    var eMon = parseInt(em[2], 10);
+    var eDay = parseInt(em[3], 10);
+    if (eMon >= 1 && eMon <= 12 && eDay >= 1 && eDay <= 31) {
+      return { kind: 'exact', dayNum: dayNumOf(ey, eMon, eDay) };
+    }
+    return null;
+  }
+
+  // Recurring solar month-day: "MM-DD"
+  var sm = /^(\d{1,2})-(\d{1,2})$/.exec(s);
+  if (sm) {
+    var sMon = parseInt(sm[1], 10);
+    var sDay = parseInt(sm[2], 10);
+    if (sMon >= 1 && sMon <= 12 && sDay >= 1 && sDay <= 31) {
+      return { kind: 'solar', dayNum: dayNumOf(year, sMon, sDay) };
+    }
+    return null;
+  }
+
+  // Floating holiday anchor with optional day offset, e.g. "easter-7d", "thanksgiving+4d"
+  var am = /^(easter|mothers-day|fathers-day|thanksgiving)(?:([+-]\d+)d?)?$/.exec(s);
+  if (am) {
+    var anchor = am[1];
+    var offset = am[2] ? parseInt(am[2], 10) : 0;
+    var baseNum = 0;
+    if (anchor === 'easter') {
+      var ea = easterSunday(year);
+      baseNum = dayNumOf(year, ea.month, ea.day);
+    } else if (anchor === 'mothers-day') {
+      baseNum = dayNumOf(year, 5, nthWeekday(year, 5, 0, 2));
+    } else if (anchor === 'fathers-day') {
+      baseNum = dayNumOf(year, 6, nthWeekday(year, 6, 0, 3));
+    } else if (anchor === 'thanksgiving') {
+      baseNum = dayNumOf(year, 11, nthWeekday(year, 11, 4, 4));
+    }
+    return { kind: 'solar', dayNum: baseNum + offset };
+  }
+
   return null;
 }
 
-/** Lunar month/day range within a single (non-leap) lunar month */
-function lunarRange(
-  d: DayInfo,
-  lMonth: number,
-  fromDay: number,
-  peakDay: number,
-  toDay: number
-): 'peak' | 'window' | null {
-  var l = d.lunar;
-  if (!l || l.isLeapMonth || l.lunarMonth !== lMonth) return null;
-  if (l.lunarDay === peakDay) return 'peak';
-  if (l.lunarDay >= fromDay && l.lunarDay <= toDay) return 'window';
-  return null;
+function isInConfiguredWindow(d: DayInfo, startStr: string, endStr: string): boolean {
+  var startSpec = parseDateSpec(startStr, d.year);
+  var endSpec = parseDateSpec(endStr, d.year);
+  if (!startSpec || !endSpec) return false;
+
+  if (startSpec.kind === 'lunar' && endSpec.kind === 'lunar') {
+    var l = d.lunar;
+    if (!l || l.isLeapMonth) return false;
+    var curMD = l.lunarMonth * 100 + l.lunarDay;
+    if (startSpec.md <= endSpec.md) {
+      return curMD >= startSpec.md && curMD <= endSpec.md;
+    }
+    // Wraps across lunar year boundary (e.g. lunar-12-23 through lunar-01-07)
+    return curMD >= startSpec.md || curMD <= endSpec.md;
+  }
+
+  if (startSpec.kind !== 'lunar' && endSpec.kind !== 'lunar') {
+    if (startSpec.kind === 'exact' || endSpec.kind === 'exact') {
+      return d.dayNum >= startSpec.dayNum && d.dayNum <= endSpec.dayNum;
+    }
+    if (startSpec.dayNum <= endSpec.dayNum) {
+      return d.dayNum >= startSpec.dayNum && d.dayNum <= endSpec.dayNum;
+    }
+    // Wraps across solar year boundary (e.g. 12-27 through 01-02)
+    return d.dayNum >= startSpec.dayNum || d.dayNum <= endSpec.dayNum;
+  }
+
+  return false;
 }
 
 var HOLIDAY_THEMES: HolidayThemeDef[] = [
@@ -110,125 +185,142 @@ var HOLIDAY_THEMES: HolidayThemeDef[] = [
     // 小年 (腊月廿三) through 初七 (人日)
     id: 'lunar-new-year',
     name: 'Lunar New Year',
-    match: function (d) {
+    defaultStart: 'lunar-12-23',
+    defaultEnd: 'lunar-01-07',
+    isPeak: function (d) {
       var l = d.lunar;
-      if (!l || l.isLeapMonth) return null;
-      if (l.isLastDayOfYear || (l.lunarMonth === 1 && l.lunarDay === 1)) return 'peak';
-      if (l.lunarMonth === 12 && l.lunarDay >= 23) return 'window';
-      if (l.lunarMonth === 1 && l.lunarDay <= 7) return 'window';
-      return null;
+      return Boolean(l && !l.isLeapMonth && (l.isLastDayOfYear || (l.lunarMonth === 1 && l.lunarDay === 1)));
     },
   },
   {
     id: 'lantern',
     name: 'Lantern Festival',
-    match: function (d) {
-      return lunarRange(d, 1, 13, 15, 15);
+    defaultStart: 'lunar-01-13',
+    defaultEnd: 'lunar-01-15',
+    isPeak: function (d) {
+      var l = d.lunar;
+      return Boolean(l && !l.isLeapMonth && l.lunarMonth === 1 && l.lunarDay === 15);
     },
   },
   {
     id: 'dragon-boat',
     name: 'Dragon Boat Festival',
-    match: function (d) {
-      return lunarRange(d, 5, 1, 5, 5);
+    defaultStart: 'lunar-05-01',
+    defaultEnd: 'lunar-05-05',
+    isPeak: function (d) {
+      var l = d.lunar;
+      return Boolean(l && !l.isLeapMonth && l.lunarMonth === 5 && l.lunarDay === 5);
     },
   },
   {
     id: 'qixi',
     name: 'Qixi Festival',
-    match: function (d) {
-      return lunarRange(d, 7, 5, 7, 7);
+    defaultStart: 'lunar-07-05',
+    defaultEnd: 'lunar-07-07',
+    isPeak: function (d) {
+      var l = d.lunar;
+      return Boolean(l && !l.isLeapMonth && l.lunarMonth === 7 && l.lunarDay === 7);
     },
   },
   {
     id: 'mid-autumn',
     name: 'Mid-Autumn Festival',
-    match: function (d) {
-      return lunarRange(d, 8, 10, 15, 16);
+    defaultStart: 'lunar-08-10',
+    defaultEnd: 'lunar-08-16',
+    isPeak: function (d) {
+      var l = d.lunar;
+      return Boolean(l && !l.isLeapMonth && l.lunarMonth === 8 && l.lunarDay === 15);
     },
   },
   {
-    // Dec 27 - Jan 2
     id: 'new-year',
     name: "New Year's",
-    match: function (d) {
-      if (d.month === 12 && d.day === 31) return 'peak';
-      if (d.month === 1 && d.day === 1) return 'peak';
-      if (d.month === 12 && d.day >= 27) return 'window';
-      if (d.month === 1 && d.day <= 2) return 'window';
-      return null;
+    defaultStart: '12-27',
+    defaultEnd: '01-02',
+    isPeak: function (d) {
+      return (d.month === 12 && d.day === 31) || (d.month === 1 && d.day === 1);
     },
   },
   {
     id: 'valentines',
     name: "Valentine's Day",
-    match: function (d) {
-      return aroundDate(d, 2, 14, 4, 0);
+    defaultStart: '02-10',
+    defaultEnd: '02-14',
+    isPeak: function (d) {
+      return d.month === 2 && d.day === 14;
     },
   },
   {
     id: 'st-patricks',
     name: "St. Patrick's Day",
-    match: function (d) {
-      return aroundDate(d, 3, 17, 3, 0);
+    defaultStart: '03-14',
+    defaultEnd: '03-17',
+    isPeak: function (d) {
+      return d.month === 3 && d.day === 17;
     },
   },
   {
-    // Palm Sunday through Easter Sunday
     id: 'easter',
     name: 'Easter',
-    match: function (d) {
+    defaultStart: 'easter-7d',
+    defaultEnd: 'easter+0d',
+    isPeak: function (d) {
       var e = easterSunday(d.year);
-      return aroundDate(d, e.month, e.day, 7, 0);
+      return d.month === e.month && d.day === e.day;
     },
   },
   {
-    // Thursday through 2nd Sunday of May
     id: 'mothers-day',
     name: "Mother's Day",
-    match: function (d) {
-      return aroundDate(d, 5, nthWeekday(d.year, 5, 0, 2), 3, 0);
+    defaultStart: 'mothers-day-3d',
+    defaultEnd: 'mothers-day+0d',
+    isPeak: function (d) {
+      return d.month === 5 && d.day === nthWeekday(d.year, 5, 0, 2);
     },
   },
   {
-    // Thursday through 3rd Sunday of June
     id: 'fathers-day',
     name: "Father's Day",
-    match: function (d) {
-      return aroundDate(d, 6, nthWeekday(d.year, 6, 0, 3), 3, 0);
+    defaultStart: 'fathers-day-3d',
+    defaultEnd: 'fathers-day+0d',
+    isPeak: function (d) {
+      return d.month === 6 && d.day === nthWeekday(d.year, 6, 0, 3);
     },
   },
   {
     id: 'independence',
     name: 'Independence Day',
-    match: function (d) {
-      return aroundDate(d, 7, 4, 3, 0);
+    defaultStart: '07-01',
+    defaultEnd: '07-04',
+    isPeak: function (d) {
+      return d.month === 7 && d.day === 4;
     },
   },
   {
     id: 'halloween',
     name: 'Halloween',
-    match: function (d) {
-      return aroundDate(d, 10, 31, 14, 0);
+    defaultStart: '10-17',
+    defaultEnd: '10-31',
+    isPeak: function (d) {
+      return d.month === 10 && d.day === 31;
     },
   },
   {
-    // Monday through Sunday of Thanksgiving week
     id: 'thanksgiving',
     name: 'Thanksgiving',
-    match: function (d) {
-      return aroundDate(d, 11, nthWeekday(d.year, 11, 4, 4), 3, 3);
+    defaultStart: 'thanksgiving-3d',
+    defaultEnd: 'thanksgiving+3d',
+    isPeak: function (d) {
+      return d.month === 11 && d.day === nthWeekday(d.year, 11, 4, 4);
     },
   },
   {
-    // Monday after Thanksgiving weekend through Dec 26
     id: 'christmas',
     name: 'Christmas',
-    match: function (d) {
-      if (d.month === 12 && (d.day === 24 || d.day === 25)) return 'peak';
-      var start = dayNumOf(d.year, 11, nthWeekday(d.year, 11, 4, 4)) + 4;
-      if (d.dayNum >= start && d.dayNum <= dayNumOf(d.year, 12, 26)) return 'window';
-      return null;
+    defaultStart: 'thanksgiving+4d',
+    defaultEnd: '12-26',
+    isPeak: function (d) {
+      return d.month === 12 && (d.day === 24 || d.day === 25);
     },
   },
 ];
@@ -243,7 +335,7 @@ function buildDayInfo(year: number, month: number, day: number): DayInfo {
   };
 }
 
-function toActive(def: HolidayThemeDef, d: DayInfo, isPeak: boolean): ActiveHolidayTheme {
+function toActive(def: HolidayThemeDef, isPeak: boolean): ActiveHolidayTheme {
   return {
     id: def.id,
     name: def.name,
@@ -254,27 +346,44 @@ function toActive(def: HolidayThemeDef, d: DayInfo, isPeak: boolean): ActiveHoli
 export function getHolidayThemeForDate(
   year: number,
   month: number,
-  day: number
+  day: number,
+  config?: { [id: string]: HolidayThemeConfig }
 ): ActiveHolidayTheme | null {
   var d = buildDayInfo(year, month, day);
   var windowHit: HolidayThemeDef | null = null;
   for (var i = 0; i < HOLIDAY_THEMES.length; i++) {
     var def = HOLIDAY_THEMES[i];
-    var res = def.match(d);
-    if (res === 'peak') return toActive(def, d, true);
-    if (res === 'window' && !windowHit) windowHit = def;
+    var cfg = config ? config[def.id] : undefined;
+    if (cfg && cfg.enabled === false) {
+      continue;
+    }
+    var startStr = cfg && cfg.start ? cfg.start : def.defaultStart;
+    var endStr = cfg && cfg.end ? cfg.end : def.defaultEnd;
+    if (!isInConfiguredWindow(d, startStr, endStr)) {
+      continue;
+    }
+    if (def.isPeak(d)) {
+      return toActive(def, true);
+    }
+    if (!windowHit) {
+      windowHit = def;
+    }
   }
-  return windowHit ? toActive(windowHit, d, false) : null;
+  return windowHit ? toActive(windowHit, false) : null;
 }
 
 var cachedKey = '';
+var cachedConfigRef: { [id: string]: HolidayThemeConfig } | undefined = undefined;
 var cachedTheme: ActiveHolidayTheme | null = null;
 
 /**
  * Active theme for the local calendar day of `nowMs`. `?holiday=<id>` forces
  * a theme for previewing; `?holiday=off` disables the frame.
  */
-export function getActiveHolidayTheme(nowMs: number): ActiveHolidayTheme | null {
+export function getActiveHolidayTheme(
+  nowMs: number,
+  config?: { [id: string]: HolidayThemeConfig }
+): ActiveHolidayTheme | null {
   var forced = getForcedHolidayParam();
   if (forced === 'off') return null;
   var now = new Date(nowMs);
@@ -284,14 +393,15 @@ export function getActiveHolidayTheme(nowMs: number): ActiveHolidayTheme | null 
   if (forced) {
     for (var i = 0; i < HOLIDAY_THEMES.length; i++) {
       if (HOLIDAY_THEMES[i].id === forced) {
-        return toActive(HOLIDAY_THEMES[i], buildDayInfo(y, m, dd), true);
+        return toActive(HOLIDAY_THEMES[i], true);
       }
     }
   }
   var key = toDateKey(y, m, dd);
-  if (key !== cachedKey) {
+  if (key !== cachedKey || config !== cachedConfigRef) {
     cachedKey = key;
-    cachedTheme = getHolidayThemeForDate(y, m, dd);
+    cachedConfigRef = config;
+    cachedTheme = getHolidayThemeForDate(y, m, dd, config);
   }
   return cachedTheme;
 }

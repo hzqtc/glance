@@ -1,5 +1,10 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
-import type { PhotoItem, PhotoLocationsResponse, PhotosResponse } from '../types';
+import type {
+  HolidayThemeConfig,
+  PhotoItem,
+  PhotoLocationsResponse,
+  PhotosResponse,
+} from '../types';
 import { buildCollageDeck } from '../utils/collage';
 import type { CollageFrame } from '../utils/collage';
 import { getDemoPhotosResponse, isPhotosDemoMode } from '../data/demoPhotos';
@@ -14,6 +19,7 @@ interface PhotosDashboardProps {
   isActive: boolean;
   preload?: boolean;
   slideIntervalSeconds?: number;
+  holidayThemes?: { [id: string]: HolidayThemeConfig };
   isRefreshing: boolean;
   onRefresh: () => void;
   onUnauthorized?: () => void;
@@ -722,7 +728,9 @@ export function PhotosDashboard(props: PhotosDashboardProps) {
   var currentFrame = deck.length > 0 ? deck[frameIdx] || deck[0] : null;
   var isConfigured = resp ? resp.configured : true;
   // Re-evaluated on every frame advance, so the theme rolls over at local midnight
-  var holidayTheme = currentFrame ? getActiveHolidayTheme(Date.now()) : null;
+  var holidayTheme = currentFrame
+    ? getActiveHolidayTheme(Date.now(), props.holidayThemes)
+    : null;
 
   return (
     <div

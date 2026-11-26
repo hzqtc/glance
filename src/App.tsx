@@ -1458,6 +1458,11 @@ function DashboardShell(props: DashboardShellProps) {
             isActive={activeSlide === PHOTOS_SLIDE && !ambientVisible}
             preload={preloadReady && !ambientVisible}
             slideIntervalSeconds={photoSlideIntervalSec}
+            holidayThemes={
+              data && data.config && data.config.photos
+                ? data.config.photos.holidayThemes
+                : undefined
+            }
             isRefreshing={isRefreshing}
             onRefresh={handleRefresh}
             onUnauthorized={props.onUnauthorized}

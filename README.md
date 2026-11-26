@@ -133,7 +133,7 @@ NEWS_FEEDS=[{"name":"Hacker News","url":"https://news.ycombinator.com/rss"},{"na
 
 ### 3. Customize `config/dashboard.config.json`
 
-Edit [`config/dashboard.config.json`](./config/dashboard.config.json) to set your Home city (first in `cities`), additional world cities, units (`"F"` or `"C"`), clock format (`"12h"` or `"24h"`), night dimming/ambient hours, carousel schedule, and stock watchlist:
+Edit [`config/dashboard.config.json`](./config/dashboard.config.json) to set your Home city (first in `cities`), additional world cities, units (`"F"` or `"C"`), clock format (`"12h"` or `"24h"`), night dimming/ambient hours, carousel schedule, stock watchlist, and Photos frame holiday themes:
 
 ```json
 {
@@ -142,6 +142,14 @@ Edit [`config/dashboard.config.json`](./config/dashboard.config.json) to set you
   "idleResetSeconds": 60,
   "nightMode": { "enabled": true, "startHour": 23, "endHour": 7, "dimOpacity": 0.55 },
   "ambient": { "enabled": true, "resumeAfterSeconds": 60 },
+  "photos": {
+    "slideIntervalSeconds": 15,
+    "holidayThemes": {
+      "lunar-new-year": { "enabled": true, "start": "lunar-12-23", "end": "lunar-01-07" },
+      "halloween": { "enabled": true, "start": "10-17", "end": "10-31" },
+      "christmas": { "enabled": true, "start": "thanksgiving+4d", "end": "12-26" }
+    }
+  },
   "cities": [
     { "id": "sunnyvale", "name": "Sunnyvale", "region": "CA", "lat": 37.3688, "lon": -122.0363, "timezone": "America/Los_Angeles" },
     { "id": "paris", "name": "Paris", "region": "France", "lat": 48.8566, "lon": 2.3522, "timezone": "Europe/Paris" },
@@ -159,6 +167,8 @@ Edit [`config/dashboard.config.json`](./config/dashboard.config.json) to set you
   }
 }
 ```
+
+Each of the 15 built-in US & Chinese holiday themes under `photos.holidayThemes` (`lunar-new-year`, `lantern`, `dragon-boat`, `qixi`, `mid-autumn`, `new-year`, `valentines`, `st-patricks`, `easter`, `mothers-day`, `fathers-day`, `independence`, `halloween`, `thanksgiving`, `christmas`) can be toggled with `"enabled": true/false` and given custom `start`/`end` dates using `"MM-DD"`, `"YYYY-MM-DD"`, `"lunar-MM-DD"`, or floating holiday anchors like `"easter-7d"`, `"mothers-day-3d"`, `"fathers-day-3d"`, or `"thanksgiving+4d"`.
 
 ---
 
@@ -193,6 +203,7 @@ Append `?demo=<mode>` to the URL to preview states immediately:
 - **Night ambient:** `?demo=ambient` (shows the night ambient clock at any hour)
 - **Calendar:** `?demo=calendar` (serves 3 generated sample calendars — Work, Personal, Family — with recurring events and a trip countdown through the real `.ics` pipeline)
 - **Photos:** `?demo=photos` (uses 15 bundled stock photos from [`public/demo/photos/`](./public/demo/photos/); see [CREDITS](./public/demo/photos/CREDITS.md))
+- **Holiday ornaments:** `?holiday=<id>` (e.g. `?holiday=christmas`, `?holiday=lunar-new-year`) previews any theme immediately; `?holiday=off` hides ornaments.
 
 ---
 

@@ -36,8 +36,15 @@ export interface CarouselConfig {
   schedule?: CarouselScheduleStep[];
 }
 
+export interface HolidayThemeConfig {
+  enabled?: boolean;
+  start?: string;
+  end?: string;
+}
+
 export interface PhotosConfig {
   slideIntervalSeconds: number;
+  holidayThemes?: { [id: string]: HolidayThemeConfig };
 }
 
 export interface FXPairConfig {

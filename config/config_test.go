@@ -163,3 +163,44 @@ func TestExplicitFXPairsOverrideDerivation(t *testing.T) {
 		t.Fatalf("expected explicit fxPairs to win, got %+v", cfg.World.FXPairs)
 	}
 }
+
+func TestHolidayThemesConfig(t *testing.T) {
+	// Embedded default config includes all 15 holiday themes enabled with default dates
+	defCfg, _, _, err := LoadNormalizedConfig()
+	if err != nil {
+		t.Fatalf("LoadNormalizedConfig failed: %v", err)
+	}
+	if len(defCfg.Photos.HolidayThemes) != 15 {
+		t.Fatalf("expected 15 default holiday themes, got %d", len(defCfg.Photos.HolidayThemes))
+	}
+	for id, theme := range defCfg.Photos.HolidayThemes {
+		if theme.Enabled == nil || !*theme.Enabled {
+			t.Fatalf("expected default theme %q to be enabled", id)
+		}
+		if theme.Start == "" || theme.End == "" {
+			t.Fatalf("expected default theme %q to have start/end dates, got %+v", id, theme)
+		}
+	}
+
+	// Custom overrides: disable one, customize dates on another, omit enabled -> defaults true
+	cfg, err := ParseAndNormalizeConfig([]byte(`{
+		"cities": [{"id":"c1","name":"Test","timezone":"America/Los_Angeles"}],
+		"photos": {
+			"holidayThemes": {
+				"Halloween": {"enabled": false},
+				"christmas": {"start": " 12-01 ", "end": " 12-31 "}
+			}
+		}
+	}`))
+	if err != nil {
+		t.Fatalf("ParseAndNormalizeConfig failed: %v", err)
+	}
+	h, ok := cfg.Photos.HolidayThemes["halloween"]
+	if !ok || h.Enabled == nil || *h.Enabled {
+		t.Fatalf("expected halloween disabled, got %+v", h)
+	}
+	x, ok := cfg.Photos.HolidayThemes["christmas"]
+	if !ok || x.Enabled == nil || !*x.Enabled || x.Start != "12-01" || x.End != "12-31" {
+		t.Fatalf("unexpected christmas override: %+v", x)
+	}
+}

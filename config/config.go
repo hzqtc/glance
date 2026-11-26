@@ -53,8 +53,15 @@ type CarouselConfig struct {
 	Schedule           []CarouselScheduleStep `json:"schedule,omitempty"`
 }
 
+type HolidayThemeConfig struct {
+	Enabled *bool  `json:"enabled"`
+	Start   string `json:"start,omitempty"`
+	End     string `json:"end,omitempty"`
+}
+
 type PhotosConfig struct {
-	SlideIntervalSeconds int `json:"slideIntervalSeconds"`
+	SlideIntervalSeconds int                           `json:"slideIntervalSeconds"`
+	HolidayThemes        map[string]HolidayThemeConfig `json:"holidayThemes,omitempty"`
 }
 
 type FXPairConfig struct {
@@ -161,6 +168,25 @@ func ParseAndNormalizeConfig(raw []byte) (DashboardConfig, error) {
 	cfg.Carousel.Schedule = normalizeCarouselSchedule(cfg.Carousel.Schedule, cfg.Carousel.IntervalSeconds)
 	if cfg.Photos.SlideIntervalSeconds < 3 {
 		cfg.Photos.SlideIntervalSeconds = 15
+	}
+	if len(cfg.Photos.HolidayThemes) > 0 {
+		normalizedThemes := make(map[string]HolidayThemeConfig, len(cfg.Photos.HolidayThemes))
+		for rawID, theme := range cfg.Photos.HolidayThemes {
+			id := strings.ToLower(strings.TrimSpace(rawID))
+			if id == "" {
+				continue
+			}
+			enabled := true
+			if theme.Enabled != nil {
+				enabled = *theme.Enabled
+			}
+			normalizedThemes[id] = HolidayThemeConfig{
+				Enabled: &enabled,
+				Start:   strings.TrimSpace(theme.Start),
+				End:     strings.TrimSpace(theme.End),
+			}
+		}
+		cfg.Photos.HolidayThemes = normalizedThemes
 	}
 	cfg.World.FXPairs = normalizeFXPairs(cfg.World.FXPairs, cfg.Cities)
 	if cfg.Ambient.Enabled == nil {

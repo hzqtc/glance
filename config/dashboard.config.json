@@ -34,7 +34,24 @@
     ]
   },
   "photos": {
-    "slideIntervalSeconds": 15
+    "slideIntervalSeconds": 15,
+    "holidayThemes": {
+      "lunar-new-year": { "enabled": true, "start": "lunar-12-23", "end": "lunar-01-07" },
+      "lantern": { "enabled": true, "start": "lunar-01-13", "end": "lunar-01-15" },
+      "dragon-boat": { "enabled": true, "start": "lunar-05-01", "end": "lunar-05-05" },
+      "qixi": { "enabled": true, "start": "lunar-07-05", "end": "lunar-07-07" },
+      "mid-autumn": { "enabled": true, "start": "lunar-08-10", "end": "lunar-08-16" },
+      "new-year": { "enabled": true, "start": "12-27", "end": "01-02" },
+      "valentines": { "enabled": true, "start": "02-10", "end": "02-14" },
+      "st-patricks": { "enabled": true, "start": "03-14", "end": "03-17" },
+      "easter": { "enabled": true, "start": "easter-7d", "end": "easter+0d" },
+      "mothers-day": { "enabled": true, "start": "mothers-day-3d", "end": "mothers-day+0d" },
+      "fathers-day": { "enabled": true, "start": "fathers-day-3d", "end": "fathers-day+0d" },
+      "independence": { "enabled": true, "start": "07-01", "end": "07-04" },
+      "halloween": { "enabled": true, "start": "10-17", "end": "10-31" },
+      "thanksgiving": { "enabled": true, "start": "thanksgiving-3d", "end": "thanksgiving+3d" },
+      "christmas": { "enabled": true, "start": "thanksgiving+4d", "end": "12-26" }
+    }
   },
   "cities": [
     {
