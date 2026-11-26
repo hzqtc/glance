@@ -159,7 +159,7 @@ const (
 	usgsQuakesURL      = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_day.geojson"
 	noaaSWPCKpURL      = "https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json"
 	nhcCurrentStorms   = "https://www.nhc.noaa.gov/CurrentStorms.json"
-	gdacsMapFeedURL    = "https://www.gdacs.org/gdacsapi/api/events/geteventlist/MAP"
+	gdacsMapFeedURL    = "https://www.gdacs.org/gdacsapi/api/events/geteventlist/SEARCH?eventlist=TC&alertlevel=Green;Orange;Red"
 )
 
 // WorldHandler serves GET /api/world on Vercel (and locally via cmd/devserver).
