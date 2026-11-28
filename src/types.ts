@@ -333,7 +333,6 @@ export interface VolcanoEvent {
   id: string;
   name: string;
   region?: string;
-  date?: string;
   lat: number;
   lon: number;
 }

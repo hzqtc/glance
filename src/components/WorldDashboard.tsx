@@ -822,8 +822,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
         selectedVolcano.name +
         (selectedVolcano.region ? ' · ' + selectedVolcano.region : ''),
       lines: [
-        formatLatLon(selectedVolcano.lat, selectedVolcano.lon) +
-          (selectedVolcano.date ? ' · New eruption (' + selectedVolcano.date + ')' : ' · New eruption'),
+        formatLatLon(selectedVolcano.lat, selectedVolcano.lon) + ' · Last eruption this week',
       ],
       stroke: 'rgba(248, 113, 113, 0.68)',
       textColor: '#fee2e2',

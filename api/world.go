@@ -80,7 +80,6 @@ type VolcanoEvent struct {
 	ID     string  `json:"id"`
 	Name   string  `json:"name"`
 	Region string  `json:"region,omitempty"`
-	Date   string  `json:"date,omitempty"`
 	Lat    float64 `json:"lat"`
 	Lon    float64 `json:"lon"`
 }
@@ -1003,10 +1002,10 @@ func latin1ToUTF8(b []byte) []byte {
 
 // parseGVPTitle parses Smithsonian GVP weekly RSS titles such as:
 // "Mayon (Philippines) - Report for 12 November-18 November 2026 - New Eruptive Activity"
-func parseGVPTitle(title string) (name, region, reportDate string, isNewEruption bool) {
+func parseGVPTitle(title string) (name, region string, isNewEruption bool) {
 	t := strings.TrimSpace(title)
 	if !strings.Contains(strings.ToLower(t), "new eruptive activity") {
-		return "", "", "", false
+		return "", "", false
 	}
 	parts := strings.Split(t, " - ")
 	head := strings.TrimSpace(parts[0])
@@ -1016,13 +1015,7 @@ func parseGVPTitle(title string) (name, region, reportDate string, isNewEruption
 	} else {
 		name = head
 	}
-	if len(parts) >= 2 {
-		rep := strings.TrimSpace(parts[1])
-		if strings.HasPrefix(strings.ToLower(rep), "report for ") {
-			reportDate = strings.TrimSpace(rep[len("report for "):])
-		}
-	}
-	return name, region, reportDate, name != ""
+	return name, region, name != ""
 }
 
 func fetchGVPVolcanoes() ([]VolcanoEvent, error) {
@@ -1042,7 +1035,7 @@ func fetchGVPVolcanoes() ([]VolcanoEvent, error) {
 
 	out := make([]VolcanoEvent, 0, 8)
 	for _, item := range feed.Items {
-		name, region, reportDate, ok := parseGVPTitle(item.Title)
+		name, region, ok := parseGVPTitle(item.Title)
 		if !ok {
 			continue
 		}
@@ -1060,7 +1053,6 @@ func fetchGVPVolcanoes() ([]VolcanoEvent, error) {
 			ID:     "gvp-" + slug,
 			Name:   name,
 			Region: region,
-			Date:   reportDate,
 			Lat:    math.Round(lat*100) / 100,
 			Lon:    math.Round(lon*100) / 100,
 		})
