@@ -56,14 +56,21 @@ type AuroraStatus struct {
 	Scale    string  `json:"scale"`
 }
 
+type StormTrackPoint struct {
+	Lat float64 `json:"lat"`
+	Lon float64 `json:"lon"`
+}
+
 type TropicalStorm struct {
-	ID         string  `json:"id"`
-	Name       string  `json:"name"`
-	Category   string  `json:"category"`
-	WindKmh    float64 `json:"windKmh"`
-	Lat        float64 `json:"lat"`
-	Lon        float64 `json:"lon"`
-	AlertLevel string  `json:"alertLevel"`
+	ID         string            `json:"id"`
+	Name       string            `json:"name"`
+	Category   string            `json:"category"`
+	WindKmh    float64           `json:"windKmh"`
+	Lat        float64           `json:"lat"`
+	Lon        float64           `json:"lon"`
+	AlertLevel string            `json:"alertLevel"`
+	Track      []StormTrackPoint `json:"track,omitempty"`
+	Forecast   []StormTrackPoint `json:"forecast,omitempty"`
 }
 
 type WorldResponse struct {
@@ -144,7 +151,7 @@ var (
 	stormsCache      ttlCache[[]TropicalStorm]
 	stormsHTTPClient = &http.Client{Timeout: 8 * time.Second}
 
-	gdacsStormPrefixes = []string{"tropical cyclone ", "tropical storm ", "typhoon ", "hurricane ", "cyclone "}
+	stormTitlePrefixes = []string{"tropical cyclone ", "tropical storm ", "typhoon ", "hurricane ", "cyclone "}
 )
 
 const (
@@ -158,8 +165,7 @@ const (
 	celestrakISSTLEURL = "https://celestrak.org/NORAD/elements/gp.php?CATNR=25544&FORMAT=TLE"
 	usgsQuakesURL      = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_day.geojson"
 	noaaSWPCKpURL      = "https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json"
-	nhcCurrentStorms   = "https://www.nhc.noaa.gov/CurrentStorms.json"
-	gdacsMapFeedURL    = "https://www.gdacs.org/gdacsapi/api/events/geteventlist/SEARCH?eventlist=TC&alertlevel=Green;Orange;Red"
+	eonetStormsURL     = "https://eonet.gsfc.nasa.gov/api/v3/events?category=severeStorms&status=open&limit=20"
 )
 
 // WorldHandler serves GET /api/world on Vercel (and locally via cmd/devserver).
@@ -685,30 +691,7 @@ func fetchNOAASWPCKp() (*AuroraStatus, error) {
 }
 
 func fetchStormsCached(forceRefresh bool) []TropicalStorm {
-	return stormsCache.getOrFetch(stormsCacheTTL, forceRefresh, func() ([]TropicalStorm, error) {
-		var (
-			nhcStorms   []TropicalStorm
-			gdacsStorms []TropicalStorm
-			nhcErr      error
-			gdacsErr    error
-			wg          sync.WaitGroup
-		)
-		wg.Add(2)
-		go func() {
-			defer wg.Done()
-			nhcStorms, nhcErr = fetchNHCStorms()
-		}()
-		go func() {
-			defer wg.Done()
-			gdacsStorms, gdacsErr = fetchGDACSStorms()
-		}()
-		wg.Wait()
-
-		if nhcErr != nil && gdacsErr != nil {
-			return nil, nhcErr
-		}
-		return mergeTropicalStorms(nhcStorms, gdacsStorms), nil
-	})
+	return stormsCache.getOrFetch(stormsCacheTTL, forceRefresh, fetchEONETStorms)
 }
 
 func classifyStormWind(windKmh float64) string {
@@ -740,216 +723,234 @@ func stormAlertFromWind(windKmh float64) string {
 	return "Green"
 }
 
-type nhcStormsPayload struct {
-	ActiveStorms []struct {
-		ID               string          `json:"id"`
-		Name             string          `json:"name"`
-		Intensity        json.RawMessage `json:"intensity"`
-		LatitudeNumeric  *float64        `json:"latitudeNumeric"`
-		LongitudeNumeric *float64        `json:"longitudeNumeric"`
-	} `json:"activeStorms"`
-}
-
-func fetchNHCStorms() ([]TropicalStorm, error) {
-	body, err := worldHTTPGet(stormsHTTPClient, nhcCurrentStorms, 256*1024, "nhc")
-	if err != nil {
-		return nil, err
-	}
-
-	var payload nhcStormsPayload
-	if err := json.Unmarshal(body, &payload); err != nil {
-		return nil, err
-	}
-
-	out := make([]TropicalStorm, 0, len(payload.ActiveStorms))
-	for _, s := range payload.ActiveStorms {
-		if s.LatitudeNumeric == nil || s.LongitudeNumeric == nil {
-			continue
-		}
-		lat := *s.LatitudeNumeric
-		lon := *s.LongitudeNumeric
-		if math.IsNaN(lat) || math.IsNaN(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180 {
-			continue
-		}
-		knots, _ := parseFlexibleFloat(s.Intensity)
-		windKmh := math.Round(knots * 1.852)
-		name := strings.TrimSpace(s.Name)
-		if name == "" {
-			name = strings.TrimSpace(s.ID)
-		}
-		if name == "" {
-			continue
-		}
-		out = append(out, TropicalStorm{
-			ID:         "nhc-" + strings.ToLower(strings.TrimSpace(s.ID)),
-			Name:       name,
-			Category:   classifyStormWind(windKmh),
-			WindKmh:    windKmh,
-			Lat:        math.Round(lat*100) / 100,
-			Lon:        math.Round(lon*100) / 100,
-			AlertLevel: stormAlertFromWind(windKmh),
-		})
-	}
-	return out, nil
-}
-
-type gdacsGeoJSON struct {
-	Features []struct {
-		Properties struct {
-			EventID      json.RawMessage `json:"eventid"`
-			EventType    string          `json:"eventtype"`
-			Name         string          `json:"name"`
-			EventName    string          `json:"eventname"`
-			AlertLevel   string          `json:"alertlevel"`
-			IsCurrent    string          `json:"iscurrent"`
-			SeverityData struct {
-				Severity     float64 `json:"severity"`
-				SeverityUnit string  `json:"severityunit"`
-			} `json:"severitydata"`
-		} `json:"properties"`
-		Geometry struct {
-			Type        string          `json:"type"`
-			Coordinates json.RawMessage `json:"coordinates"`
-		} `json:"geometry"`
-	} `json:"features"`
-}
-
-func cleanGDACSStormName(eventName, fullName string) string {
-	n := strings.TrimSpace(eventName)
-	if n == "" {
-		n = strings.TrimSpace(fullName)
-	}
-	// Strip verbose prefixes like "Tropical Cyclone " or "Hurricane "
+func cleanStormTitle(title string) string {
+	n := strings.TrimSpace(title)
 	lowerN := strings.ToLower(n)
-	for _, prefix := range gdacsStormPrefixes {
+	for _, prefix := range stormTitlePrefixes {
 		if strings.HasPrefix(lowerN, prefix) {
 			n = strings.TrimSpace(n[len(prefix):])
 			break
 		}
 	}
-	// Strip trailing "-26" year suffix if present (e.g., "MAN-YI-26")
-	if idx := strings.LastIndex(n, "-"); idx > 0 && len(n)-idx == 3 {
-		if _, err := strconv.Atoi(n[idx+1:]); err == nil {
-			n = strings.TrimSpace(n[:idx])
-		}
-	}
 	if n == "" {
 		return "Cyclone"
-	}
-	// Title-case ALL CAPS names like "MAN-YI" -> "Man-Yi"
-	if n == strings.ToUpper(n) && len(n) > 1 {
-		lower := strings.ToLower(n)
-		var b strings.Builder
-		capNext := true
-		for _, r := range lower {
-			if capNext && r >= 'a' && r <= 'z' {
-				b.WriteRune(r - 'a' + 'A')
-				capNext = false
-			} else {
-				b.WriteRune(r)
-				capNext = r == ' ' || r == '-'
-			}
-		}
-		return b.String()
 	}
 	return n
 }
 
-func fetchGDACSStorms() ([]TropicalStorm, error) {
-	body, err := worldHTTPGet(stormsHTTPClient, gdacsMapFeedURL, 1024*1024, "gdacs")
+type eonetEventsPayload struct {
+	Events []struct {
+		ID       string `json:"id"`
+		Title    string `json:"title"`
+		Geometry []struct {
+			Date           string          `json:"date"`
+			Type           string          `json:"type"`
+			Coordinates    json.RawMessage `json:"coordinates"`
+			MagnitudeValue *float64        `json:"magnitudeValue"`
+			MagnitudeUnit  string          `json:"magnitudeUnit"`
+		} `json:"geometry"`
+	} `json:"events"`
+}
+
+func wrapLonDelta(dLon float64) float64 {
+	for dLon > 180 {
+		dLon -= 360
+	}
+	for dLon < -180 {
+		dLon += 360
+	}
+	return dLon
+}
+
+func wrapLon180(lon float64) float64 {
+	for lon > 180 {
+		lon -= 360
+	}
+	for lon < -180 {
+		lon += 360
+	}
+	return lon
+}
+
+func projectStormForecast(fixes []struct {
+	t   time.Time
+	lat float64
+	lon float64
+}) []StormTrackPoint {
+	n := len(fixes)
+	if n < 2 {
+		return nil
+	}
+	last := fixes[n-1]
+	ref := fixes[n-2]
+	// Prefer a reference point 6..24h before the latest fix for smoother heading
+	for i := n - 2; i >= 0; i-- {
+		dt := last.t.Sub(fixes[i].t).Hours()
+		if dt >= 6 {
+			ref = fixes[i]
+			if dt <= 24 {
+				break
+			}
+		}
+	}
+	dtHours := last.t.Sub(ref.t).Hours()
+	if dtHours < 1 || dtHours > 72 {
+		return nil
+	}
+	vLat := (last.lat - ref.lat) / dtHours
+	vLon := wrapLonDelta(last.lon-ref.lon) / dtHours
+	speedDegPerHr := math.Hypot(vLat, vLon)
+	if speedDegPerHr < 0.03 {
+		return nil
+	}
+	if speedDegPerHr > 0.65 {
+		scale := 0.65 / speedDegPerHr
+		vLat *= scale
+		vLon *= scale
+	}
+
+	out := make([]StormTrackPoint, 0, 4)
+	out = append(out, StormTrackPoint{
+		Lat: math.Round(last.lat*100) / 100,
+		Lon: math.Round(last.lon*100) / 100,
+	})
+	for _, hrs := range []float64{12, 24, 36} {
+		fLat := last.lat + vLat*hrs
+		if fLat > 75 {
+			fLat = 75
+		} else if fLat < -75 {
+			fLat = -75
+		}
+		fLon := wrapLon180(last.lon + vLon*hrs)
+		out = append(out, StormTrackPoint{
+			Lat: math.Round(fLat*100) / 100,
+			Lon: math.Round(fLon*100) / 100,
+		})
+	}
+	return out
+}
+
+func fetchEONETStorms() ([]TropicalStorm, error) {
+	body, err := worldHTTPGet(stormsHTTPClient, eonetStormsURL, 512*1024, "eonet storms")
 	if err != nil {
 		return nil, err
 	}
 
-	var raw gdacsGeoJSON
-	if err := json.Unmarshal(body, &raw); err != nil {
+	var payload eonetEventsPayload
+	if err := json.Unmarshal(body, &payload); err != nil {
 		return nil, err
 	}
 
-	out := make([]TropicalStorm, 0)
-	for _, f := range raw.Features {
-		if strings.ToUpper(strings.TrimSpace(f.Properties.EventType)) != "TC" {
+	out := make([]TropicalStorm, 0, len(payload.Events))
+	for _, ev := range payload.Events {
+		if len(ev.Geometry) == 0 {
 			continue
 		}
-		if strings.ToLower(strings.TrimSpace(f.Properties.IsCurrent)) != "true" {
+		type stormFix struct {
+			t       time.Time
+			lat     float64
+			lon     float64
+			windKmh float64
+		}
+		fixes := make([]stormFix, 0, len(ev.Geometry))
+		for _, g := range ev.Geometry {
+			if strings.ToLower(strings.TrimSpace(g.Type)) != "point" {
+				continue
+			}
+			var coords []float64
+			if err := json.Unmarshal(g.Coordinates, &coords); err != nil || len(coords) < 2 {
+				continue
+			}
+			lon, lat := coords[0], coords[1]
+			if math.IsNaN(lat) || math.IsNaN(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180 {
+				continue
+			}
+			t, _ := time.Parse(time.RFC3339, strings.TrimSpace(g.Date))
+			windKmh := 0.0
+			if g.MagnitudeValue != nil && !math.IsNaN(*g.MagnitudeValue) && *g.MagnitudeValue > 0 {
+				val := *g.MagnitudeValue
+				unit := strings.ToLower(strings.TrimSpace(g.MagnitudeUnit))
+				if unit == "kt" || unit == "kts" || unit == "knots" {
+					windKmh = val * 1.852
+				} else if unit == "mph" {
+					windKmh = val * 1.60934
+				} else {
+					windKmh = val
+				}
+			}
+			fixes = append(fixes, stormFix{t: t, lat: lat, lon: lon, windKmh: math.Round(windKmh)})
+		}
+		if len(fixes) == 0 {
 			continue
 		}
-		if strings.ToLower(strings.TrimSpace(f.Geometry.Type)) != "point" {
-			continue
+		// Ensure chronological order
+		sort.SliceStable(fixes, func(i, j int) bool {
+			return fixes[i].t.Before(fixes[j].t)
+		})
+
+		// Keep at most the latest 40 track points, deduplicating identical consecutive fixes
+		track := make([]StormTrackPoint, 0, len(fixes))
+		projFixes := make([]struct {
+			t   time.Time
+			lat float64
+			lon float64
+		}, 0, len(fixes))
+		for _, fx := range fixes {
+			pt := StormTrackPoint{
+				Lat: math.Round(fx.lat*100) / 100,
+				Lon: math.Round(fx.lon*100) / 100,
+			}
+			if len(track) > 0 && track[len(track)-1] == pt {
+				continue
+			}
+			track = append(track, pt)
+			projFixes = append(projFixes, struct {
+				t   time.Time
+				lat float64
+				lon float64
+			}{t: fx.t, lat: fx.lat, lon: fx.lon})
 		}
-		var coords []float64
-		if err := json.Unmarshal(f.Geometry.Coordinates, &coords); err != nil || len(coords) < 2 {
-			continue
-		}
-		lon := coords[0]
-		lat := coords[1]
-		if math.IsNaN(lat) || math.IsNaN(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180 {
-			continue
+		if len(track) > 40 {
+			track = track[len(track)-40:]
 		}
 
-		windKmh := f.Properties.SeverityData.Severity
-		unit := strings.ToLower(strings.TrimSpace(f.Properties.SeverityData.SeverityUnit))
-		if unit == "kt" || unit == "kts" || unit == "knots" {
-			windKmh = windKmh * 1.852
-		} else if unit == "mph" {
-			windKmh = windKmh * 1.60934
+		last := fixes[len(fixes)-1]
+		windKmh := last.windKmh
+		if windKmh == 0 {
+			for i := len(fixes) - 1; i >= 0; i-- {
+				if fixes[i].windKmh > 0 {
+					windKmh = fixes[i].windKmh
+					break
+				}
+			}
 		}
-		if math.IsNaN(windKmh) || windKmh < 0 {
-			windKmh = 0
-		}
-		windKmh = math.Round(windKmh)
 
-		idStr := strings.Trim(strings.TrimSpace(string(f.Properties.EventID)), "\"")
+		name := cleanStormTitle(ev.Title)
+		idStr := strings.ToLower(strings.TrimSpace(ev.ID))
 		if idStr == "" {
-			idStr = fmt.Sprintf("%.1f-%.1f", lat, lon)
-		}
-		alert := strings.TrimSpace(f.Properties.AlertLevel)
-		if alert == "" {
-			alert = stormAlertFromWind(windKmh)
+			idStr = fmt.Sprintf("%.1f-%.1f", last.lat, last.lon)
 		}
 		out = append(out, TropicalStorm{
-			ID:         "gdacs-" + idStr,
-			Name:       cleanGDACSStormName(f.Properties.EventName, f.Properties.Name),
+			ID:         "eonet-" + idStr,
+			Name:       name,
 			Category:   classifyStormWind(windKmh),
 			WindKmh:    windKmh,
-			Lat:        math.Round(lat*100) / 100,
-			Lon:        math.Round(lon*100) / 100,
-			AlertLevel: alert,
+			Lat:        math.Round(last.lat*100) / 100,
+			Lon:        math.Round(last.lon*100) / 100,
+			AlertLevel: stormAlertFromWind(windKmh),
+			Track:      track,
+			Forecast:   projectStormForecast(projFixes),
 		})
 	}
-	return out, nil
-}
 
-func mergeTropicalStorms(nhc, gdacs []TropicalStorm) []TropicalStorm {
-	merged := make([]TropicalStorm, 0, len(nhc)+len(gdacs))
-	merged = append(merged, nhc...)
-
-	for _, g := range gdacs {
-		gNorm := strings.ToLower(strings.TrimSpace(g.Name))
-		dup := false
-		for _, existing := range merged {
-			if strings.ToLower(strings.TrimSpace(existing.Name)) == gNorm {
-				dup = true
-				break
-			}
-			if math.Abs(existing.Lat-g.Lat) < 4.0 && math.Abs(existing.Lon-g.Lon) < 4.0 {
-				dup = true
-				break
-			}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].WindKmh != out[j].WindKmh {
+			return out[i].WindKmh > out[j].WindKmh
 		}
-		if !dup {
-			merged = append(merged, g)
-		}
-	}
-
-	sort.Slice(merged, func(i, j int) bool {
-		if merged[i].WindKmh != merged[j].WindKmh {
-			return merged[i].WindKmh > merged[j].WindKmh
-		}
-		return merged[i].Name < merged[j].Name
+		return out[i].Name < out[j].Name
 	})
-	if len(merged) > 15 {
-		merged = merged[:15]
+	if len(out) > 15 {
+		out = out[:15]
 	}
-	return merged
+	return out, nil
 }

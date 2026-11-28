@@ -312,6 +312,11 @@ export interface AuroraStatus {
   scale: string;
 }
 
+export interface StormTrackPoint {
+  lat: number;
+  lon: number;
+}
+
 export interface TropicalStorm {
   id: string;
   name: string;
@@ -320,6 +325,8 @@ export interface TropicalStorm {
   lat: number;
   lon: number;
   alertLevel: string;
+  track?: StormTrackPoint[];
+  forecast?: StormTrackPoint[];
 }
 
 export interface WorldResponse {

@@ -591,6 +591,20 @@ function buildWrappedPolylineSegments(
   return segments;
 }
 
+export function buildGeoPolylineSegments(
+  points: Array<{ lat: number; lon: number }>,
+  mapW: number,
+  mapH: number,
+  centerLon?: number
+): string[] {
+  if (!points || points.length < 2) return [];
+  var projected: ProjectedPoint[] = [];
+  for (var i = 0; i < points.length; i++) {
+    projected.push(projectLonLat(points[i].lon, points[i].lat, mapW, mapH, centerLon));
+  }
+  return buildWrappedPolylineSegments(projected, mapW);
+}
+
 /** Builds live ISS position, past trail (-45m), future orbit (+95m), and horizon footprint. */
 export function buildISSTrack(
   orbit: ISSOrbit,

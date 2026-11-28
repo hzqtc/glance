@@ -21,74 +21,53 @@ func TestWorldHandlerFXRates(t *testing.T) {
 	sampleLine2 := "2 25544  51.6416 247.4627 0006703 130.5360 325.0288 15.49815350483021"
 	stormsHTTPClient = &http.Client{
 		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
-			if strings.Contains(r.URL.Host, "nhc.noaa.gov") {
-				b, _ := json.Marshal(map[string]any{
-					"activeStorms": []map[string]any{
-						{
-							"id":               "al092026",
-							"name":             "Helena",
-							"classification":   "HU",
-							"intensity":        "90",
-							"latitudeNumeric":  24.2,
-							"longitudeNumeric": -72.5,
-							"lastUpdate":       "2026-11-22T12:00:00Z",
-						},
-					},
-				})
-				return &http.Response{
-					StatusCode: http.StatusOK,
-					Header:     http.Header{"Content-Type": []string{"application/json"}},
-					Body:       io.NopCloser(bytes.NewReader(b)),
-				}, nil
-			}
 			b, _ := json.Marshal(map[string]any{
-				"features": []map[string]any{
+				"events": []map[string]any{
 					{
-						"properties": map[string]any{
-							"eventid":    1001,
-							"eventtype":  "TC",
-							"eventname":  "MAN-YI-26",
-							"alertlevel": "Red",
-							"iscurrent":  "true",
-							"todate":     "2026-11-22T12:00:00Z",
-							"severitydata": map[string]any{
-								"severity":     195.0,
-								"severityunit": "km/h",
+						"id":    "EONET_9001",
+						"title": "Hurricane Helena",
+						"geometry": []map[string]any{
+							{
+								"date":           "2026-11-21T12:00:00Z",
+								"type":           "Point",
+								"coordinates":    []float64{-68.0, 21.0},
+								"magnitudeValue": 65.0,
+								"magnitudeUnit":  "kts",
 							},
-						},
-						"geometry": map[string]any{
-							"type":        "Point",
-							"coordinates": []float64{126.4, 15.8},
+							{
+								"date":           "2026-11-22T00:00:00Z",
+								"type":           "Point",
+								"coordinates":    []float64{-70.2, 22.6},
+								"magnitudeValue": 80.0,
+								"magnitudeUnit":  "kts",
+							},
+							{
+								"date":           "2026-11-22T12:00:00Z",
+								"type":           "Point",
+								"coordinates":    []float64{-72.5, 24.2},
+								"magnitudeValue": 90.0,
+								"magnitudeUnit":  "kts",
+							},
 						},
 					},
 					{
-						"properties": map[string]any{
-							"eventid":    1002,
-							"eventtype":  "TC",
-							"eventname":  "HELENA",
-							"alertlevel": "Orange",
-							"iscurrent":  "true",
-							"todate":     "2026-11-22T12:00:00Z",
-							"severitydata": map[string]any{
-								"severity":     160.0,
-								"severityunit": "km/h",
+						"id":    "EONET_9002",
+						"title": "Typhoon Man-Yi",
+						"geometry": []map[string]any{
+							{
+								"date":           "2026-11-22T00:00:00Z",
+								"type":           "Point",
+								"coordinates":    []float64{129.0, 14.2},
+								"magnitudeValue": 100.0,
+								"magnitudeUnit":  "kts",
 							},
-						},
-						"geometry": map[string]any{
-							"type":        "Point",
-							"coordinates": []float64{-72.3, 24.1},
-						},
-					},
-					{
-						"properties": map[string]any{
-							"eventid":   1003,
-							"eventtype": "TC",
-							"eventname": "OLD-STORM",
-							"iscurrent": "false",
-						},
-						"geometry": map[string]any{
-							"type":        "Point",
-							"coordinates": []float64{130.0, 20.0},
+							{
+								"date":           "2026-11-22T12:00:00Z",
+								"type":           "Point",
+								"coordinates":    []float64{126.4, 15.8},
+								"magnitudeValue": 105.0,
+								"magnitudeUnit":  "kts",
+							},
 						},
 					},
 				},
@@ -286,13 +265,13 @@ func TestWorldHandlerFXRates(t *testing.T) {
 		t.Fatalf("unexpected Aurora status: %+v", resp.Aurora)
 	}
 	if len(resp.Storms) != 2 {
-		t.Fatalf("expected 2 active deduplicated tropical storms, got %d: %+v", len(resp.Storms), resp.Storms)
+		t.Fatalf("expected 2 active tropical storms, got %d: %+v", len(resp.Storms), resp.Storms)
 	}
-	if resp.Storms[0].Name != "Man-Yi" || resp.Storms[0].Category != "Cat 3" {
-		t.Fatalf("expected strongest storm Man-Yi Cat 3 first, got %+v", resp.Storms[0])
+	if resp.Storms[0].Name != "Man-Yi" || resp.Storms[0].Category != "Cat 3" || len(resp.Storms[0].Track) != 2 || len(resp.Storms[0].Forecast) != 4 {
+		t.Fatalf("expected strongest storm Man-Yi Cat 3 with track & forecast first, got %+v", resp.Storms[0])
 	}
-	if resp.Storms[1].Name != "Helena" || resp.Storms[1].Category != "Cat 2" {
-		t.Fatalf("expected NHC storm Helena Cat 2 second, got %+v", resp.Storms[1])
+	if resp.Storms[1].Name != "Helena" || resp.Storms[1].Category != "Cat 2" || len(resp.Storms[1].Track) != 3 || len(resp.Storms[1].Forecast) != 4 {
+		t.Fatalf("expected storm Helena Cat 2 with track & forecast second, got %+v", resp.Storms[1])
 	}
 }
 

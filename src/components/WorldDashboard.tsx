@@ -17,6 +17,7 @@ import {
   MAP_CENTER_LON,
   MAP_LEFT_LON,
   buildAuroraOvalPaths,
+  buildGeoPolylineSegments,
   buildISSTrack,
   buildMoonLitPath,
   buildTerminatorPaths,
@@ -1410,7 +1411,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
                 </g>
               ) : null}
 
-              {/* Active Tropical Cyclones / Typhoons & Hurricanes (NHC + GDACS) */}
+              {/* Active Tropical Cyclones / Typhoons & Hurricanes (NASA EONET) */}
               {showStorms && storms.length > 0 ? (
                 <g class="world-storms-layer">
                   {storms.map(function (storm) {
@@ -1427,68 +1428,150 @@ export function WorldDashboard(props: WorldDashboardProps) {
                     // Counter-clockwise spiral in Northern Hemisphere, mirrored clockwise in Southern
                     var spinScale = storm.lat >= 0 ? '1,1' : '-1,1';
                     var labelLeft = sPt.x > MAP_W - 115;
+                    var trackSegs =
+                      storm.track && storm.track.length >= 2
+                        ? buildGeoPolylineSegments(storm.track, MAP_W, MAP_H, mapCenterLon)
+                        : [];
+                    var forecastSegs =
+                      storm.forecast && storm.forecast.length >= 2
+                        ? buildGeoPolylineSegments(storm.forecast, MAP_W, MAP_H, mapCenterLon)
+                        : [];
+                    var forecastPts =
+                      storm.forecast && storm.forecast.length >= 2
+                        ? storm.forecast.slice(1).map(function (fp) {
+                            return projectLonLat(fp.lon, fp.lat, MAP_W, MAP_H, mapCenterLon);
+                          })
+                        : [];
+                    var originPt =
+                      storm.track && storm.track.length >= 2
+                        ? projectLonLat(storm.track[0].lon, storm.track[0].lat, MAP_W, MAP_H, mapCenterLon)
+                        : null;
 
                     return (
                       <g
                         key={'storm-' + storm.id}
                         class="world-storm-pin"
-                        transform={
-                          'translate(' + sPt.x.toFixed(1) + ',' + sPt.y.toFixed(1) + ')'
-                        }
                         onClick={function () {
                           clearAllSelections();
                           setSelectedStormId(isSelS ? null : storm.id);
                         }}
                       >
-                        <circle cx="0" cy="0" r="18" fill="transparent" />
-                        <circle cx="0" cy="0" r={isSelS ? '13' : '10.5'} fill={sHalo} />
-                        <g transform={'scale(' + spinScale + ')'}>
-                          {/* Spiral cyclone arms + eye */}
-                          <path
-                            d="M 0 -5.5 C 4.5 -5.5 7.5 -2 6.5 2.5 C 5.8 5.4 3 7.5 -0.8 8.2"
-                            fill="none"
-                            stroke={sColor}
-                            stroke-width="2"
-                            stroke-linecap="round"
-                          />
-                          <path
-                            d="M 0 5.5 C -4.5 5.5 -7.5 2 -6.5 -2.5 C -5.8 -5.4 -3 -7.5 0.8 -8.2"
-                            fill="none"
-                            stroke={sColor}
-                            stroke-width="2"
-                            stroke-linecap="round"
-                          />
+                        {/* Past movement path */}
+                        {trackSegs.map(function (seg, tIdx) {
+                          return (
+                            <g key={'st-tr-' + String(tIdx)}>
+                              <path
+                                d={seg}
+                                fill="none"
+                                stroke={sColor}
+                                stroke-width={isSelS ? '4.5' : '3.2'}
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                opacity={isSelS ? '0.32' : '0.18'}
+                              />
+                              <path
+                                d={seg}
+                                fill="none"
+                                stroke={sColor}
+                                stroke-width={isSelS ? '2' : '1.4'}
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                opacity={isSelS ? '0.95' : '0.72'}
+                              />
+                            </g>
+                          );
+                        })}
+                        {originPt ? (
                           <circle
-                            cx="0"
-                            cy="0"
-                            r="3"
-                            fill="#091326"
-                            stroke={sColor}
-                            stroke-width="1.6"
+                            cx={originPt.x.toFixed(1)}
+                            cy={originPt.y.toFixed(1)}
+                            r={isSelS ? '2.6' : '2'}
+                            fill={sColor}
+                            opacity={isSelS ? '0.9' : '0.62'}
                           />
+                        ) : null}
+
+                        {/* Projected / forecast trajectory */}
+                        {forecastSegs.map(function (seg, fIdx) {
+                          return (
+                            <path
+                              key={'st-fc-' + String(fIdx)}
+                              d={seg}
+                              fill="none"
+                              stroke={sColor}
+                              stroke-width={isSelS ? '1.9' : '1.35'}
+                              stroke-dasharray="4 3.5"
+                              stroke-linecap="round"
+                              opacity={isSelS ? '0.92' : '0.64'}
+                            />
+                          );
+                        })}
+                        {forecastPts.map(function (fpt, fpIdx) {
+                          return (
+                            <circle
+                              key={'st-fp-' + String(fpIdx)}
+                              cx={fpt.x.toFixed(1)}
+                              cy={fpt.y.toFixed(1)}
+                              r={fpIdx === forecastPts.length - 1 ? (isSelS ? '2.8' : '2.2') : '1.7'}
+                              fill="#091326"
+                              stroke={sColor}
+                              stroke-width="1.2"
+                              opacity={isSelS ? '0.95' : '0.7'}
+                            />
+                          );
+                        })}
+
+                        <g transform={'translate(' + sPt.x.toFixed(1) + ',' + sPt.y.toFixed(1) + ')'}>
+                          <circle cx="0" cy="0" r="18" fill="transparent" />
+                          <circle cx="0" cy="0" r={isSelS ? '13' : '10.5'} fill={sHalo} />
+                          <g transform={'scale(' + spinScale + ')'}>
+                            {/* Spiral cyclone arms + eye */}
+                            <path
+                              d="M 0 -5.5 C 4.5 -5.5 7.5 -2 6.5 2.5 C 5.8 5.4 3 7.5 -0.8 8.2"
+                              fill="none"
+                              stroke={sColor}
+                              stroke-width="2"
+                              stroke-linecap="round"
+                            />
+                            <path
+                              d="M 0 5.5 C -4.5 5.5 -7.5 2 -6.5 -2.5 C -5.8 -5.4 -3 -7.5 0.8 -8.2"
+                              fill="none"
+                              stroke={sColor}
+                              stroke-width="2"
+                              stroke-linecap="round"
+                            />
+                            <circle
+                              cx="0"
+                              cy="0"
+                              r="3"
+                              fill="#091326"
+                              stroke={sColor}
+                              stroke-width="1.6"
+                            />
+                          </g>
+                          <text
+                            x={labelLeft ? '-12' : '12'}
+                            y="-2"
+                            text-anchor={labelLeft ? 'end' : 'start'}
+                            class="world-pin-name"
+                            fill={isMajor ? '#fda4af' : isHurr ? '#fed7aa' : '#bae6fd'}
+                            font-size="11"
+                            font-weight="700"
+                          >
+                            {storm.name}
+                          </text>
+                          <text
+                            x={labelLeft ? '-12' : '12'}
+                            y="10"
+                            text-anchor={labelLeft ? 'end' : 'start'}
+                            class="world-pin-sub"
+                            fill="rgba(226, 238, 255, 0.88)"
+                            font-size="9.5"
+                            font-weight="500"
+                          >
+                            {storm.category}
+                          </text>
                         </g>
-                        <text
-                          x={labelLeft ? '-12' : '12'}
-                          y="-2"
-                          text-anchor={labelLeft ? 'end' : 'start'}
-                          class="world-pin-name"
-                          fill={isMajor ? '#fda4af' : isHurr ? '#fed7aa' : '#bae6fd'}
-                          font-size="11"
-                          font-weight="700"
-                        >
-                          {storm.name}
-                        </text>
-                        <text
-                          x={labelLeft ? '-12' : '12'}
-                          y="10"
-                          text-anchor={labelLeft ? 'end' : 'start'}
-                          class="world-pin-sub"
-                          fill="rgba(226, 238, 255, 0.88)"
-                          font-size="9.5"
-                          font-weight="500"
-                        >
-                          {storm.category}
-                        </text>
                       </g>
                     );
                   })}
