@@ -179,7 +179,8 @@ const (
 	usgsQuakesURL      = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_day.geojson"
 	noaaSWPCKpURL      = "https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json"
 	eonetStormsURL     = "https://eonet.gsfc.nasa.gov/api/v3/events?category=severeStorms&status=open&limit=20"
-	eonetVolcanoesURL  = "https://eonet.gsfc.nasa.gov/api/v3/events?category=volcanoes&status=open&limit=20"
+	eonetVolcanoesURL  = "https://eonet.gsfc.nasa.gov/api/v3/events?category=volcanoes&status=open&days=7&limit=20"
+	volcanoMaxAge      = 7 * 24 * time.Hour
 )
 
 // WorldHandler serves GET /api/world on Vercel (and locally via cmd/devserver).
@@ -1008,6 +1009,7 @@ func fetchEONETVolcanoes() ([]VolcanoEvent, error) {
 		return nil, err
 	}
 
+	cutoff := time.Now().UTC().Add(-volcanoMaxAge)
 	out := make([]VolcanoEvent, 0, len(payload.Events))
 	for _, ev := range payload.Events {
 		if len(ev.Geometry) == 0 {
@@ -1041,7 +1043,7 @@ func fetchEONETVolcanoes() ([]VolcanoEvent, error) {
 				}
 			}
 		}
-		if !found {
+		if !found || bestTime.IsZero() || bestTime.Before(cutoff) {
 			continue
 		}
 		name, region := parseVolcanoTitle(ev.Title)

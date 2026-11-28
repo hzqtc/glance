@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestWorldHandlerFXRates(t *testing.T) {
@@ -22,6 +23,8 @@ func TestWorldHandlerFXRates(t *testing.T) {
 	stormsHTTPClient = &http.Client{
 		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 			if strings.Contains(r.URL.RawQuery, "category=volcanoes") {
+				recentDate := time.Now().UTC().Add(-48 * time.Hour).Format(time.RFC3339)
+				staleDate := time.Now().UTC().Add(-30 * 24 * time.Hour).Format(time.RFC3339)
 				b, _ := json.Marshal(map[string]any{
 					"events": []map[string]any{
 						{
@@ -29,9 +32,20 @@ func TestWorldHandlerFXRates(t *testing.T) {
 							"title": "Nevados del Chillan Volcano, Chile",
 							"geometry": []map[string]any{
 								{
-									"date":        "2026-06-15T00:00:00Z",
+									"date":        recentDate,
 									"type":        "Point",
 									"coordinates": []float64{-71.378, -36.868},
+								},
+							},
+						},
+						{
+							"id":    "EONET_20001",
+							"title": "Old Dormant Volcano, Peru",
+							"geometry": []map[string]any{
+								{
+									"date":        staleDate,
+									"type":        "Point",
+									"coordinates": []float64{-71.4, -16.3},
 								},
 							},
 						},
