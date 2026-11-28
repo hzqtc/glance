@@ -1683,25 +1683,24 @@ export function WorldDashboard(props: WorldDashboardProps) {
                           setSelectedVolcanoId(isSelV ? null : v.id);
                         }}
                       >
-                        <circle cx="0" cy="0" r="15" fill="transparent" />
+                        <circle cx="0" cy="0" r="14" fill="transparent" />
                         <circle
                           cx="0"
                           cy="0"
-                          r={isSelV ? '11.5' : '8.5'}
-                          fill={isSelV ? 'rgba(239, 68, 68, 0.3)' : 'rgba(239, 68, 68, 0.18)'}
-                          stroke="#f87171"
-                          stroke-width={isSelV ? '1.3' : '0.7'}
-                          stroke-opacity={isSelV ? '0.9' : '0.45'}
+                          r={isSelV ? '10' : '6.2'}
+                          fill={isSelV ? 'rgba(239, 68, 68, 0.28)' : 'rgba(239, 68, 68, 0.16)'}
+                          stroke={isSelV ? '#f87171' : 'none'}
+                          stroke-width="1.2"
                         />
                         {/* Miniature volcano cone + glowing crater */}
                         <path
-                          d="M -5.2 4.2 L -1.6 -3.2 L 1.6 -3.2 L 5.2 4.2 Z"
+                          d="M -3.8 3.2 L -1.2 -2.6 L 1.2 -2.6 L 3.8 3.2 Z"
                           fill="#ef4444"
                           stroke="#091326"
-                          stroke-width="0.9"
+                          stroke-width="0.8"
                           stroke-linejoin="round"
                         />
-                        <circle cx="0" cy="-3.4" r="1.4" fill="#fde047" />
+                        <circle cx="0" cy="-2.8" r="1.1" fill="#fde047" />
                         {isSelV ? (
                           <text
                             x={vPt.x > MAP_W - 105 ? '-10' : '10'}
