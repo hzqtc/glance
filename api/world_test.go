@@ -21,6 +21,28 @@ func TestWorldHandlerFXRates(t *testing.T) {
 	sampleLine2 := "2 25544  51.6416 247.4627 0006703 130.5360 325.0288 15.49815350483021"
 	stormsHTTPClient = &http.Client{
 		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			if strings.Contains(r.URL.RawQuery, "category=volcanoes") {
+				b, _ := json.Marshal(map[string]any{
+					"events": []map[string]any{
+						{
+							"id":    "EONET_20710",
+							"title": "Nevados del Chillan Volcano, Chile",
+							"geometry": []map[string]any{
+								{
+									"date":        "2026-06-15T00:00:00Z",
+									"type":        "Point",
+									"coordinates": []float64{-71.378, -36.868},
+								},
+							},
+						},
+					},
+				})
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Header:     http.Header{"Content-Type": []string{"application/json"}},
+					Body:       io.NopCloser(bytes.NewReader(b)),
+				}, nil
+			}
 			b, _ := json.Marshal(map[string]any{
 				"events": []map[string]any{
 					{
@@ -272,6 +294,9 @@ func TestWorldHandlerFXRates(t *testing.T) {
 	}
 	if resp.Storms[1].Name != "Helena" || resp.Storms[1].Category != "Cat 2" || len(resp.Storms[1].Track) != 3 || len(resp.Storms[1].Forecast) != 4 {
 		t.Fatalf("expected storm Helena Cat 2 with track & forecast second, got %+v", resp.Storms[1])
+	}
+	if len(resp.Volcanoes) != 1 || resp.Volcanoes[0].Name != "Nevados del Chillan" || resp.Volcanoes[0].Region != "Chile" {
+		t.Fatalf("unexpected volcanoes in response: %+v", resp.Volcanoes)
 	}
 }
 

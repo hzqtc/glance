@@ -73,6 +73,15 @@ type TropicalStorm struct {
 	Forecast   []StormTrackPoint `json:"forecast,omitempty"`
 }
 
+type VolcanoEvent struct {
+	ID     string  `json:"id"`
+	Name   string  `json:"name"`
+	Region string  `json:"region,omitempty"`
+	Date   string  `json:"date,omitempty"`
+	Lat    float64 `json:"lat"`
+	Lon    float64 `json:"lon"`
+}
+
 type WorldResponse struct {
 	Version   string            `json:"version"`
 	FetchedAt string            `json:"fetchedAt"`
@@ -81,6 +90,7 @@ type WorldResponse struct {
 	Quakes    []EarthquakeEvent `json:"quakes,omitempty"`
 	Aurora    *AuroraStatus     `json:"aurora,omitempty"`
 	Storms    []TropicalStorm   `json:"storms,omitempty"`
+	Volcanoes []VolcanoEvent    `json:"volcanoes,omitempty"`
 }
 
 type fxCacheEntry struct {
@@ -151,21 +161,25 @@ var (
 	stormsCache      ttlCache[[]TropicalStorm]
 	stormsHTTPClient = &http.Client{Timeout: 8 * time.Second}
 
+	volcanoesCache ttlCache[[]VolcanoEvent]
+
 	stormTitlePrefixes = []string{"tropical cyclone ", "tropical storm ", "typhoon ", "hurricane ", "cyclone "}
 )
 
 const (
-	fxCacheTTL     = 5 * time.Minute
-	issCacheTTL    = 3 * time.Hour
-	quakesCacheTTL = 10 * time.Minute
-	auroraCacheTTL = 15 * time.Minute
-	stormsCacheTTL = 15 * time.Minute
+	fxCacheTTL        = 5 * time.Minute
+	issCacheTTL       = 3 * time.Hour
+	quakesCacheTTL    = 10 * time.Minute
+	auroraCacheTTL    = 15 * time.Minute
+	stormsCacheTTL    = 15 * time.Minute
+	volcanoesCacheTTL = 30 * time.Minute
 
 	whereTheISSTLEURL  = "https://api.wheretheiss.at/v1/satellites/25544/tles"
 	celestrakISSTLEURL = "https://celestrak.org/NORAD/elements/gp.php?CATNR=25544&FORMAT=TLE"
 	usgsQuakesURL      = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_day.geojson"
 	noaaSWPCKpURL      = "https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json"
 	eonetStormsURL     = "https://eonet.gsfc.nasa.gov/api/v3/events?category=severeStorms&status=open&limit=20"
+	eonetVolcanoesURL  = "https://eonet.gsfc.nasa.gov/api/v3/events?category=volcanoes&status=open&limit=20"
 )
 
 // WorldHandler serves GET /api/world on Vercel (and locally via cmd/devserver).
@@ -187,14 +201,15 @@ func WorldHandler(w http.ResponseWriter, r *http.Request) {
 	forceRefresh := r.URL.Query().Get("refresh") == "1"
 
 	var (
-		fxQuotes []FXQuote
-		issOrbit *ISSOrbit
-		quakes   []EarthquakeEvent
-		aurora   *AuroraStatus
-		storms   []TropicalStorm
-		wg       sync.WaitGroup
+		fxQuotes  []FXQuote
+		issOrbit  *ISSOrbit
+		quakes    []EarthquakeEvent
+		aurora    *AuroraStatus
+		storms    []TropicalStorm
+		volcanoes []VolcanoEvent
+		wg        sync.WaitGroup
 	)
-	wg.Add(5)
+	wg.Add(6)
 	go func() {
 		defer wg.Done()
 		fxQuotes = fetchFXQuotesCached(cfg.World.FXPairs, forceRefresh)
@@ -215,6 +230,10 @@ func WorldHandler(w http.ResponseWriter, r *http.Request) {
 		defer wg.Done()
 		storms = fetchStormsCached(forceRefresh)
 	}()
+	go func() {
+		defer wg.Done()
+		volcanoes = fetchVolcanoesCached(forceRefresh)
+	}()
 	wg.Wait()
 
 	resp := WorldResponse{
@@ -225,6 +244,7 @@ func WorldHandler(w http.ResponseWriter, r *http.Request) {
 		Quakes:    quakes,
 		Aurora:    aurora,
 		Storms:    storms,
+		Volcanoes: volcanoes,
 	}
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -946,6 +966,105 @@ func fetchEONETStorms() ([]TropicalStorm, error) {
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].WindKmh != out[j].WindKmh {
 			return out[i].WindKmh > out[j].WindKmh
+		}
+		return out[i].Name < out[j].Name
+	})
+	if len(out) > 15 {
+		out = out[:15]
+	}
+	return out, nil
+}
+
+func fetchVolcanoesCached(forceRefresh bool) []VolcanoEvent {
+	return volcanoesCache.getOrFetch(volcanoesCacheTTL, forceRefresh, fetchEONETVolcanoes)
+}
+
+func parseVolcanoTitle(title string) (string, string) {
+	t := strings.TrimSpace(title)
+	name := t
+	region := ""
+	if idx := strings.LastIndex(t, ","); idx > 0 {
+		name = strings.TrimSpace(t[:idx])
+		region = strings.TrimSpace(t[idx+1:])
+	}
+	// Trim redundant trailing "Volcano" so map labels stay concise
+	if strings.HasSuffix(strings.ToLower(name), " volcano") {
+		name = strings.TrimSpace(name[:len(name)-len(" volcano")])
+	}
+	if name == "" {
+		name = t
+	}
+	return name, region
+}
+
+func fetchEONETVolcanoes() ([]VolcanoEvent, error) {
+	body, err := worldHTTPGet(stormsHTTPClient, eonetVolcanoesURL, 512*1024, "eonet volcanoes")
+	if err != nil {
+		return nil, err
+	}
+
+	var payload eonetEventsPayload
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return nil, err
+	}
+
+	out := make([]VolcanoEvent, 0, len(payload.Events))
+	for _, ev := range payload.Events {
+		if len(ev.Geometry) == 0 {
+			continue
+		}
+		// Pick latest valid Point geometry
+		var bestLat, bestLon float64
+		var bestDate string
+		var bestTime time.Time
+		found := false
+		for _, g := range ev.Geometry {
+			if strings.ToLower(strings.TrimSpace(g.Type)) != "point" {
+				continue
+			}
+			var coords []float64
+			if err := json.Unmarshal(g.Coordinates, &coords); err != nil || len(coords) < 2 {
+				continue
+			}
+			lon, lat := coords[0], coords[1]
+			if math.IsNaN(lat) || math.IsNaN(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180 {
+				continue
+			}
+			t, _ := time.Parse(time.RFC3339, strings.TrimSpace(g.Date))
+			if !found || t.After(bestTime) {
+				found = true
+				bestTime = t
+				bestLat = lat
+				bestLon = lon
+				if len(g.Date) >= 10 {
+					bestDate = g.Date[:10]
+				}
+			}
+		}
+		if !found {
+			continue
+		}
+		name, region := parseVolcanoTitle(ev.Title)
+		if name == "" {
+			continue
+		}
+		idStr := strings.ToLower(strings.TrimSpace(ev.ID))
+		if idStr == "" {
+			idStr = fmt.Sprintf("%.2f-%.2f", bestLat, bestLon)
+		}
+		out = append(out, VolcanoEvent{
+			ID:     "volc-" + idStr,
+			Name:   name,
+			Region: region,
+			Date:   bestDate,
+			Lat:    math.Round(bestLat*100) / 100,
+			Lon:    math.Round(bestLon*100) / 100,
+		})
+	}
+
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Date != out[j].Date {
+			return out[i].Date > out[j].Date
 		}
 		return out[i].Name < out[j].Name
 	})

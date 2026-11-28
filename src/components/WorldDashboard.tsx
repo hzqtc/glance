@@ -10,6 +10,7 @@ import type {
   TempUnit,
   TimeFormat,
   TropicalStorm,
+  VolcanoEvent,
   WorldResponse,
 } from '../types';
 import { WORLD_BORDER_PATH, WORLD_LAND_PATH } from '../data/worldLand';
@@ -57,6 +58,7 @@ interface WorldLayerPrefs {
   quakes: boolean;
   aurora: boolean;
   storms: boolean;
+  volcanoes: boolean;
 }
 
 // Map layer toggles saved per device; any missing or invalid field defaults to visible.
@@ -68,10 +70,11 @@ function readStoredWorldLayers(): WorldLayerPrefs {
     quakes: true,
     aurora: true,
     storms: true,
+    volcanoes: true,
   };
   var parsed = readStorageJSON<Partial<WorldLayerPrefs>>(WORLD_LAYERS_KEY);
   if (parsed && typeof parsed === 'object') {
-    var keys: (keyof WorldLayerPrefs)[] = ['arcs', 'celestial', 'iss', 'quakes', 'aurora', 'storms'];
+    var keys: (keyof WorldLayerPrefs)[] = ['arcs', 'celestial', 'iss', 'quakes', 'aurora', 'storms', 'volcanoes'];
     for (var i = 0; i < keys.length; i++) {
       var val = parsed[keys[i]];
       if (typeof val === 'boolean') prefs[keys[i]] = val;
@@ -189,6 +192,12 @@ export function WorldDashboard(props: WorldDashboardProps) {
   var storms = _stormsState[0];
   var setStorms = _stormsState[1];
 
+  var _volcanoesState = useState<VolcanoEvent[]>(function () {
+    return initialCache && initialCache.volcanoes ? initialCache.volcanoes : [];
+  });
+  var volcanoes = _volcanoesState[0];
+  var setVolcanoes = _volcanoesState[1];
+
   var _loadingState = useState<boolean>(false);
   var isLoading = _loadingState[0];
   var setIsLoading = _loadingState[1];
@@ -217,6 +226,10 @@ export function WorldDashboard(props: WorldDashboardProps) {
   var selectedStormId = _selectedStormState[0];
   var setSelectedStormId = _selectedStormState[1];
 
+  var _selectedVolcanoState = useState<string | null>(null);
+  var selectedVolcanoId = _selectedVolcanoState[0];
+  var setSelectedVolcanoId = _selectedVolcanoState[1];
+
   var _selectedCelestialState = useState<'sun' | 'moon' | null>(null);
   var selectedCelestial = _selectedCelestialState[0];
   var setSelectedCelestial = _selectedCelestialState[1];
@@ -230,6 +243,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
   var showQuakes = layers.quakes;
   var showAurora = layers.aurora;
   var showStorms = layers.storms;
+  var showVolcanoes = layers.volcanoes;
 
   function toggleLayer(key: keyof WorldLayerPrefs) {
     setLayers(function (prev) {
@@ -239,6 +253,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
         else if (key === 'quakes') setSelectedQuakeId(null);
         else if (key === 'aurora') setSelectedAuroraPt(null);
         else if (key === 'storms') setSelectedStormId(null);
+        else if (key === 'volcanoes') setSelectedVolcanoId(null);
         else if (key === 'celestial') setSelectedCelestial(null);
       }
       var next: WorldLayerPrefs = {
@@ -248,6 +263,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
         quakes: prev.quakes,
         aurora: prev.aurora,
         storms: prev.storms,
+        volcanoes: prev.volcanoes,
       };
       next[key] = nextVal;
       writeStoredWorldLayers(next);
@@ -319,12 +335,18 @@ export function WorldDashboard(props: WorldDashboardProps) {
         } else {
           setStorms([]);
         }
+        if (json.volcanoes) {
+          setVolcanoes(json.volcanoes);
+        } else {
+          setVolcanoes([]);
+        }
         if (
           (json.fx && json.fx.length > 0) ||
           json.iss ||
           json.quakes ||
           json.aurora ||
-          json.storms
+          json.storms ||
+          json.volcanoes
         ) {
           writeCachedWorld(json);
         }
@@ -420,6 +442,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
         !selectedQuakeId &&
         !selectedAuroraPt &&
         !selectedStormId &&
+        !selectedVolcanoId &&
         !selectedCelestial
       ) {
         return;
@@ -430,6 +453,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
         setSelectedQuakeId(null);
         setSelectedAuroraPt(null);
         setSelectedStormId(null);
+        setSelectedVolcanoId(null);
         setSelectedCelestial(null);
       }, idleResetSec * 1000);
       return function () {
@@ -442,6 +466,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
       selectedQuakeId,
       selectedAuroraPt,
       selectedStormId,
+      selectedVolcanoId,
       selectedCelestial,
       idleResetSec,
       props.activityTick,
@@ -659,12 +684,23 @@ export function WorldDashboard(props: WorldDashboardProps) {
     }
   }
 
+  var selectedVolcano: VolcanoEvent | null = null;
+  if (selectedVolcanoId && showVolcanoes) {
+    for (var vv = 0; vv < volcanoes.length; vv++) {
+      if (volcanoes[vv].id === selectedVolcanoId) {
+        selectedVolcano = volcanoes[vv];
+        break;
+      }
+    }
+  }
+
   function clearAllSelections() {
     setSelectedCityId(null);
     setSelectedISS(false);
     setSelectedQuakeId(null);
     setSelectedAuroraPt(null);
     setSelectedStormId(null);
+    setSelectedVolcanoId(null);
     setSelectedCelestial(null);
   }
 
@@ -770,6 +806,27 @@ export function WorldDashboard(props: WorldDashboardProps) {
       lines: stormLines,
       stroke: 'rgba(244, 63, 94, 0.65)',
       textColor: '#ffe4e6',
+    };
+  } else if (selectedVolcano) {
+    var selVolcPt = projectLonLat(
+      selectedVolcano.lon,
+      selectedVolcano.lat,
+      MAP_W,
+      MAP_H,
+      mapCenterLon
+    );
+    activePopover = {
+      x: selVolcPt.x,
+      y: selVolcPt.y,
+      title:
+        selectedVolcano.name +
+        (selectedVolcano.region ? ' · ' + selectedVolcano.region : ''),
+      lines: [
+        formatLatLon(selectedVolcano.lat, selectedVolcano.lon) +
+          (selectedVolcano.date ? ' · Active ' + selectedVolcano.date : ' · Active volcano'),
+      ],
+      stroke: 'rgba(248, 113, 113, 0.68)',
+      textColor: '#fee2e2',
     };
   } else if (selectedAuroraPt && aurora && showAurora && auroraOval) {
     var auroraStroke =
@@ -1160,6 +1217,36 @@ export function WorldDashboard(props: WorldDashboardProps) {
                   <path d="M12 15.4C8.2 15.4 5.2 18.2 5.5 21.5" />
                   <path d="M15.4 12C15.4 15.8 12.6 19 8.8 19.2" />
                   <path d="M8.6 12C8.6 8.2 11.4 5 15.2 4.8" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                class={
+                  showVolcanoes
+                    ? 'ctrl-btn ctrl-btn-mode ctrl-btn-world-icon ctrl-btn-selected world-icon-volcanoes'
+                    : 'ctrl-btn ctrl-btn-mode ctrl-btn-world-icon'
+                }
+                onClick={function () {
+                  toggleLayer('volcanoes');
+                }}
+                aria-pressed={showVolcanoes}
+                aria-label="Toggle active volcanoes"
+                title="Active volcanoes"
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  class="ctrl-svg"
+                  aria-hidden="true"
+                >
+                  <path d="M4 20h16l-5-11h-6L4 20z" />
+                  <path d="M10.5 6.5c0-1.5 1-2.5 1.5-3.5.5 1 1.5 2 1.5 3.5" />
                 </svg>
               </button>
               <button
@@ -1572,6 +1659,62 @@ export function WorldDashboard(props: WorldDashboardProps) {
                             {storm.category}
                           </text>
                         </g>
+                      </g>
+                    );
+                  })}
+                </g>
+              ) : null}
+
+              {/* Active Volcanoes (NASA EONET / Smithsonian GVP) */}
+              {showVolcanoes && volcanoes.length > 0 ? (
+                <g class="world-volcanoes-layer">
+                  {volcanoes.map(function (v) {
+                    var vPt = projectLonLat(v.lon, v.lat, MAP_W, MAP_H, mapCenterLon);
+                    var isSelV = selectedVolcanoId === v.id;
+                    return (
+                      <g
+                        key={'volc-' + v.id}
+                        class="world-volcano-pin"
+                        transform={
+                          'translate(' + vPt.x.toFixed(1) + ',' + vPt.y.toFixed(1) + ')'
+                        }
+                        onClick={function () {
+                          clearAllSelections();
+                          setSelectedVolcanoId(isSelV ? null : v.id);
+                        }}
+                      >
+                        <circle cx="0" cy="0" r="15" fill="transparent" />
+                        <circle
+                          cx="0"
+                          cy="0"
+                          r={isSelV ? '11.5' : '8.5'}
+                          fill={isSelV ? 'rgba(239, 68, 68, 0.3)' : 'rgba(239, 68, 68, 0.18)'}
+                          stroke="#f87171"
+                          stroke-width={isSelV ? '1.3' : '0.7'}
+                          stroke-opacity={isSelV ? '0.9' : '0.45'}
+                        />
+                        {/* Miniature volcano cone + glowing crater */}
+                        <path
+                          d="M -5.2 4.2 L -1.6 -3.2 L 1.6 -3.2 L 5.2 4.2 Z"
+                          fill="#ef4444"
+                          stroke="#091326"
+                          stroke-width="0.9"
+                          stroke-linejoin="round"
+                        />
+                        <circle cx="0" cy="-3.4" r="1.4" fill="#fde047" />
+                        {isSelV ? (
+                          <text
+                            x={vPt.x > MAP_W - 105 ? '-10' : '10'}
+                            y="3.5"
+                            text-anchor={vPt.x > MAP_W - 105 ? 'end' : 'start'}
+                            class="world-pin-sub"
+                            fill="#fecaca"
+                            font-size="10"
+                            font-weight="700"
+                          >
+                            {v.name}
+                          </text>
+                        ) : null}
                       </g>
                     );
                   })}

@@ -127,6 +127,10 @@
   color: #fda4af;
 }
 
+.world-controls .world-icon-volcanoes {
+  color: #f87171;
+}
+
 .world-controls:hover,
 .world-controls:active {
   opacity: 1;
@@ -163,6 +167,7 @@
 .world-iss-marker,
 .world-quake-pin,
 .world-storm-pin,
+.world-volcano-pin,
 .world-aurora-layer,
 .world-map-popover {
   cursor: pointer;

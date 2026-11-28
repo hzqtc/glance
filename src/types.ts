@@ -329,6 +329,15 @@ export interface TropicalStorm {
   forecast?: StormTrackPoint[];
 }
 
+export interface VolcanoEvent {
+  id: string;
+  name: string;
+  region?: string;
+  date?: string;
+  lat: number;
+  lon: number;
+}
+
 export interface WorldResponse {
   version: string;
   fetchedAt: string;
@@ -337,6 +346,7 @@ export interface WorldResponse {
   quakes?: EarthquakeEvent[];
   aurora?: AuroraStatus;
   storms?: TropicalStorm[];
+  volcanoes?: VolcanoEvent[];
 }
 
 export type WeatherKind =
