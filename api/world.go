@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"bytes"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"io"
 	"math"
@@ -11,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"glance/auth"
 	"glance/config"
@@ -172,15 +175,14 @@ const (
 	quakesCacheTTL    = 10 * time.Minute
 	auroraCacheTTL    = 15 * time.Minute
 	stormsCacheTTL    = 15 * time.Minute
-	volcanoesCacheTTL = 30 * time.Minute
+	volcanoesCacheTTL = 1 * time.Hour
 
 	whereTheISSTLEURL  = "https://api.wheretheiss.at/v1/satellites/25544/tles"
 	celestrakISSTLEURL = "https://celestrak.org/NORAD/elements/gp.php?CATNR=25544&FORMAT=TLE"
 	usgsQuakesURL      = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_day.geojson"
 	noaaSWPCKpURL      = "https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json"
 	eonetStormsURL     = "https://eonet.gsfc.nasa.gov/api/v3/events?category=severeStorms&status=open&limit=20"
-	eonetVolcanoesURL  = "https://eonet.gsfc.nasa.gov/api/v3/events?category=volcanoes&status=open&days=7&limit=20"
-	volcanoMaxAge      = 7 * 24 * time.Hour
+	gvpVolcanoesRSSURL = "https://volcano.si.edu/news/WeeklyVolcanoRSS.xml"
 )
 
 // WorldHandler serves GET /api/world on Vercel (and locally via cmd/devserver).
@@ -977,101 +979,95 @@ func fetchEONETStorms() ([]TropicalStorm, error) {
 }
 
 func fetchVolcanoesCached(forceRefresh bool) []VolcanoEvent {
-	return volcanoesCache.getOrFetch(volcanoesCacheTTL, forceRefresh, fetchEONETVolcanoes)
+	return volcanoesCache.getOrFetch(volcanoesCacheTTL, forceRefresh, fetchGVPVolcanoes)
 }
 
-func parseVolcanoTitle(title string) (string, string) {
+type gvpRSSFeed struct {
+	Items []struct {
+		Title string `xml:"title"`
+		Point string `xml:"point"`
+	} `xml:"channel>item"`
+}
+
+func latin1ToUTF8(b []byte) []byte {
+	if utf8.Valid(b) {
+		return b
+	}
+	var sb strings.Builder
+	sb.Grow(len(b) + 64)
+	for _, c := range b {
+		sb.WriteRune(rune(c))
+	}
+	return []byte(sb.String())
+}
+
+// parseGVPTitle parses Smithsonian GVP weekly RSS titles such as:
+// "Mayon (Philippines) - Report for 12 November-18 November 2026 - New Eruptive Activity"
+func parseGVPTitle(title string) (name, region, reportDate string, isNewEruption bool) {
 	t := strings.TrimSpace(title)
-	name := t
-	region := ""
-	if idx := strings.LastIndex(t, ","); idx > 0 {
-		name = strings.TrimSpace(t[:idx])
-		region = strings.TrimSpace(t[idx+1:])
+	if !strings.Contains(strings.ToLower(t), "new eruptive activity") {
+		return "", "", "", false
 	}
-	// Trim redundant trailing "Volcano" so map labels stay concise
-	if strings.HasSuffix(strings.ToLower(name), " volcano") {
-		name = strings.TrimSpace(name[:len(name)-len(" volcano")])
+	parts := strings.Split(t, " - ")
+	head := strings.TrimSpace(parts[0])
+	if openIdx := strings.LastIndex(head, "("); openIdx > 0 && strings.HasSuffix(head, ")") {
+		name = strings.TrimSpace(head[:openIdx])
+		region = strings.TrimSpace(head[openIdx+1 : len(head)-1])
+	} else {
+		name = head
 	}
-	if name == "" {
-		name = t
+	if len(parts) >= 2 {
+		rep := strings.TrimSpace(parts[1])
+		if strings.HasPrefix(strings.ToLower(rep), "report for ") {
+			reportDate = strings.TrimSpace(rep[len("report for "):])
+		}
 	}
-	return name, region
+	return name, region, reportDate, name != ""
 }
 
-func fetchEONETVolcanoes() ([]VolcanoEvent, error) {
-	body, err := worldHTTPGet(stormsHTTPClient, eonetVolcanoesURL, 512*1024, "eonet volcanoes")
+func fetchGVPVolcanoes() ([]VolcanoEvent, error) {
+	body, err := worldHTTPGet(stormsHTTPClient, gvpVolcanoesRSSURL, 512*1024, "smithsonian gvp")
 	if err != nil {
 		return nil, err
 	}
 
-	var payload eonetEventsPayload
-	if err := json.Unmarshal(body, &payload); err != nil {
+	dec := xml.NewDecoder(bytes.NewReader(latin1ToUTF8(body)))
+	dec.CharsetReader = func(charset string, input io.Reader) (io.Reader, error) {
+		return input, nil
+	}
+	var feed gvpRSSFeed
+	if err := dec.Decode(&feed); err != nil {
 		return nil, err
 	}
 
-	cutoff := time.Now().UTC().Add(-volcanoMaxAge)
-	out := make([]VolcanoEvent, 0, len(payload.Events))
-	for _, ev := range payload.Events {
-		if len(ev.Geometry) == 0 {
+	out := make([]VolcanoEvent, 0, 8)
+	for _, item := range feed.Items {
+		name, region, reportDate, ok := parseGVPTitle(item.Title)
+		if !ok {
 			continue
 		}
-		// Pick latest valid Point geometry
-		var bestLat, bestLon float64
-		var bestDate string
-		var bestTime time.Time
-		found := false
-		for _, g := range ev.Geometry {
-			if strings.ToLower(strings.TrimSpace(g.Type)) != "point" {
-				continue
-			}
-			var coords []float64
-			if err := json.Unmarshal(g.Coordinates, &coords); err != nil || len(coords) < 2 {
-				continue
-			}
-			lon, lat := coords[0], coords[1]
-			if math.IsNaN(lat) || math.IsNaN(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180 {
-				continue
-			}
-			t, _ := time.Parse(time.RFC3339, strings.TrimSpace(g.Date))
-			if !found || t.After(bestTime) {
-				found = true
-				bestTime = t
-				bestLat = lat
-				bestLon = lon
-				if len(g.Date) >= 10 {
-					bestDate = g.Date[:10]
-				}
-			}
-		}
-		if !found || bestTime.IsZero() || bestTime.Before(cutoff) {
+		fields := strings.Fields(strings.TrimSpace(item.Point))
+		if len(fields) < 2 {
 			continue
 		}
-		name, region := parseVolcanoTitle(ev.Title)
-		if name == "" {
+		lat, err1 := strconv.ParseFloat(fields[0], 64)
+		lon, err2 := strconv.ParseFloat(fields[1], 64)
+		if err1 != nil || err2 != nil || math.IsNaN(lat) || math.IsNaN(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180 {
 			continue
 		}
-		idStr := strings.ToLower(strings.TrimSpace(ev.ID))
-		if idStr == "" {
-			idStr = fmt.Sprintf("%.2f-%.2f", bestLat, bestLon)
-		}
+		slug := strings.ToLower(strings.ReplaceAll(name, " ", "-"))
 		out = append(out, VolcanoEvent{
-			ID:     "volc-" + idStr,
+			ID:     "gvp-" + slug,
 			Name:   name,
 			Region: region,
-			Date:   bestDate,
-			Lat:    math.Round(bestLat*100) / 100,
-			Lon:    math.Round(bestLon*100) / 100,
+			Date:   reportDate,
+			Lat:    math.Round(lat*100) / 100,
+			Lon:    math.Round(lon*100) / 100,
 		})
 	}
 
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].Date != out[j].Date {
-			return out[i].Date > out[j].Date
-		}
-		return out[i].Name < out[j].Name
-	})
-	if len(out) > 15 {
-		out = out[:15]
+	if len(out) > 12 {
+		out = out[:12]
 	}
 	return out, nil
 }

@@ -823,7 +823,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
         (selectedVolcano.region ? ' · ' + selectedVolcano.region : ''),
       lines: [
         formatLatLon(selectedVolcano.lat, selectedVolcano.lon) +
-          (selectedVolcano.date ? ' · Active ' + selectedVolcano.date : ' · Active volcano'),
+          (selectedVolcano.date ? ' · New eruption (' + selectedVolcano.date + ')' : ' · New eruption'),
       ],
       stroke: 'rgba(248, 113, 113, 0.68)',
       textColor: '#fee2e2',
@@ -1665,7 +1665,7 @@ export function WorldDashboard(props: WorldDashboardProps) {
                 </g>
               ) : null}
 
-              {/* Active Volcanoes (NASA EONET / Smithsonian GVP) */}
+              {/* New Volcanic Eruptions (Smithsonian GVP Weekly) */}
               {showVolcanoes && volcanoes.length > 0 ? (
                 <g class="world-volcanoes-layer">
                   {volcanoes.map(function (v) {

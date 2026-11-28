@@ -9,7 +9,6 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 )
 
 func TestWorldHandlerFXRates(t *testing.T) {
@@ -22,39 +21,28 @@ func TestWorldHandlerFXRates(t *testing.T) {
 	sampleLine2 := "2 25544  51.6416 247.4627 0006703 130.5360 325.0288 15.49815350483021"
 	stormsHTTPClient = &http.Client{
 		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
-			if strings.Contains(r.URL.RawQuery, "category=volcanoes") {
-				recentDate := time.Now().UTC().Add(-48 * time.Hour).Format(time.RFC3339)
-				staleDate := time.Now().UTC().Add(-30 * 24 * time.Hour).Format(time.RFC3339)
-				b, _ := json.Marshal(map[string]any{
-					"events": []map[string]any{
-						{
-							"id":    "EONET_20710",
-							"title": "Nevados del Chillan Volcano, Chile",
-							"geometry": []map[string]any{
-								{
-									"date":        recentDate,
-									"type":        "Point",
-									"coordinates": []float64{-71.378, -36.868},
-								},
-							},
-						},
-						{
-							"id":    "EONET_20001",
-							"title": "Old Dormant Volcano, Peru",
-							"geometry": []map[string]any{
-								{
-									"date":        staleDate,
-									"type":        "Point",
-									"coordinates": []float64{-71.4, -16.3},
-								},
-							},
-						},
-					},
-				})
+			if strings.Contains(r.URL.Host, "volcano.si.edu") {
+				rss := `<?xml version="1.0" encoding="ISO-8859-1"?>
+<rss version="2.0" xmlns:georss="http://www.georss.org/georss">
+  <channel>
+    <item>
+      <title>Nevados de Chillan (Chile) - Report for 12 November-18 November 2026 - New Eruptive Activity</title>
+      <georss:point>-36.8680 -71.3780</georss:point>
+    </item>
+    <item>
+      <title>Kilauea (United States) - Report for 12 November-18 November 2026 - Continuing Eruptive Activity</title>
+      <georss:point>19.4210 -155.2870</georss:point>
+    </item>
+    <item>
+      <title>Bulusan (Philippines) - Report for 12 November-18 November 2026 - New Unrest</title>
+      <georss:point>12.7690 124.0560</georss:point>
+    </item>
+  </channel>
+</rss>`
 				return &http.Response{
 					StatusCode: http.StatusOK,
-					Header:     http.Header{"Content-Type": []string{"application/json"}},
-					Body:       io.NopCloser(bytes.NewReader(b)),
+					Header:     http.Header{"Content-Type": []string{"application/xml"}},
+					Body:       io.NopCloser(bytes.NewBufferString(rss)),
 				}, nil
 			}
 			b, _ := json.Marshal(map[string]any{
@@ -309,7 +297,7 @@ func TestWorldHandlerFXRates(t *testing.T) {
 	if resp.Storms[1].Name != "Helena" || resp.Storms[1].Category != "Cat 2" || len(resp.Storms[1].Track) != 3 || len(resp.Storms[1].Forecast) != 4 {
 		t.Fatalf("expected storm Helena Cat 2 with track & forecast second, got %+v", resp.Storms[1])
 	}
-	if len(resp.Volcanoes) != 1 || resp.Volcanoes[0].Name != "Nevados del Chillan" || resp.Volcanoes[0].Region != "Chile" {
+	if len(resp.Volcanoes) != 1 || resp.Volcanoes[0].Name != "Nevados de Chillan" || resp.Volcanoes[0].Region != "Chile" {
 		t.Fatalf("unexpected volcanoes in response: %+v", resp.Volcanoes)
 	}
 }
